@@ -8,10 +8,10 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="NOVA">
   <meta name="mobile-web-app-capable" content="yes">
-  <meta name="description" content="NOVA — бесплатный локальный ИИ-агент с памятью, инструментами, голосовым чатом, компасом, создателем Тумсоевым и лунной кошкой.">
+  <meta name="description" content="NOVA — бесплатный локальный ИИ-агент с памятью, голосовым чатом, компасом и ежедневными уроками английского.">
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="./icon-192.png">
-  <link rel="stylesheet" href="./styles.css?v=26.0.0">
+  <link rel="stylesheet" href="./styles.css?v=26.1.0">
   <title>NOVA 26 — Free AI Agent</title>
 </head>
 <body>
@@ -118,7 +118,7 @@
     </section>
 
     <section id="chatPanel" class="chat-panel" aria-label="NOVA chat">
-      <button id="panelToggle" class="panel-toggle" type="button" aria-controls="chat quickActions composer" aria-expanded="true" aria-label="Свернуть панель">
+      <button id="panelToggle" class="panel-toggle" type="button" aria-controls="chat englishLesson quickActions composer" aria-expanded="true" aria-label="Свернуть панель">
         <span class="panel-grip" aria-hidden="true"></span>
         <span class="panel-chevron" aria-hidden="true">⌄</span>
         <span id="panelToggleText" class="sr-only">Свернуть панель</span>
@@ -130,10 +130,33 @@
         <button id="brainBtn" class="brain-chip" type="button" aria-label="Включить бесплатный локальный мозг">
           <span aria-hidden="true">🧠</span><b id="brainStateText">Базовый</b>
         </button>
-        <span class="version">v26</span>
+        <span class="version">v26.1</span>
       </div>
 
       <div id="chat" class="chat-log" role="log" aria-live="polite" aria-relevant="additions"></div>
+
+      <section id="englishLesson" class="english-lesson" aria-label="Учим английский" hidden>
+        <div class="lesson-heading">
+          <span class="lesson-badge">🇺🇸 <b data-i18n="lesson.title">Учим английский</b></span>
+          <span id="lessonProgress" class="lesson-progress">1/10</span>
+          <button id="lessonCloseBtn" class="lesson-close" type="button" aria-label="Закрыть урок">×</button>
+        </div>
+        <div class="lesson-content">
+          <div class="lesson-word-wrap">
+            <strong id="lessonWord" class="lesson-word">Hello</strong>
+            <span id="lessonPhonetic" class="lesson-phonetic">[хэ-ЛОУ]</span>
+          </div>
+          <div class="lesson-meaning-wrap">
+            <b id="lessonTranslation" class="lesson-translation">Привет</b>
+            <span id="lessonExample" class="lesson-example">Hello, how are you? — Привет, как дела?</span>
+          </div>
+        </div>
+        <div class="lesson-controls">
+          <button id="lessonListenBtn" type="button"><span>🔊</span><b data-i18n="lesson.listen">Слушать</b></button>
+          <button id="lessonQuizBtn" type="button"><span>🎯</span><b data-i18n="lesson.quiz">Проверка</b></button>
+          <button id="lessonNextBtn" type="button"><span>▶</span><b data-i18n="lesson.next">Дальше</b></button>
+        </div>
+      </section>
 
       <div id="quickActions" class="quick-actions" aria-label="NOVA actions">
         <button class="action-btn" type="button" data-action="joke"><span>😂</span><b data-i18n="action.joke">Шутка</b></button>
@@ -142,6 +165,7 @@
         <button class="action-btn" type="button" data-action="dance"><span>💃</span><b data-i18n="action.dance">Танцуй</b></button>
         <button class="action-btn" type="button" data-action="laugh"><span>😄</span><b data-i18n="action.laugh">Смейся</b></button>
         <button class="action-btn" type="button" data-action="cat"><span>🐈</span><b data-i18n="action.cat">Кошка</b></button>
+        <button class="action-btn english-action" type="button" data-action="english"><span>🇺🇸</span><b data-i18n="action.english">Английский</b></button>
       </div>
 
       <form id="composer" class="composer" autocomplete="off">
@@ -157,7 +181,8 @@
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
   <noscript>Для работы NOVA включите JavaScript.</noscript>
-  <script src="./brain.js?v=26.0.0" defer></script>
-  <script src="./app.js?v=26.0.0" defer></script>
+  <script src="./english-lessons.js?v=26.1.0" defer></script>
+  <script src="./brain.js?v=26.1.0" defer></script>
+  <script src="./app.js?v=26.1.0" defer></script>
 </body>
 </html>

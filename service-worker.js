@@ -1,9 +1,10 @@
-const CACHE = 'nova-v26-free-agent-20260714';
+const CACHE = 'nova-v26-1-english-coach-20260714';
 const CORE = [
   './',
   './index.html',
   './styles.css',
   './app.js',
+  './english-lessons.js',
   './brain.js',
   './local-ai-worker.js',
   './manifest.webmanifest',

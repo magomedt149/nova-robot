@@ -378,7 +378,7 @@ button:focus-visible,input:focus-visible,[role="button"]:focus-visible{
 .bubble{max-width:min(82%,560px);padding:7px 10px;border-radius:13px 13px 13px 4px;color:#e9f9ff;background:rgba(25,58,92,.68);font-size:13px;line-height:1.34;white-space:pre-line;overflow-wrap:anywhere}
 .message.user .bubble{border-radius:13px 13px 4px 13px;color:#fff;background:linear-gradient(135deg,#3d7dff,#5d50d8)}
 @keyframes messageIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
-.quick-actions{display:grid;grid-template-columns:repeat(6,1fr);gap:6px;margin:8px 0}
+.quick-actions{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;margin:8px 0}
 .action-btn{
   min-width:0;height:46px;padding:4px 2px;border:1px solid rgba(119,220,255,.14);border-radius:13px;
   display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;
@@ -388,6 +388,32 @@ button:focus-visible,input:focus-visible,[role="button"]:focus-visible{
 .action-btn:hover{border-color:rgba(107,233,255,.35);filter:brightness(1.08)}
 .action-btn:active,.action-btn.running{transform:translateY(1px) scale(.96);border-color:rgba(109,239,255,.58);background:linear-gradient(180deg,rgba(38,104,151,.9),rgba(26,55,98,.9));box-shadow:0 0 17px rgba(44,210,255,.2)}
 .guitar-action{border-color:rgba(255,181,72,.2);background:linear-gradient(180deg,rgba(90,57,38,.84),rgba(40,30,43,.88))}
+.english-action{border-color:rgba(255,96,126,.24);background:linear-gradient(180deg,rgba(43,74,141,.9),rgba(82,31,74,.86))}
+
+/* Free daily English lesson */
+.english-lesson{
+  margin:8px 0;padding:7px 8px;border:1px solid rgba(105,224,255,.22);border-radius:15px;
+  color:#effbff;background:
+    radial-gradient(circle at 8% 20%,rgba(75,125,255,.22),transparent 34%),
+    linear-gradient(135deg,rgba(16,38,78,.95),rgba(45,21,61,.95));
+  box-shadow:inset 0 1px rgba(255,255,255,.06),0 6px 18px rgba(0,0,0,.17)}
+.english-lesson[hidden]{display:none!important}
+.lesson-heading{height:18px;display:flex;align-items:center;gap:7px;color:#a9c6e9;font-size:9px;font-weight:800;letter-spacing:.02em}
+.lesson-badge{display:flex;align-items:center;gap:4px;color:#dcf8ff}.lesson-badge b{font-size:10px}
+.lesson-progress{margin-left:auto;color:#8af4d0}
+.lesson-close{width:22px;height:22px;margin:-2px -2px -2px 0;padding:0;border:1px solid rgba(173,225,255,.15);border-radius:7px;color:#b9cbe2;background:rgba(255,255,255,.04);font-size:17px;line-height:18px;cursor:pointer}
+.lesson-content{min-height:45px;display:grid;grid-template-columns:minmax(105px,.78fr) minmax(0,1.35fr);gap:9px;align-items:center}
+.lesson-word-wrap,.lesson-meaning-wrap{min-width:0;display:flex;flex-direction:column;justify-content:center}
+.lesson-word{display:-webkit-box;overflow:hidden;-webkit-box-orient:vertical;-webkit-line-clamp:2;color:#fff;font-size:clamp(14px,2.5vw,18px);line-height:1.08;text-shadow:0 0 12px rgba(88,224,255,.38)}
+.lesson-phonetic{display:-webkit-box;overflow:hidden;-webkit-box-orient:vertical;-webkit-line-clamp:2;margin-top:3px;color:#7feaff;font-size:9px;line-height:1.12}
+.lesson-translation{overflow:hidden;color:#fff0a9;font-size:11px;line-height:1.15;text-overflow:ellipsis;white-space:nowrap}
+.lesson-example{display:-webkit-box;overflow:hidden;-webkit-box-orient:vertical;-webkit-line-clamp:2;margin-top:3px;color:#afc6e3;font-size:9px;line-height:1.12}
+.lesson-controls{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:5px}
+.lesson-controls button{min-width:0;height:28px;padding:0 6px;border:1px solid rgba(113,223,255,.17);border-radius:9px;display:flex;align-items:center;justify-content:center;gap:4px;color:#def8ff;background:rgba(13,34,68,.82);font-size:9px;font-weight:800;cursor:pointer}
+.lesson-controls button span{font-size:13px}.lesson-controls button:active{transform:scale(.97)}
+.lesson-controls button.active{border-color:rgba(255,214,95,.6);color:#fff1a7;background:rgba(111,70,28,.72);box-shadow:0 0 13px rgba(255,184,63,.16)}
+.english-lesson.quiz-mode .lesson-word{color:#ffd975;font-size:24px}.english-lesson.quiz-mode .lesson-phonetic{visibility:hidden}
+.english-lesson.correct{border-color:rgba(85,243,188,.48);box-shadow:inset 0 1px rgba(255,255,255,.06),0 0 17px rgba(85,243,188,.12)}
 .composer{display:grid;grid-template-columns:minmax(0,1fr) 48px 48px;gap:7px;align-items:center}
 .composer input{
   min-width:0;height:48px;padding:0 14px;border:1px solid rgba(104,214,255,.2);border-radius:15px;
@@ -408,7 +434,7 @@ button:focus-visible,input:focus-visible,[role="button"]:focus-visible{
 noscript{position:fixed;inset:auto 20px 20px;z-index:100;padding:15px;background:#171d2e;color:#fff;border-radius:12px;text-align:center}
 
 @media(max-width:620px){
-  .quick-actions{grid-template-columns:repeat(3,1fr)}
+  .quick-actions{grid-template-columns:repeat(4,1fr)}
   .action-btn{height:42px;flex-direction:row;gap:5px;padding:4px 6px}
   .action-btn span{font-size:17px}.action-btn b{font-size:10px}
   .chat-log{height:108px}

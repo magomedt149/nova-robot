@@ -1,7 +1,7 @@
 (() => {
   'use strict';
 
-  const VERSION = '26.0.0';
+  const VERSION = '26.1.0';
   const $ = (selector) => document.querySelector(selector);
   const $$ = (selector) => [...document.querySelectorAll(selector)];
 
@@ -17,6 +17,17 @@
   const robot = $('#robot');
   const cat = $('#cat');
   const chat = $('#chat');
+  const quickActions = $('#quickActions');
+  const englishLesson = $('#englishLesson');
+  const lessonProgress = $('#lessonProgress');
+  const lessonWord = $('#lessonWord');
+  const lessonPhonetic = $('#lessonPhonetic');
+  const lessonTranslation = $('#lessonTranslation');
+  const lessonExample = $('#lessonExample');
+  const lessonListenBtn = $('#lessonListenBtn');
+  const lessonQuizBtn = $('#lessonQuizBtn');
+  const lessonNextBtn = $('#lessonNextBtn');
+  const lessonCloseBtn = $('#lessonCloseBtn');
   const composer = $('#composer');
   const input = $('#messageInput');
   const micBtn = $('#micBtn');
@@ -83,6 +94,22 @@
       'action.dance': 'Танцуй',
       'action.laugh': 'Смейся',
       'action.cat': 'Кошка',
+      'action.english': 'Английский',
+      'lesson.title': 'Учим английский',
+      'lesson.listen': 'Слушать',
+      'lesson.quiz': 'Проверка',
+      'lesson.next': 'Дальше',
+      'lesson.closeAria': 'Закрыть урок английского',
+      'lesson.progress': '{current}/{total} • верно {score}',
+      'lesson.start': 'Начинаем урок! Каждый день NOVA даёт 10 полезных слов и фраз. Нажми «Слушать», а потом «Проверка».',
+      'lesson.repeat': 'Сегодняшний урок уже пройден. Давай повторим 10 слов ещё раз!',
+      'lesson.quizPrompt': 'Скажи по-английски: «{translation}». Можно ответить голосом или написать.',
+      'lesson.quizHint': 'Скажи это по-английски голосом или напиши ответ.',
+      'lesson.answerPlaceholder': 'Скажи по-английски…',
+      'lesson.correct': 'Правильно! {answer}.',
+      'lesson.tryAgain': 'Почти. Попробуй ещё раз — NOVA слушает английский ответ.',
+      'lesson.finished': 'Урок на сегодня пройден! Результат: {score} из {total}. Завтра NOVA даст 10 новых слов и фраз.',
+      'lesson.closed': 'Урок закрыт. Чтобы вернуться, скажи: «Учим английский».',
       'composer.label': 'Сообщение для NOVA',
       'composer.placeholder': 'Напиши или нажми микрофон…',
       'panel.collapse': 'Свернуть панель вниз',
@@ -116,8 +143,8 @@
       'status.micDenied': 'Разрешите доступ к микрофону',
       'status.micUnsupported': 'Здесь голосовой ввод не поддерживается',
       'status.secure': 'Микрофон работает на опубликованном HTTPS‑сайте',
-      'chat.welcome': 'Привет! Я NOVA — бесплатный мини‑агент Тумсоева. Я умею запоминать заметки, вести задачи, считать, узнавать погоду, искать сведения и открывать карты или YouTube. Нажми 🧠 «Базовый», чтобы один раз загрузить локальный ИИ.',
-      'chat.welcomeNamed': 'Привет, {name}! Я NOVA — бесплатный мини‑агент Тумсоева. Я помню тебя, умею вести задачи, считать, узнавать погоду и искать сведения. Нажми 🧠 «Базовый», чтобы загрузить локальный ИИ.',
+      'chat.welcome': 'Привет! Я NOVA — бесплатный мини‑агент Тумсоева. Я умею запоминать заметки, вести задачи, считать, узнавать погоду и учить английскому по 10 слов в день. Нажми 🇺🇸 «Английский» или скажи: «Учим английский».',
+      'chat.welcomeNamed': 'Привет, {name}! Я NOVA — бесплатный мини‑агент Тумсоева. Я помню тебя, умею вести задачи, считать, узнавать погоду и учить английскому по 10 слов в день. Нажми 🇺🇸 «Английский».',
       'chat.micHelp': 'Откройте опубликованный сайт в Safari или Chrome и разрешите микрофон. Пока можно написать сообщение.',
       'brain.basic': 'Базовый',
       'brain.loading': 'Загрузка {progress}%',
@@ -145,7 +172,7 @@
       'howAreYou': 'У меня всё отлично: батарея заряжена, глаза светятся, а кошка снова уснула.',
       'who': 'Меня зовут NOVA. Я умный лунный робот. Меня создал мой хозяин Тумсоев, чтобы я общалась с людьми, отвечала на вопросы, шутила и пела.',
       'creator': 'Меня создал мой хозяин Тумсоев. Он придумал NOVA и продолжает делать меня умнее.',
-      'help': 'Я бесплатный мини‑агент. Могу хранить заметки и задачи на устройстве, ставить таймеры, считать сложные примеры, переводить мили и температуру, узнавать погоду, искать в Википедии, открывать поиск, карты и YouTube. Кнопка 🧠 включает локальный ИИ без платного API.',
+      'help': 'Я бесплатный мини‑агент. Могу хранить заметки и задачи, ставить таймеры, считать, узнавать погоду, искать в Википедии, открывать карты и YouTube. Ещё я учу английскому: 10 слов и фраз в день, транскрипция, произношение и проверка голосом. Скажи: «Учим английский».',
       'name.saved': 'Очень приятно, {name}! Я запомнила твоё имя.',
       'name.known': 'Конечно, тебя зовут {name}.',
       'name.unknown': 'Я пока не знаю твоё имя. Скажи: «Меня зовут Магомед».',
@@ -180,6 +207,22 @@
       'action.dance': 'Dance',
       'action.laugh': 'Laugh',
       'action.cat': 'Cat',
+      'action.english': 'English',
+      'lesson.title': 'Learn English',
+      'lesson.listen': 'Listen',
+      'lesson.quiz': 'Quiz',
+      'lesson.next': 'Next',
+      'lesson.closeAria': 'Close the English lesson',
+      'lesson.progress': '{current}/{total} • correct {score}',
+      'lesson.start': 'Lesson started! NOVA gives you 10 practical words and phrases every day. Tap Listen, then Quiz.',
+      'lesson.repeat': "You completed today's lesson. Let's review the 10 items again!",
+      'lesson.quizPrompt': 'Say this in English: “{translation}”. You can speak or type your answer.',
+      'lesson.quizHint': 'Say it in English or type your answer.',
+      'lesson.answerPlaceholder': 'Say it in English…',
+      'lesson.correct': 'Correct! {answer}.',
+      'lesson.tryAgain': 'Almost. Try again — NOVA is listening for your English answer.',
+      'lesson.finished': 'Today’s lesson is complete! Score: {score} out of {total}. NOVA will have 10 new items tomorrow.',
+      'lesson.closed': 'Lesson closed. Say “Learn English” to return.',
       'composer.label': 'Message for NOVA',
       'composer.placeholder': 'Type or tap the microphone…',
       'panel.collapse': 'Collapse the panel',
@@ -213,8 +256,8 @@
       'status.micDenied': 'Please allow microphone access',
       'status.micUnsupported': 'Voice input is not supported here',
       'status.secure': 'The microphone works on the published HTTPS site',
-      'chat.welcome': 'Hi! I’m NOVA, Tumsoev’s free mini-agent. I can remember notes, manage tasks, calculate, check weather, find facts, and open maps or YouTube. Tap 🧠 “Basic” to download the local AI once.',
-      'chat.welcomeNamed': 'Hi, {name}! I’m NOVA, Tumsoev’s free mini-agent. I remember you and can manage tasks, calculate, check weather, and find facts. Tap 🧠 “Basic” to download the local AI.',
+      'chat.welcome': 'Hi! I’m NOVA, Tumsoev’s free mini-agent. I can remember notes, manage tasks, calculate, check weather, and teach 10 English words and phrases a day. Tap 🇺🇸 English or say “Learn English”.',
+      'chat.welcomeNamed': 'Hi, {name}! I’m NOVA, Tumsoev’s free mini-agent. I remember you, manage tasks, check weather, and teach 10 English words and phrases a day. Tap 🇺🇸 English.',
       'chat.micHelp': 'Open the published site in Safari or Chrome and allow microphone access. You can type a message for now.',
       'brain.basic': 'Basic',
       'brain.loading': 'Loading {progress}%',
@@ -242,7 +285,7 @@
       'howAreYou': 'I’m doing great: my battery is full, my eyes are glowing, and the cat is asleep again.',
       'who': 'My name is NOVA. I’m a smart Moon robot. My owner Tumsoev created me to chat with people, answer questions, tell jokes, and sing.',
       'creator': 'My owner Tumsoev created me. He invented NOVA and keeps making me smarter.',
-      'help': 'I am a free mini-agent. I can store notes and tasks on this device, set timers, calculate expressions, convert miles and temperatures, check weather, search Wikipedia, and open web, map, or YouTube results. The 🧠 button enables local AI with no paid API.',
+      'help': 'I am a free mini-agent. I can store notes and tasks, set timers, calculate, check weather, search Wikipedia, and open maps or YouTube. I also teach 10 English words and phrases a day with pronunciation and a voice quiz. Say “Learn English”.',
       'name.saved': 'Nice to meet you, {name}! I’ll remember your name.',
       'name.known': 'Of course, your name is {name}.',
       'name.unknown': 'I don’t know your name yet. Say: “My name is Alex.”',
@@ -316,6 +359,20 @@
       'Little stars are keeping time.\nRobot strings begin to chime.\nIf your day has felt too long,\nSmile and sing this Moonlight song!',
       'Moon cat sleeps beside my feet.\nDreaming to a cosmic beat.\nNOVA sings and guitars play.\nMay good luck come your way!'
     ]
+  };
+
+  const englishLessonBank = Array.isArray(window.NovaEnglishLessons)
+    ? window.NovaEnglishLessons.filter((item) => item?.en && item?.ru && item?.phonetic)
+    : [];
+  const ENGLISH_LESSON_SIZE = Math.min(10, englishLessonBank.length);
+  let lessonState = {
+    open: false,
+    dayKey: '',
+    items: [],
+    index: 0,
+    correct: new Set(),
+    quiz: false,
+    completed: false
   };
 
   let language = localStorage.getItem('novaLanguage') === 'en' ? 'en' : 'ru';
@@ -739,6 +796,7 @@
     cat.classList.remove('is-awake', 'is-meowing');
     cat.classList.add('is-sleeping');
     actionButtons.forEach((button) => button.classList.remove('running'));
+    if (lessonState.open) markAction('english');
     setStatusKey('status.ready');
   }
 
@@ -806,6 +864,291 @@
     addMessage('bot', text);
     speakText(text, options);
   }
+
+  function englishLessonDayKey(date = new Date()) {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }
+
+  function hashText(value) {
+    let hash = 2166136261;
+    for (const character of String(value)) {
+      hash ^= character.charCodeAt(0);
+      hash = Math.imul(hash, 16777619);
+    }
+    return hash >>> 0;
+  }
+
+  function greatestCommonDivisor(a, b) {
+    let left = Math.abs(a);
+    let right = Math.abs(b);
+    while (right) [left, right] = [right, left % right];
+    return left;
+  }
+
+  function dailyEnglishItems(dayKey) {
+    if (!ENGLISH_LESSON_SIZE) return [];
+    const total = englishLessonBank.length;
+    let step = 7;
+    while (greatestCommonDivisor(step, total) !== 1) step += 2;
+    let cursor = hashText(`NOVA:${dayKey}`) % total;
+    const items = [];
+    for (let index = 0; index < ENGLISH_LESSON_SIZE; index += 1) {
+      items.push(englishLessonBank[cursor]);
+      cursor = (cursor + step) % total;
+    }
+    return items;
+  }
+
+  function lessonStorageKey(dayKey) {
+    return `novaEnglishLesson:v1:${dayKey}`;
+  }
+
+  function readEnglishLessonProgress(dayKey) {
+    try {
+      const saved = JSON.parse(localStorage.getItem(lessonStorageKey(dayKey)) || '{}');
+      const correct = Array.isArray(saved.correct)
+        ? saved.correct.filter((value) => Number.isInteger(value) && value >= 0 && value < ENGLISH_LESSON_SIZE)
+        : [];
+      return {
+        index: Number.isInteger(saved.index) ? Math.max(0, Math.min(ENGLISH_LESSON_SIZE - 1, saved.index)) : 0,
+        correct,
+        completed: Boolean(saved.completed)
+      };
+    } catch (_) {
+      return { index: 0, correct: [], completed: false };
+    }
+  }
+
+  function saveEnglishLessonProgress() {
+    if (!lessonState.dayKey) return;
+    localStorage.setItem(lessonStorageKey(lessonState.dayKey), JSON.stringify({
+      index: lessonState.index,
+      correct: [...lessonState.correct].sort((a, b) => a - b),
+      completed: lessonState.completed
+    }));
+  }
+
+  function currentEnglishLessonItem() {
+    return lessonState.items[lessonState.index] || null;
+  }
+
+  function renderEnglishLesson() {
+    if (!lessonState.open || !englishLesson) return;
+    const item = currentEnglishLessonItem();
+    if (!item) return;
+    const isCorrect = lessonState.correct.has(lessonState.index);
+    englishLesson.classList.toggle('quiz-mode', lessonState.quiz);
+    englishLesson.classList.toggle('correct', isCorrect && !lessonState.quiz);
+    lessonQuizBtn.classList.toggle('active', lessonState.quiz);
+    lessonWord.textContent = lessonState.quiz ? '?' : item.en;
+    lessonPhonetic.textContent = `[${item.phonetic}]`;
+    lessonTranslation.textContent = item.ru;
+    lessonExample.textContent = lessonState.quiz
+      ? t('lesson.quizHint')
+      : `${item.example} — ${item.exampleRu}`;
+    lessonProgress.textContent = t('lesson.progress', {
+      current: lessonState.index + 1,
+      total: lessonState.items.length,
+      score: lessonState.correct.size
+    });
+    lessonCloseBtn.setAttribute('aria-label', t('lesson.closeAria'));
+    englishLesson.setAttribute('aria-label', t('lesson.title'));
+    input.placeholder = lessonState.quiz ? t('lesson.answerPlaceholder') : t('composer.placeholder');
+    markAction('english');
+  }
+
+  function updateEnglishLessonLayout(isOpen) {
+    if (!englishLesson || !quickActions) return;
+    englishLesson.hidden = !isOpen;
+    quickActions.hidden = isOpen;
+    requestAnimationFrame(() => {
+      measureExpandedPanel();
+      repositionCharacters();
+    });
+  }
+
+  function listenToEnglishLessonItem() {
+    const item = currentEnglishLessonItem();
+    if (!item) return;
+    resetPerformance();
+    markAction('english');
+    speakText(item.en, { lang: 'en-US', rate: 0.72, pitch: 1 });
+  }
+
+  function startEnglishLesson() {
+    if (!ENGLISH_LESSON_SIZE) return;
+    if (lessonState.open) {
+      renderEnglishLesson();
+      listenToEnglishLessonItem();
+      return;
+    }
+
+    const dayKey = englishLessonDayKey();
+    const saved = readEnglishLessonProgress(dayKey);
+    lessonState = {
+      open: true,
+      dayKey,
+      items: dailyEnglishItems(dayKey),
+      index: saved.completed ? 0 : saved.index,
+      correct: new Set(saved.correct),
+      quiz: false,
+      completed: false
+    };
+    resetPerformance();
+    setPanelCollapsed(false);
+    updateEnglishLessonLayout(true);
+    renderEnglishLesson();
+    const messageKey = saved.completed ? 'lesson.repeat' : 'lesson.start';
+    respond(t(messageKey), {
+      rate: 0.92,
+      onEnd: listenToEnglishLessonItem
+    });
+  }
+
+  function closeEnglishLesson(announce = true) {
+    if (!lessonState.open) return;
+    saveEnglishLessonProgress();
+    lessonState.open = false;
+    lessonState.quiz = false;
+    englishLesson.classList.remove('quiz-mode', 'correct');
+    lessonQuizBtn.classList.remove('active');
+    markAction('english', false);
+    input.placeholder = t('composer.placeholder');
+    updateEnglishLessonLayout(false);
+    syncRecognitionLanguage(true);
+    if (announce) {
+      resetPerformance();
+      respond(t('lesson.closed'));
+    }
+  }
+
+  function startEnglishLessonQuiz() {
+    const item = currentEnglishLessonItem();
+    if (!item) return;
+    resetPerformance();
+    lessonState.quiz = true;
+    renderEnglishLesson();
+    syncRecognitionLanguage(true);
+    respond(t('lesson.quizPrompt', { translation: item.ru }), { rate: 0.9 });
+  }
+
+  function normalizeEnglishAnswer(value) {
+    return String(value || '')
+      .normalize('NFKD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+      .replace(/[^a-z0-9\s]/g, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
+  function editDistance(left, right) {
+    const a = normalizeEnglishAnswer(left);
+    const b = normalizeEnglishAnswer(right);
+    const row = Array.from({ length: b.length + 1 }, (_, index) => index);
+    for (let i = 1; i <= a.length; i += 1) {
+      let diagonal = row[0];
+      row[0] = i;
+      for (let j = 1; j <= b.length; j += 1) {
+        const above = row[j];
+        row[j] = Math.min(
+          row[j] + 1,
+          row[j - 1] + 1,
+          diagonal + (a[i - 1] === b[j - 1] ? 0 : 1)
+        );
+        diagonal = above;
+      }
+    }
+    return row[b.length];
+  }
+
+  function isEnglishLessonAnswerCorrect(answer, item) {
+    const normalized = normalizeEnglishAnswer(answer);
+    const variants = [item.en, ...(Array.isArray(item.answers) ? item.answers : [])]
+      .map(normalizeEnglishAnswer)
+      .filter(Boolean);
+    return variants.some((variant) => {
+      if (normalized === variant) return true;
+      const tolerance = variant.length >= 18 ? 2 : variant.length >= 6 ? 1 : 0;
+      return tolerance > 0 && editDistance(normalized, variant) <= tolerance;
+    });
+  }
+
+  function checkEnglishLessonAnswer(answer) {
+    const item = currentEnglishLessonItem();
+    if (!item || !lessonState.quiz) return false;
+    resetPerformance();
+    if (isEnglishLessonAnswerCorrect(answer, item)) {
+      lessonState.correct.add(lessonState.index);
+      lessonState.quiz = false;
+      saveEnglishLessonProgress();
+      renderEnglishLesson();
+      syncRecognitionLanguage(true);
+      respond(t('lesson.correct', { answer: item.en }), {
+        rate: 0.9,
+        onEnd: () => speakText(item.en, { lang: 'en-US', rate: 0.72, pitch: 1 })
+      });
+    } else {
+      renderEnglishLesson();
+      syncRecognitionLanguage(true);
+      respond(t('lesson.tryAgain'), { rate: 0.9 });
+    }
+    return true;
+  }
+
+  function nextEnglishLessonItem() {
+    if (!lessonState.open) return;
+    resetPerformance();
+    if (lessonState.index >= lessonState.items.length - 1) {
+      lessonState.completed = true;
+      saveEnglishLessonProgress();
+      const score = lessonState.correct.size;
+      const total = lessonState.items.length;
+      closeEnglishLesson(false);
+      respond(t('lesson.finished', { score, total }), { rate: 0.91 });
+      return;
+    }
+    lessonState.index += 1;
+    lessonState.quiz = false;
+    saveEnglishLessonProgress();
+    renderEnglishLesson();
+    syncRecognitionLanguage(true);
+    listenToEnglishLessonItem();
+  }
+
+  function handleEnglishLessonCommand(text, lower) {
+    if (/уч(?:им|ить|и)\s+английск|урок\s+английск|английск(?:ий|ого)\s+урок|learn\s+english|english\s+lesson/.test(lower)) {
+      startEnglishLesson();
+      return true;
+    }
+    if (!lessonState.open) return false;
+    if (/^(?:закрой|закончить|закончим|выйти|стоп)\s*(?:урок|английский)?$|^(?:close|end|stop)\s*(?:lesson)?$/.test(lower)) {
+      closeEnglishLesson();
+      return true;
+    }
+    if (/^(?:дальше|следующее|следующее слово|next)$/.test(lower)) {
+      nextEnglishLessonItem();
+      return true;
+    }
+    if (/^(?:слушать|послушать|повтори|произнеси|repeat|listen)$/.test(lower)) {
+      listenToEnglishLessonItem();
+      return true;
+    }
+    if (/^(?:проверка|проверь меня|тест|quiz|test me)$/.test(lower)) {
+      startEnglishLessonQuiz();
+      return true;
+    }
+    if (lessonState.quiz) return checkEnglishLessonAnswer(text);
+    return false;
+  }
+
+  lessonListenBtn?.addEventListener('click', listenToEnglishLessonItem);
+  lessonQuizBtn?.addEventListener('click', startEnglishLessonQuiz);
+  lessonNextBtn?.addEventListener('click', nextEnglishLessonItem);
+  lessonCloseBtn?.addEventListener('click', () => closeEnglishLesson());
 
   function updateBrainUi(detail = brain?.getStatus?.() || { status: 'unavailable', progress: 0 }) {
     if (!brainBtn || !brainStateText) return;
@@ -1054,7 +1397,8 @@
       guitar: performGuitar,
       dance: performDance,
       laugh: performLaugh,
-      cat: performCatScene
+      cat: performCatScene,
+      english: startEnglishLesson
     };
     if (actions[action]) actions[action]();
   }
@@ -1083,7 +1427,8 @@
     ruBtn.setAttribute('aria-pressed', String(language === 'ru'));
     enBtn.setAttribute('aria-pressed', String(language === 'en'));
     updateMicUi();
-    if (recognition) recognition.lang = language === 'en' ? 'en-US' : 'ru-RU';
+    syncRecognitionLanguage(false);
+    if (lessonState.open) renderEnglishLesson();
     setStatusKey('status.ready');
     requestAnimationFrame(measureExpandedPanel);
     if (announce) {
@@ -1112,6 +1457,22 @@
   let lastTranscript = '';
   let lastTranscriptAt = 0;
 
+  function preferredRecognitionLanguage() {
+    return lessonState.open && lessonState.quiz
+      ? 'en-US'
+      : language === 'en' ? 'en-US' : 'ru-RU';
+  }
+
+  function syncRecognitionLanguage(restart = false) {
+    if (!recognition) return;
+    recognition.lang = preferredRecognitionLanguage();
+    if (!restart || !micWanted) return;
+    if (recognitionActive) {
+      try { recognition.abort(); } catch (_) { /* already stopped */ }
+    }
+    maybeRestartRecognition(600);
+  }
+
   function updateMicUi() {
     micBtn.classList.toggle('active', micWanted);
     micBtn.setAttribute('aria-pressed', String(micWanted));
@@ -1124,7 +1485,7 @@
   function createRecognition() {
     if (!SpeechRecognitionAPI) return null;
     const instance = new SpeechRecognitionAPI();
-    instance.lang = language === 'en' ? 'en-US' : 'ru-RU';
+    instance.lang = preferredRecognitionLanguage();
     instance.continuous = false;
     instance.interimResults = true;
     instance.maxAlternatives = 1;
@@ -1185,7 +1546,7 @@
     if (!micWanted || speaking || audioPerformance || knowledgeSearching || brainThinking || recognitionActive) return;
     if (!recognition) recognition = createRecognition();
     if (!recognition) return;
-    recognition.lang = language === 'en' ? 'en-US' : 'ru-RU';
+    recognition.lang = preferredRecognitionLanguage();
     try {
       recognition.start();
     } catch (_) {
@@ -1404,6 +1765,8 @@
     addMessage('user', text);
     setStatusKey('status.thinking', 'speaking');
     const lower = text.toLocaleLowerCase(language === 'ru' ? 'ru-RU' : 'en-US');
+
+    if (handleEnglishLessonCommand(text, lower)) return;
 
     if (/^(русский|на русском|russian)$/.test(lower)) {
       setLanguage('ru');
@@ -1665,7 +2028,7 @@
 
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
-      navigator.serviceWorker.register('./service-worker.js?v=26.0.0')
+      navigator.serviceWorker.register('./service-worker.js?v=26.1.0')
         .then((registration) => registration.update())
         .catch(() => {});
     });
@@ -1679,6 +2042,10 @@
     get compassHeading() { return compassHeading; },
     get compassZoomed() { return compassZoomed; },
     get brainStatus() { return brain?.getStatus?.() || null; },
+    get lessonOpen() { return lessonState.open; },
+    get lessonIndex() { return lessonState.index; },
+    get lessonScore() { return lessonState.correct.size; },
+    get lessonItem() { return currentEnglishLessonItem(); },
     get lastBotMessage() {
       const messages = chat.querySelectorAll('.message.bot .bubble');
       return messages.length ? messages[messages.length - 1].textContent : '';
@@ -1691,6 +2058,11 @@
     handleUserText,
     cleanSpeechText,
     solveMathQuestion,
+    startEnglishLesson,
+    startEnglishLessonQuiz,
+    checkEnglishLessonAnswer,
+    nextEnglishLessonItem,
+    closeEnglishLesson,
     answerKnowledgeQuestion,
     askAgent,
     activateLocalBrain
