@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+  <meta name="theme-color" content="#050816">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="NOVA">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="description" content="NOVA — бесплатный локальный ИИ-агент с памятью, инструментами, голосовым чатом, компасом, создателем Тумсоевым и лунной кошкой.">
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="apple-touch-icon" href="./icon-192.png">
+  <link rel="stylesheet" href="./styles.css?v=26.0.0">
+  <title>NOVA 26 — Free AI Agent</title>
+</head>
+<body>
+  <div class="space-bg" aria-hidden="true">
+    <div class="stars stars-a"></div>
+    <div class="stars stars-b"></div>
+    <div class="planet"><span></span></div>
+    <div class="shooting-star shooting-star-a"></div>
+    <div class="shooting-star shooting-star-b"></div>
+    <div class="moon-horizon"></div>
+  </div>
+
+  <main class="app-shell">
+    <header class="app-header">
+      <div class="brand" aria-label="NOVA AI">
+        <span class="brand-mark">N</span>
+        <span class="brand-copy"><b>NOVA</b><small>AI ROBOT</small></span>
+      </div>
+
+      <div class="language-switch" role="group" aria-label="Language">
+        <button id="ruBtn" class="language-btn active" type="button" aria-pressed="true">🇷🇺 RU</button>
+        <button id="enBtn" class="language-btn" type="button" aria-pressed="false">🇺🇸 EN</button>
+      </div>
+    </header>
+
+    <section id="stage" class="stage" aria-label="Тумсоев, NOVA и лунная кошка">
+      <div class="stage-glow" aria-hidden="true"></div>
+
+      <button id="compassWidget" class="compass-widget" type="button" aria-label="Включить компас" aria-pressed="false">
+        <span class="compass-face" aria-hidden="true">
+          <span id="compassDial" class="compass-dial">
+            <b class="compass-cardinal compass-north">N</b>
+            <b class="compass-cardinal compass-east">E</b>
+            <b class="compass-cardinal compass-south">S</b>
+            <b class="compass-cardinal compass-west">W</b>
+            <span class="compass-needle">
+              <i class="compass-needle-north"></i>
+              <i class="compass-needle-south"></i>
+            </span>
+            <span class="compass-center"></span>
+          </span>
+          <span class="compass-lubber"></span>
+        </span>
+        <span id="compassReadout" class="compass-readout">НАЖМИ</span>
+        <span class="compass-zoom-badge" aria-hidden="true"></span>
+      </button>
+
+      <div id="owner" class="owner-character draggable" role="button" tabindex="0" aria-label="Тумсоев, хозяин и создатель NOVA">
+        <div class="owner-motion">
+          <div class="owner-shadow"></div>
+          <div class="owner-photo-frame">
+            <span class="owner-avatar" aria-hidden="true">T</span>
+            <span class="owner-scan" aria-hidden="true"></span>
+          </div>
+          <div class="owner-name">TUMSOEV</div>
+        </div>
+      </div>
+
+      <div id="cat" class="cat-character is-sleeping draggable" role="button" tabindex="0" aria-label="Разбудить кошку">
+        <div class="cat-motion">
+          <div class="cat-shadow"></div>
+          <div class="cat-tail"></div>
+          <div class="cat-body"></div>
+          <div class="cat-head">
+            <i class="cat-ear cat-ear-left"></i>
+            <i class="cat-ear cat-ear-right"></i>
+            <i class="cat-eye cat-eye-left"></i>
+            <i class="cat-eye cat-eye-right"></i>
+            <i class="cat-nose"></i>
+            <i class="cat-mouth"></i>
+            <i class="cat-whisker cat-whisker-left"></i>
+            <i class="cat-whisker cat-whisker-right"></i>
+          </div>
+          <div class="cat-paws"><i></i><i></i></div>
+          <div class="cat-zzz"><span>Z</span><span>z</span><span>z</span></div>
+        </div>
+      </div>
+
+      <div id="robot" class="robot-character draggable" role="button" tabindex="0" aria-label="Робот NOVA">
+        <div class="robot-motion">
+          <div class="robot-shadow"></div>
+          <div class="antenna"><i></i></div>
+          <div class="robot-head">
+            <div class="robot-face">
+              <i class="robot-eye robot-eye-left"></i>
+              <i class="robot-eye robot-eye-right"></i>
+              <i class="robot-mouth"></i>
+            </div>
+          </div>
+          <div class="robot-neck"></div>
+          <div class="robot-arm robot-arm-left"><i></i></div>
+          <div class="robot-arm robot-arm-right"><i></i></div>
+          <div class="robot-body">
+            <div class="robot-core"><i></i></div>
+            <b>NOVA</b>
+          </div>
+          <div class="robot-leg robot-leg-left"><i></i></div>
+          <div class="robot-leg robot-leg-right"><i></i></div>
+          <div class="robot-guitar" aria-hidden="true">🎸</div>
+        </div>
+      </div>
+
+      <div class="drag-hint" id="dragHint">↔ Перетаскивай Тумсоева, NOVA и кошку</div>
+    </section>
+
+    <section id="chatPanel" class="chat-panel" aria-label="NOVA chat">
+      <button id="panelToggle" class="panel-toggle" type="button" aria-controls="chat quickActions composer" aria-expanded="true" aria-label="Свернуть панель">
+        <span class="panel-grip" aria-hidden="true"></span>
+        <span class="panel-chevron" aria-hidden="true">⌄</span>
+        <span id="panelToggleText" class="sr-only">Свернуть панель</span>
+      </button>
+
+      <div class="status-row" aria-live="polite">
+        <span id="statusDot" class="status-dot"></span>
+        <span id="statusText">NOVA готова</span>
+        <button id="brainBtn" class="brain-chip" type="button" aria-label="Включить бесплатный локальный мозг">
+          <span aria-hidden="true">🧠</span><b id="brainStateText">Базовый</b>
+        </button>
+        <span class="version">v26</span>
+      </div>
+
+      <div id="chat" class="chat-log" role="log" aria-live="polite" aria-relevant="additions"></div>
+
+      <div id="quickActions" class="quick-actions" aria-label="NOVA actions">
+        <button class="action-btn" type="button" data-action="joke"><span>😂</span><b data-i18n="action.joke">Шутка</b></button>
+        <button class="action-btn" type="button" data-action="spin"><span>🌀</span><b data-i18n="action.spin">Крутись</b></button>
+        <button class="action-btn guitar-action" type="button" data-action="guitar"><span>🎸</span><b data-i18n="action.guitar">Гитара</b></button>
+        <button class="action-btn" type="button" data-action="dance"><span>💃</span><b data-i18n="action.dance">Танцуй</b></button>
+        <button class="action-btn" type="button" data-action="laugh"><span>😄</span><b data-i18n="action.laugh">Смейся</b></button>
+        <button class="action-btn" type="button" data-action="cat"><span>🐈</span><b data-i18n="action.cat">Кошка</b></button>
+      </div>
+
+      <form id="composer" class="composer" autocomplete="off">
+        <label class="sr-only" for="messageInput" data-i18n="composer.label">Сообщение для NOVA</label>
+        <input id="messageInput" type="text" maxlength="240" enterkeyhint="send" placeholder="Напиши или нажми микрофон…">
+        <button id="micBtn" class="round-btn mic-btn" type="button" aria-label="Включить микрофон" aria-pressed="false">
+          <span class="mic-rings" aria-hidden="true"></span><span class="mic-icon">🎙️</span>
+        </button>
+        <button id="sendBtn" class="round-btn send-btn" type="submit" aria-label="Отправить">➤</button>
+      </form>
+    </section>
+  </main>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <noscript>Для работы NOVA включите JavaScript.</noscript>
+  <script src="./brain.js?v=26.0.0" defer></script>
+  <script src="./app.js?v=26.0.0" defer></script>
+</body>
+</html>

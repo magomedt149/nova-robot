@@ -1,0 +1,22 @@
+{
+  "name": "NOVA 26 — Free AI Agent",
+  "short_name": "NOVA 26",
+  "description": "Бесплатный локальный ИИ-агент NOVA с памятью, инструментами, компасом, создателем Тумсоевым, голосовым чатом и лунной кошкой.",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#02030a",
+  "theme_color": "#07132f",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
