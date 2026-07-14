@@ -1,7 +1,7 @@
 (() => {
   'use strict';
 
-  const VERSION = '26.2.0';
+  const VERSION = '26.3.0';
   const $ = (selector) => document.querySelector(selector);
   const $$ = (selector) => [...document.querySelectorAll(selector)];
 
@@ -131,7 +131,9 @@
       'compass.noSensor': 'Поверни телефон восьмёркой, чтобы откалибровать компас.',
       'drag.hint': '↔ Перетаскивай Тумсоева, NOVA и кошку',
       'status.ready': 'NOVA готова',
+      'status.micRequest': 'Разрешите микрофон во всплывающем окне…',
       'status.listening': 'Слушаю… говорите',
+      'status.hearing': 'Голос слышу… распознаю',
       'status.wake': 'NOVA проснулась — слушаю…',
       'status.heard': 'Слышу: {text}',
       'status.thinking': 'Поняла. Отвечаю…',
@@ -142,6 +144,8 @@
       'status.music': 'Тумсоев и NOVA играют на гитаре…',
       'status.micOff': 'Микрофон выключен',
       'status.micDenied': 'Разрешите доступ к микрофону',
+      'status.micBusy': 'Микрофон занят или недоступен',
+      'status.noSpeech': 'Не расслышала. Скажите ещё раз: «Привет, Нова»',
       'status.micUnsupported': 'Здесь голосовой ввод не поддерживается',
       'status.secure': 'Микрофон работает на опубликованном HTTPS‑сайте',
       'chat.welcome': 'Привет! Я NOVA — бесплатный мини‑агент Тумсоева. Включи 🎙 один раз и скажи: «Привет, Нова» — мой голосовой шар проснётся. Ещё я веду задачи, считаю, узнаю погоду и учу английскому по 10 слов в день.',
@@ -247,7 +251,9 @@
       'compass.noSensor': 'Move your phone in a figure eight to calibrate the compass.',
       'drag.hint': '↔ Drag Tumsoev, NOVA, and the cat',
       'status.ready': 'NOVA is ready',
+      'status.micRequest': 'Allow microphone access in the browser prompt…',
       'status.listening': 'Listening… speak now',
+      'status.hearing': 'I hear your voice… recognizing',
       'status.wake': 'NOVA is awake — listening…',
       'status.heard': 'I hear: {text}',
       'status.thinking': 'Got it. Answering…',
@@ -258,6 +264,8 @@
       'status.music': 'Tumsoev and NOVA are playing guitar…',
       'status.micOff': 'Microphone is off',
       'status.micDenied': 'Please allow microphone access',
+      'status.micBusy': 'The microphone is busy or unavailable',
+      'status.noSpeech': 'I didn’t catch that. Say “Hey, NOVA” again',
       'status.micUnsupported': 'Voice input is not supported here',
       'status.secure': 'The microphone works on the published HTTPS site',
       'chat.welcome': 'Hi! I’m NOVA, Tumsoev’s free mini-agent. Turn on 🎙 once and say “Hey, NOVA” to wake my voice orb. I can also manage tasks, check weather, and teach 10 English words and phrases a day.',
@@ -391,6 +399,7 @@
   let speechToken = 0;
   let wakeOrbActive = false;
   let wakeOrbTimer = 0;
+  let voiceOrbPreviewTimer = 0;
   let panelCollapsed = false;
   let panelTransitionTimer = 0;
   let knowledgeRequestId = 0;
@@ -873,13 +882,38 @@
     speakText(text, options);
   }
 
+  function setNovaVoiceOrbVisual(active) {
+    root.classList.toggle('nova-wake-active', active);
+    robot.classList.toggle('is-wake-orb', active);
+    micBtn.classList.toggle('wake-orb', active);
+  }
+
+  function clearNovaVoicePreview(updateStatus = true) {
+    clearTimeout(voiceOrbPreviewTimer);
+    voiceOrbPreviewTimer = 0;
+    if (wakeOrbActive) return;
+    setNovaVoiceOrbVisual(false);
+    if (updateStatus && !speaking) {
+      if (micWanted && recognitionActive) setStatusKey('status.listening', 'listening');
+      else setStatusKey('status.ready');
+    }
+  }
+
+  function pulseNovaVoiceOrb() {
+    if (wakeOrbActive) return;
+    clearTimeout(voiceOrbPreviewTimer);
+    setNovaVoiceOrbVisual(true);
+    setStatusKey('status.hearing', 'listening');
+    voiceOrbPreviewTimer = window.setTimeout(() => clearNovaVoicePreview(true), 1800);
+  }
+
   function deactivateNovaWakeOrb(updateStatus = true) {
     clearTimeout(wakeOrbTimer);
+    clearTimeout(voiceOrbPreviewTimer);
     wakeOrbTimer = 0;
+    voiceOrbPreviewTimer = 0;
     wakeOrbActive = false;
-    root.classList.remove('nova-wake-active');
-    robot.classList.remove('is-wake-orb');
-    micBtn.classList.remove('wake-orb');
+    setNovaVoiceOrbVisual(false);
     if (!updateStatus || speaking) return;
     if (micWanted && recognitionActive) setStatusKey('status.listening', 'listening');
     else setStatusKey('status.ready');
@@ -887,10 +921,10 @@
 
   function activateNovaWakeOrb() {
     clearTimeout(wakeOrbTimer);
+    clearTimeout(voiceOrbPreviewTimer);
+    voiceOrbPreviewTimer = 0;
     wakeOrbActive = true;
-    root.classList.add('nova-wake-active');
-    robot.classList.add('is-wake-orb');
-    micBtn.classList.add('wake-orb');
+    setNovaVoiceOrbVisual(true);
     setPanelCollapsed(false);
     setStatusKey('status.wake', 'listening');
     wakeOrbTimer = window.setTimeout(() => deactivateNovaWakeOrb(true), 6500);
@@ -899,11 +933,12 @@
   function isNovaWakePhrase(value) {
     const phrase = String(value || '')
       .toLocaleLowerCase('ru-RU')
-      .replace(/[.,!?;:«»"']/g, ' ')
+      .replace(/ё/g, 'е')
+      .replace(/[^a-zа-я0-9\s-]/g, ' ')
       .replace(/\s+/g, ' ')
       .trim();
-    return /^(?:привет|здравствуй|эй)\s+(?:нова|ново|nova)$/.test(phrase)
-      || /^(?:hey|hi|hello)\s+nova$/.test(phrase);
+    return /(?:^|\s)(?:привет|здравствуй|эй|алло)\s*(?:нова|ново|новая|новой|новую|нава|nova)(?=\s|$)/.test(phrase)
+      || /(?:^|\s)(?:hey|hi|hello)\s+nova(?=\s|$)/.test(phrase);
   }
 
   function englishLessonDayKey(date = new Date()) {
@@ -1493,7 +1528,9 @@
   const SpeechRecognitionAPI = window.SpeechRecognition || window.webkitSpeechRecognition;
   let recognition = null;
   let recognitionActive = false;
+  let recognitionStarting = false;
   let micWanted = false;
+  let microphonePermissionRequestId = 0;
   let recognitionTimer = 0;
   let lastTranscript = '';
   let lastTranscriptAt = 0;
@@ -1523,41 +1560,105 @@
     owner.classList.toggle('is-listening', activelyListening);
   }
 
+  function applyRecognitionPhraseHints(instance) {
+    const PhraseAPI = window.SpeechRecognitionPhrase;
+    if (!PhraseAPI || !('phrases' in instance)) return;
+    try {
+      instance.phrases = [
+        ['Привет, Нова', 10],
+        ['Привет Нова', 10],
+        ['Нова', 9],
+        ['Hey Nova', 10]
+      ].map(([phrase, boost]) => new PhraseAPI(phrase, boost));
+    } catch (_) { /* contextual hints are optional */ }
+  }
+
+  function recognitionCandidates(result) {
+    const candidates = [];
+    const count = Math.min(Number(result?.length) || 0, 5);
+    for (let index = 0; index < count; index += 1) {
+      const transcript = String(result[index]?.transcript || '').trim();
+      if (transcript) candidates.push(transcript);
+    }
+    return candidates;
+  }
+
+  function dispatchRecognizedText(text) {
+    const clean = String(text || '').trim();
+    if (!clean) return false;
+    const normalized = clean.toLocaleLowerCase('ru-RU')
+      .replace(/[^a-zа-яё0-9\s-]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+    const now = Date.now();
+    if (normalized === lastTranscript && now - lastTranscriptAt <= 2600) return false;
+    lastTranscript = normalized;
+    lastTranscriptAt = now;
+    handleUserText(clean);
+    return true;
+  }
+
   function createRecognition() {
     if (!SpeechRecognitionAPI) return null;
     const instance = new SpeechRecognitionAPI();
     instance.lang = preferredRecognitionLanguage();
     instance.continuous = false;
     instance.interimResults = true;
-    instance.maxAlternatives = 1;
+    instance.maxAlternatives = 5;
+    applyRecognitionPhraseHints(instance);
 
     instance.onstart = () => {
+      recognitionStarting = false;
       recognitionActive = true;
       updateMicUi();
       setStatusKey('status.listening', 'listening');
     };
 
+    instance.onaudiostart = () => {
+      if (micWanted && !speaking) setStatusKey('status.listening', 'listening');
+    };
+
+    instance.onsoundstart = pulseNovaVoiceOrb;
+    instance.onspeechstart = pulseNovaVoiceOrb;
+
     instance.onresult = (event) => {
       let interim = '';
-      let finalText = '';
+      const finalParts = [];
       for (let i = event.resultIndex; i < event.results.length; i += 1) {
-        const fragment = event.results[i][0].transcript;
-        if (event.results[i].isFinal) finalText += fragment;
-        else interim += fragment;
-      }
-      if (interim) setStatusKey('status.heard', 'listening', { text: interim });
-      if (finalText.trim()) {
-        const normalized = finalText.trim().toLowerCase();
-        const now = Date.now();
-        if (normalized !== lastTranscript || now - lastTranscriptAt > 2600) {
-          lastTranscript = normalized;
-          lastTranscriptAt = now;
-          handleUserText(finalText.trim());
+        const result = event.results[i];
+        const candidates = recognitionCandidates(result);
+        const wakeCandidate = candidates.find(isNovaWakePhrase);
+        const fragment = wakeCandidate || candidates[0] || '';
+        if (result.isFinal) finalParts.push(fragment);
+        else {
+          interim += `${fragment} `;
+          if (wakeCandidate) {
+            setStatusKey('status.heard', 'listening', { text: wakeCandidate });
+            if (dispatchRecognizedText(wakeCandidate)) {
+              try { instance.stop?.(); } catch (_) { /* result is already complete enough */ }
+            }
+            return;
+          }
         }
+      }
+      interim = interim.trim();
+      const finalText = finalParts.join(' ').trim();
+      if (interim) {
+        pulseNovaVoiceOrb();
+        setStatusKey('status.heard', 'listening', { text: interim });
+      }
+      if (finalText.trim()) {
+        dispatchRecognizedText(finalText);
       }
     };
 
+    instance.onnomatch = () => {
+      clearNovaVoicePreview(false);
+      if (micWanted) setStatusKey('status.noSpeech', 'error');
+    };
+
     instance.onerror = (event) => {
+      recognitionStarting = false;
       recognitionActive = false;
       updateMicUi();
       if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
@@ -1570,13 +1671,17 @@
         micWanted = false;
         deactivateNovaWakeOrb(false);
         updateMicUi();
-        setStatusKey('status.micDenied', 'error');
+        setStatusKey('status.micBusy', 'error');
+      } else if (event.error === 'no-speech') {
+        clearNovaVoicePreview(false);
+        if (micWanted) setStatusKey('status.noSpeech', 'error');
       } else if (event.error !== 'aborted' && event.error !== 'no-speech') {
         setStatus(`${t('status.micUnsupported')}: ${event.error}`, 'error');
       }
     };
 
     instance.onend = () => {
+      recognitionStarting = false;
       recognitionActive = false;
       updateMicUi();
       if (micWanted && !speaking && !audioPerformance && !knowledgeSearching && !brainThinking) maybeRestartRecognition(480);
@@ -1586,13 +1691,15 @@
 
   function startRecognition() {
     clearTimeout(recognitionTimer);
-    if (!micWanted || speaking || audioPerformance || knowledgeSearching || brainThinking || recognitionActive) return;
+    if (!micWanted || speaking || audioPerformance || knowledgeSearching || brainThinking || recognitionActive || recognitionStarting) return;
     if (!recognition) recognition = createRecognition();
     if (!recognition) return;
     recognition.lang = preferredRecognitionLanguage();
+    recognitionStarting = true;
     try {
       recognition.start();
     } catch (_) {
+      recognitionStarting = false;
       maybeRestartRecognition(600);
     }
   }
@@ -1605,23 +1712,36 @@
 
   function pauseRecognitionForOutput() {
     clearTimeout(recognitionTimer);
-    if (!recognition || !recognitionActive) return;
+    if (!recognition || (!recognitionActive && !recognitionStarting)) return;
     try { recognition.abort(); } catch (_) { /* already closing */ }
   }
 
   function stopMicrophone(showMessage = true) {
     micWanted = false;
+    microphonePermissionRequestId += 1;
     deactivateNovaWakeOrb(false);
     clearTimeout(recognitionTimer);
     if (recognition) {
       try { recognition.abort(); } catch (_) { /* already stopped */ }
     }
+    recognitionStarting = false;
     recognitionActive = false;
     updateMicUi();
     if (showMessage) setStatusKey('status.micOff');
   }
 
-  function toggleMicrophone() {
+  async function requestMicrophonePermission() {
+    if (!navigator.mediaDevices?.getUserMedia) return { ok: true };
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      stream.getTracks().forEach((track) => track.stop());
+      return { ok: true };
+    } catch (error) {
+      return { ok: false, error };
+    }
+  }
+
+  async function toggleMicrophone() {
     if (micWanted) {
       stopMicrophone();
       return;
@@ -1639,8 +1759,21 @@
     }
     resetPerformance();
     micWanted = true;
-    if (!recognition) recognition = createRecognition();
     updateMicUi();
+    setStatusKey('status.micRequest', 'listening');
+    const requestId = ++microphonePermissionRequestId;
+    const permission = await requestMicrophonePermission();
+    if (!micWanted || requestId !== microphonePermissionRequestId) return;
+    if (!permission.ok) {
+      micWanted = false;
+      updateMicUi();
+      const denied = permission.error?.name === 'NotAllowedError'
+        || permission.error?.name === 'PermissionDeniedError';
+      setStatusKey(denied ? 'status.micDenied' : 'status.micBusy', 'error');
+      showToast(t('chat.micHelp'));
+      return;
+    }
+    if (!recognition) recognition = createRecognition();
     setStatusKey('status.listening', 'listening');
     startRecognition();
   }
@@ -2085,7 +2218,7 @@
 
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
-      navigator.serviceWorker.register('./service-worker.js?v=26.2.0')
+      navigator.serviceWorker.register('./service-worker.js?v=26.3.0')
         .then((registration) => registration.update())
         .catch(() => {});
     });
