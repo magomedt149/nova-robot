@@ -1,7 +1,7 @@
 (() => {
   'use strict';
 
-  const VERSION = '26.1.0';
+  const VERSION = '26.2.0';
   const $ = (selector) => document.querySelector(selector);
   const $$ = (selector) => [...document.querySelectorAll(selector)];
 
@@ -132,6 +132,7 @@
       'drag.hint': '↔ Перетаскивай Тумсоева, NOVA и кошку',
       'status.ready': 'NOVA готова',
       'status.listening': 'Слушаю… говорите',
+      'status.wake': 'NOVA проснулась — слушаю…',
       'status.heard': 'Слышу: {text}',
       'status.thinking': 'Поняла. Отвечаю…',
       'status.searching': 'Ищу точный ответ…',
@@ -143,8 +144,8 @@
       'status.micDenied': 'Разрешите доступ к микрофону',
       'status.micUnsupported': 'Здесь голосовой ввод не поддерживается',
       'status.secure': 'Микрофон работает на опубликованном HTTPS‑сайте',
-      'chat.welcome': 'Привет! Я NOVA — бесплатный мини‑агент Тумсоева. Я умею запоминать заметки, вести задачи, считать, узнавать погоду и учить английскому по 10 слов в день. Нажми 🇺🇸 «Английский» или скажи: «Учим английский».',
-      'chat.welcomeNamed': 'Привет, {name}! Я NOVA — бесплатный мини‑агент Тумсоева. Я помню тебя, умею вести задачи, считать, узнавать погоду и учить английскому по 10 слов в день. Нажми 🇺🇸 «Английский».',
+      'chat.welcome': 'Привет! Я NOVA — бесплатный мини‑агент Тумсоева. Включи 🎙 один раз и скажи: «Привет, Нова» — мой голосовой шар проснётся. Ещё я веду задачи, считаю, узнаю погоду и учу английскому по 10 слов в день.',
+      'chat.welcomeNamed': 'Привет, {name}! Включи 🎙 один раз и скажи: «Привет, Нова» — мой голосовой шар проснётся. Я помню тебя, веду задачи, узнаю погоду и учу английскому по 10 слов в день.',
       'chat.micHelp': 'Откройте опубликованный сайт в Safari или Chrome и разрешите микрофон. Пока можно написать сообщение.',
       'brain.basic': 'Базовый',
       'brain.loading': 'Загрузка {progress}%',
@@ -169,6 +170,8 @@
       'guitar.done': 'Наш концерт окончен! Нажми «Гитара», и мы сыграем другую песню.',
       'hello': 'Привет! Я NOVA. Очень рада тебя видеть! Как у тебя дела?',
       'hello.named': 'Привет, {name}! Очень рада тебя видеть! Как у тебя дела?',
+      'wake.reply': 'Я здесь. Слушаю тебя.',
+      'wake.replyNamed': 'Я здесь, {name}. Слушаю тебя.',
       'howAreYou': 'У меня всё отлично: батарея заряжена, глаза светятся, а кошка снова уснула.',
       'who': 'Меня зовут NOVA. Я умный лунный робот. Меня создал мой хозяин Тумсоев, чтобы я общалась с людьми, отвечала на вопросы, шутила и пела.',
       'creator': 'Меня создал мой хозяин Тумсоев. Он придумал NOVA и продолжает делать меня умнее.',
@@ -245,6 +248,7 @@
       'drag.hint': '↔ Drag Tumsoev, NOVA, and the cat',
       'status.ready': 'NOVA is ready',
       'status.listening': 'Listening… speak now',
+      'status.wake': 'NOVA is awake — listening…',
       'status.heard': 'I hear: {text}',
       'status.thinking': 'Got it. Answering…',
       'status.searching': 'Looking for an accurate answer…',
@@ -256,8 +260,8 @@
       'status.micDenied': 'Please allow microphone access',
       'status.micUnsupported': 'Voice input is not supported here',
       'status.secure': 'The microphone works on the published HTTPS site',
-      'chat.welcome': 'Hi! I’m NOVA, Tumsoev’s free mini-agent. I can remember notes, manage tasks, calculate, check weather, and teach 10 English words and phrases a day. Tap 🇺🇸 English or say “Learn English”.',
-      'chat.welcomeNamed': 'Hi, {name}! I’m NOVA, Tumsoev’s free mini-agent. I remember you, manage tasks, check weather, and teach 10 English words and phrases a day. Tap 🇺🇸 English.',
+      'chat.welcome': 'Hi! I’m NOVA, Tumsoev’s free mini-agent. Turn on 🎙 once and say “Hey, NOVA” to wake my voice orb. I can also manage tasks, check weather, and teach 10 English words and phrases a day.',
+      'chat.welcomeNamed': 'Hi, {name}! Turn on 🎙 once and say “Hey, NOVA” to wake my voice orb. I remember you, manage tasks, check weather, and teach 10 English words and phrases a day.',
       'chat.micHelp': 'Open the published site in Safari or Chrome and allow microphone access. You can type a message for now.',
       'brain.basic': 'Basic',
       'brain.loading': 'Loading {progress}%',
@@ -282,6 +286,8 @@
       'guitar.done': 'Our concert is over! Tap Guitar and we’ll play a different song.',
       'hello': 'Hello! I’m NOVA. It’s great to see you! How are you?',
       'hello.named': 'Hello, {name}! It’s great to see you! How are you?',
+      'wake.reply': 'I’m here. I’m listening.',
+      'wake.replyNamed': 'I’m here, {name}. I’m listening.',
       'howAreYou': 'I’m doing great: my battery is full, my eyes are glowing, and the cat is asleep again.',
       'who': 'My name is NOVA. I’m a smart Moon robot. My owner Tumsoev created me to chat with people, answer questions, tell jokes, and sing.',
       'creator': 'My owner Tumsoev created me. He invented NOVA and keeps making me smarter.',
@@ -383,6 +389,8 @@
   let audioPerformance = false;
   let speaking = false;
   let speechToken = 0;
+  let wakeOrbActive = false;
+  let wakeOrbTimer = 0;
   let panelCollapsed = false;
   let panelTransitionTimer = 0;
   let knowledgeRequestId = 0;
@@ -863,6 +871,39 @@
   function respond(text, options = {}) {
     addMessage('bot', text);
     speakText(text, options);
+  }
+
+  function deactivateNovaWakeOrb(updateStatus = true) {
+    clearTimeout(wakeOrbTimer);
+    wakeOrbTimer = 0;
+    wakeOrbActive = false;
+    root.classList.remove('nova-wake-active');
+    robot.classList.remove('is-wake-orb');
+    micBtn.classList.remove('wake-orb');
+    if (!updateStatus || speaking) return;
+    if (micWanted && recognitionActive) setStatusKey('status.listening', 'listening');
+    else setStatusKey('status.ready');
+  }
+
+  function activateNovaWakeOrb() {
+    clearTimeout(wakeOrbTimer);
+    wakeOrbActive = true;
+    root.classList.add('nova-wake-active');
+    robot.classList.add('is-wake-orb');
+    micBtn.classList.add('wake-orb');
+    setPanelCollapsed(false);
+    setStatusKey('status.wake', 'listening');
+    wakeOrbTimer = window.setTimeout(() => deactivateNovaWakeOrb(true), 6500);
+  }
+
+  function isNovaWakePhrase(value) {
+    const phrase = String(value || '')
+      .toLocaleLowerCase('ru-RU')
+      .replace(/[.,!?;:«»"']/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+    return /^(?:привет|здравствуй|эй)\s+(?:нова|ново|nova)$/.test(phrase)
+      || /^(?:hey|hi|hello)\s+nova$/.test(phrase);
   }
 
   function englishLessonDayKey(date = new Date()) {
@@ -1521,11 +1562,13 @@
       updateMicUi();
       if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
         micWanted = false;
+        deactivateNovaWakeOrb(false);
         updateMicUi();
         setStatusKey('status.micDenied', 'error');
         showToast(t('chat.micHelp'));
       } else if (event.error === 'audio-capture') {
         micWanted = false;
+        deactivateNovaWakeOrb(false);
         updateMicUi();
         setStatusKey('status.micDenied', 'error');
       } else if (event.error !== 'aborted' && event.error !== 'no-speech') {
@@ -1568,6 +1611,7 @@
 
   function stopMicrophone(showMessage = true) {
     micWanted = false;
+    deactivateNovaWakeOrb(false);
     clearTimeout(recognitionTimer);
     if (recognition) {
       try { recognition.abort(); } catch (_) { /* already stopped */ }
@@ -1765,6 +1809,19 @@
     addMessage('user', text);
     setStatusKey('status.thinking', 'speaking');
     const lower = text.toLocaleLowerCase(language === 'ru' ? 'ru-RU' : 'en-US');
+
+    if (isNovaWakePhrase(text)) {
+      resetPerformance();
+      activateNovaWakeOrb();
+      respond(visitorName ? t('wake.replyNamed', { name: visitorName }) : t('wake.reply'), {
+        pitch: 1.08,
+        rate: 0.92,
+        onEnd: () => {
+          if (wakeOrbActive) setStatusKey('status.wake', 'listening');
+        }
+      });
+      return;
+    }
 
     if (handleEnglishLessonCommand(text, lower)) return;
 
@@ -2028,7 +2085,7 @@
 
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
-      navigator.serviceWorker.register('./service-worker.js?v=26.1.0')
+      navigator.serviceWorker.register('./service-worker.js?v=26.2.0')
         .then((registration) => registration.update())
         .catch(() => {});
     });
@@ -2042,6 +2099,7 @@
     get compassHeading() { return compassHeading; },
     get compassZoomed() { return compassZoomed; },
     get brainStatus() { return brain?.getStatus?.() || null; },
+    get wakeOrbActive() { return wakeOrbActive; },
     get lessonOpen() { return lessonState.open; },
     get lessonIndex() { return lessonState.index; },
     get lessonScore() { return lessonState.correct.size; },
@@ -2056,6 +2114,9 @@
     enableCompass,
     handleCompassOrientation,
     handleUserText,
+    activateNovaWakeOrb,
+    deactivateNovaWakeOrb,
+    isNovaWakePhrase,
     cleanSpeechText,
     solveMathQuestion,
     startEnglishLesson,

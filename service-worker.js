@@ -1,4 +1,4 @@
-const CACHE = 'nova-v26-1-english-coach-20260714';
+const CACHE = 'nova-v26-2-voice-orb-20260714';
 const CORE = [
   './',
   './index.html',
