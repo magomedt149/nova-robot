@@ -12,6 +12,7 @@
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="./icon-192.png">
   <link rel="stylesheet" href="./styles.css?v=26.3.0">
+  <link rel="stylesheet" href="./photo-studio.css?v=26.4.0">
   <title>NOVA 26 — Free AI Agent</title>
 </head>
 <body>
@@ -47,10 +48,7 @@
             <b class="compass-cardinal compass-east">E</b>
             <b class="compass-cardinal compass-south">S</b>
             <b class="compass-cardinal compass-west">W</b>
-            <span class="compass-needle">
-              <i class="compass-needle-north"></i>
-              <i class="compass-needle-south"></i>
-            </span>
+            <span class="compass-needle"><i class="compass-needle-north"></i><i class="compass-needle-south"></i></span>
             <span class="compass-center"></span>
           </span>
           <span class="compass-lubber"></span>
@@ -60,102 +58,29 @@
       </button>
 
       <div id="owner" class="owner-character draggable" role="button" tabindex="0" aria-label="Тумсоев, хозяин и создатель NOVA">
-        <div class="owner-motion">
-          <div class="owner-shadow"></div>
-          <div class="owner-photo-frame">
-            <span class="owner-avatar" aria-hidden="true">T</span>
-            <span class="owner-scan" aria-hidden="true"></span>
-          </div>
-          <div class="owner-name">TUMSOEV</div>
-        </div>
+        <div class="owner-motion"><div class="owner-shadow"></div><div class="owner-photo-frame"><span class="owner-avatar" aria-hidden="true">T</span><span class="owner-scan" aria-hidden="true"></span></div><div class="owner-name">TUMSOEV</div></div>
       </div>
 
       <div id="cat" class="cat-character is-sleeping draggable" role="button" tabindex="0" aria-label="Разбудить кошку">
-        <div class="cat-motion">
-          <div class="cat-shadow"></div>
-          <div class="cat-tail"></div>
-          <div class="cat-body"></div>
-          <div class="cat-head">
-            <i class="cat-ear cat-ear-left"></i>
-            <i class="cat-ear cat-ear-right"></i>
-            <i class="cat-eye cat-eye-left"></i>
-            <i class="cat-eye cat-eye-right"></i>
-            <i class="cat-nose"></i>
-            <i class="cat-mouth"></i>
-            <i class="cat-whisker cat-whisker-left"></i>
-            <i class="cat-whisker cat-whisker-right"></i>
-          </div>
-          <div class="cat-paws"><i></i><i></i></div>
-          <div class="cat-zzz"><span>Z</span><span>z</span><span>z</span></div>
-        </div>
+        <div class="cat-motion"><div class="cat-shadow"></div><div class="cat-tail"></div><div class="cat-body"></div><div class="cat-head"><i class="cat-ear cat-ear-left"></i><i class="cat-ear cat-ear-right"></i><i class="cat-eye cat-eye-left"></i><i class="cat-eye cat-eye-right"></i><i class="cat-nose"></i><i class="cat-mouth"></i><i class="cat-whisker cat-whisker-left"></i><i class="cat-whisker cat-whisker-right"></i></div><div class="cat-paws"><i></i><i></i></div><div class="cat-zzz"><span>Z</span><span>z</span><span>z</span></div></div>
       </div>
 
       <div id="robot" class="robot-character draggable" role="button" tabindex="0" aria-label="Робот NOVA">
-        <div class="robot-motion">
-          <div class="robot-shadow"></div>
-          <div class="antenna"><i></i></div>
-          <div class="robot-head">
-            <div class="robot-face">
-              <i class="robot-eye robot-eye-left"></i>
-              <i class="robot-eye robot-eye-right"></i>
-              <i class="robot-mouth"></i>
-            </div>
-          </div>
-          <div class="robot-neck"></div>
-          <div class="robot-arm robot-arm-left"><i></i></div>
-          <div class="robot-arm robot-arm-right"><i></i></div>
-          <div class="robot-body">
-            <div class="robot-core"><i></i></div>
-            <b>NOVA</b>
-          </div>
-          <div class="robot-leg robot-leg-left"><i></i></div>
-          <div class="robot-leg robot-leg-right"><i></i></div>
-          <div class="robot-guitar" aria-hidden="true">🎸</div>
-        </div>
+        <div class="robot-motion"><div class="robot-shadow"></div><div class="antenna"><i></i></div><div class="robot-head"><div class="robot-face"><i class="robot-eye robot-eye-left"></i><i class="robot-eye robot-eye-right"></i><i class="robot-mouth"></i></div></div><div class="robot-neck"></div><div class="robot-arm robot-arm-left"><i></i></div><div class="robot-arm robot-arm-right"><i></i></div><div class="robot-body"><div class="robot-core"><i></i></div><b>NOVA</b></div><div class="robot-leg robot-leg-left"><i></i></div><div class="robot-leg robot-leg-right"><i></i></div><div class="robot-guitar" aria-hidden="true">🎸</div></div>
       </div>
 
       <div class="drag-hint" id="dragHint">↔ Перетаскивай Тумсоева, NOVA и кошку</div>
     </section>
 
     <section id="chatPanel" class="chat-panel" aria-label="NOVA chat">
-      <button id="panelToggle" class="panel-toggle" type="button" aria-controls="chat englishLesson quickActions composer" aria-expanded="true" aria-label="Свернуть панель">
-        <span class="panel-grip" aria-hidden="true"></span>
-        <span class="panel-chevron" aria-hidden="true">⌄</span>
-        <span id="panelToggleText" class="sr-only">Свернуть панель</span>
-      </button>
-
-      <div class="status-row" aria-live="polite">
-        <span id="statusDot" class="status-dot"></span>
-        <span id="statusText">NOVA готова</span>
-        <button id="brainBtn" class="brain-chip" type="button" aria-label="Включить бесплатный локальный мозг">
-          <span aria-hidden="true">🧠</span><b id="brainStateText">Базовый</b>
-        </button>
-        <span class="version">v26.3</span>
-      </div>
-
+      <button id="panelToggle" class="panel-toggle" type="button" aria-controls="chat englishLesson quickActions composer" aria-expanded="true" aria-label="Свернуть панель"><span class="panel-grip" aria-hidden="true"></span><span class="panel-chevron" aria-hidden="true">⌄</span><span id="panelToggleText" class="sr-only">Свернуть панель</span></button>
+      <div class="status-row" aria-live="polite"><span id="statusDot" class="status-dot"></span><span id="statusText">NOVA готова</span><button id="brainBtn" class="brain-chip" type="button" aria-label="Включить бесплатный локальный мозг"><span aria-hidden="true">🧠</span><b id="brainStateText">Базовый</b></button><span class="version">v26.4</span></div>
       <div id="chat" class="chat-log" role="log" aria-live="polite" aria-relevant="additions"></div>
 
       <section id="englishLesson" class="english-lesson" aria-label="Учим английский" hidden>
-        <div class="lesson-heading">
-          <span class="lesson-badge">🇺🇸 <b data-i18n="lesson.title">Учим английский</b></span>
-          <span id="lessonProgress" class="lesson-progress">1/10</span>
-          <button id="lessonCloseBtn" class="lesson-close" type="button" aria-label="Закрыть урок">×</button>
-        </div>
-        <div class="lesson-content">
-          <div class="lesson-word-wrap">
-            <strong id="lessonWord" class="lesson-word">Hello</strong>
-            <span id="lessonPhonetic" class="lesson-phonetic">[хэ-ЛОУ]</span>
-          </div>
-          <div class="lesson-meaning-wrap">
-            <b id="lessonTranslation" class="lesson-translation">Привет</b>
-            <span id="lessonExample" class="lesson-example">Hello, how are you? — Привет, как дела?</span>
-          </div>
-        </div>
-        <div class="lesson-controls">
-          <button id="lessonListenBtn" type="button"><span>🔊</span><b data-i18n="lesson.listen">Слушать</b></button>
-          <button id="lessonQuizBtn" type="button"><span>🎯</span><b data-i18n="lesson.quiz">Проверка</b></button>
-          <button id="lessonNextBtn" type="button"><span>▶</span><b data-i18n="lesson.next">Дальше</b></button>
-        </div>
+        <div class="lesson-heading"><span class="lesson-badge">🇺🇸 <b data-i18n="lesson.title">Учим английский</b></span><span id="lessonProgress" class="lesson-progress">1/10</span><button id="lessonCloseBtn" class="lesson-close" type="button" aria-label="Закрыть урок">×</button></div>
+        <div class="lesson-content"><div class="lesson-word-wrap"><strong id="lessonWord" class="lesson-word">Hello</strong><span id="lessonPhonetic" class="lesson-phonetic">[хэ-ЛОУ]</span></div><div class="lesson-meaning-wrap"><b id="lessonTranslation" class="lesson-translation">Привет</b><span id="lessonExample" class="lesson-example">Hello, how are you? — Привет, как дела?</span></div></div>
+        <div class="lesson-controls"><button id="lessonListenBtn" type="button"><span>🔊</span><b data-i18n="lesson.listen">Слушать</b></button><button id="lessonQuizBtn" type="button"><span>🎯</span><b data-i18n="lesson.quiz">Проверка</b></button><button id="lessonNextBtn" type="button"><span>▶</span><b data-i18n="lesson.next">Дальше</b></button></div>
       </section>
 
       <div id="quickActions" class="quick-actions" aria-label="NOVA actions">
@@ -166,24 +91,38 @@
         <button class="action-btn" type="button" data-action="laugh"><span>😄</span><b data-i18n="action.laugh">Смейся</b></button>
         <button class="action-btn" type="button" data-action="cat"><span>🐈</span><b data-i18n="action.cat">Кошка</b></button>
         <button class="action-btn english-action" type="button" data-action="english"><span>🇺🇸</span><b data-i18n="action.english">Английский</b></button>
+        <button id="photoStudioBtn" class="action-btn photo-studio-launch" type="button"><span>✨</span><b>Фото-студия</b></button>
       </div>
 
-      <form id="composer" class="composer" autocomplete="off">
-        <label class="sr-only" for="messageInput" data-i18n="composer.label">Сообщение для NOVA</label>
-        <input id="messageInput" type="text" maxlength="240" enterkeyhint="send" placeholder="Напиши или нажми микрофон…">
-        <button id="micBtn" class="round-btn mic-btn" type="button" aria-label="Включить микрофон" aria-pressed="false">
-          <span class="mic-rings" aria-hidden="true"></span><span class="mic-icon">🎙️</span>
-        </button>
-        <button id="sendBtn" class="round-btn send-btn" type="submit" aria-label="Отправить">➤</button>
-      </form>
+      <form id="composer" class="composer" autocomplete="off"><label class="sr-only" for="messageInput" data-i18n="composer.label">Сообщение для NOVA</label><input id="messageInput" type="text" maxlength="240" enterkeyhint="send" placeholder="Напиши или нажми микрофон…"><button id="micBtn" class="round-btn mic-btn" type="button" aria-label="Включить микрофон" aria-pressed="false"><span class="mic-rings" aria-hidden="true"></span><span class="mic-icon">🎙️</span></button><button id="sendBtn" class="round-btn send-btn" type="submit" aria-label="Отправить">➤</button></form>
     </section>
   </main>
+
+  <section id="photoStudioModal" class="photo-studio-modal" role="dialog" aria-modal="true" aria-labelledby="photoStudioTitle" hidden>
+    <div class="photo-studio-card">
+      <div class="photo-studio-head"><h2 id="photoStudioTitle">✨ NOVA AI Photo Studio</h2><button id="photoStudioClose" class="photo-studio-close" type="button" aria-label="Закрыть">×</button></div>
+      <p class="photo-studio-note">Загрузи свою фотографию и выбери новый образ. Сейчас работает бесплатное локальное превью без отправки фото на сервер. Только безопасная смена одежды, стиля и фона.</p>
+      <label id="photoUpload" class="photo-upload">
+        <input id="photoInput" type="file" accept="image/*">
+        <img id="photoPreview" alt="Загруженная фотография">
+        <span class="photo-upload-copy"><span>📸</span><b>Нажми и загрузи фото</b><br><small>Фото остаётся на твоём устройстве</small></span>
+      </label>
+      <div class="studio-controls">
+        <div class="studio-field"><label for="outfitSelect">Одежда</label><select id="outfitSelect"><option value="none">Без изменения</option><option value="suit">Деловой костюм</option><option value="western">Ковбойский стиль</option><option value="sport">Спортивный образ</option></select></div>
+        <div class="studio-field"><label for="styleSelect">Стиль</label><select id="styleSelect"><option value="none">Реализм</option><option value="cinematic">Кино</option><option value="anime">Аниме</option><option value="western">Вестерн</option><option value="bw">Чёрно-белый</option></select></div>
+        <div class="studio-field"><label for="backgroundSelect">Фон</label><select id="backgroundSelect"><option value="none">Оригинальный</option><option value="studio">Фотостудия</option><option value="city">Ночной город</option><option value="space">Космос</option><option value="white">Белый фон</option></select></div>
+      </div>
+      <div class="studio-actions"><button id="photoGenerate" class="studio-generate" type="button">Создать превью</button><button id="photoReset" class="studio-reset" type="button">Сбросить</button></div>
+      <div id="photoStudioResult" class="studio-result">Для настоящей ИИ-генерации позже можно подключить отдельный API. Перед подключением платного API NOVA обязательно предупредит.</div>
+    </div>
+  </section>
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
   <noscript>Для работы NOVA включите JavaScript.</noscript>
   <script src="./english-lessons.js?v=26.3.0" defer></script>
   <script src="./brain.js?v=26.3.0" defer></script>
   <script src="./voice-fix.js?v=26.3.1" defer></script>
+  <script src="./photo-studio.js?v=26.4.0" defer></script>
   <script src="./app.js?v=26.3.0" defer></script>
 </body>
 </html>
