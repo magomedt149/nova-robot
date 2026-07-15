@@ -1,1 +1,91 @@
-(()=>{const $=s=>document.querySelector(s);const modal=$('#photoStudioModal');const launch=$('[data-action="photo-studio"]');if(!modal||!launch)return;const close=$('#photoStudioClose');const upload=$('#photoUpload');const input=$('#photoInput');const image=$('#photoPreview');const style=$('#photoStyle');const outfit=$('#photoOutfit');const background=$('#photoBackground');const generate=$('#photoGenerate');const reset=$('#photoReset');const result=$('#photoStudioResult');const classes=['style-cinematic','style-anime','style-western','style-bw','bg-studio','bg-city','bg-space','bg-white','outfit-suit','outfit-western','outfit-sport'];function open(){modal.hidden=false;document.body.style.overflow='hidden'}function shut(){modal.hidden=true;document.body.style.overflow=''}function apply(){upload.classList.remove(...classes);if(style.value!=='natural')upload.classList.add(`style-${style.value}`);if(background.value!=='original')upload.classList.add(`bg-${background.value}`);if(outfit.value!=='original')upload.classList.add(`outfit-${outfit.value}`)}function clear(){input.value='';image.removeAttribute('src');upload.classList.remove('has-photo',...classes);style.value='natural';outfit.value='original';background.value='original';result.textContent='Загрузи фотографию. Обработка выполняется только на устройстве и никуда не отправляется.'}launch.addEventListener('click',open);close.addEventListener('click',shut);modal.addEventListener('click',e=>{if(e.target===modal)shut()});document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!modal.hidden)shut()});upload.addEventListener('click',()=>input.click());input.addEventListener('change',()=>{const file=input.files&&input.files[0];if(!file)return;if(!file.type.startsWith('image/')){result.textContent='Выбери файл фотографии.';return}if(file.size>12*1024*1024){result.textContent='Файл слишком большой. Максимум 12 МБ.';return}const reader=new FileReader();reader.onload=()=>{image.src=reader.result;upload.classList.add('has-photo');apply();result.textContent='Фото загружено. Выбери одежду, фон и стиль.'};reader.readAsDataURL(file)});[style,outfit,background].forEach(el=>el.addEventListener('change',apply));generate.addEventListener('click',()=>{if(!image.src){result.textContent='Сначала загрузи фотографию.';return}apply();result.textContent='Предпросмотр готов. Это бесплатный локальный режим: он меняет оформление и не создаёт настоящее новое тело или наготу. Для реалистичной замены одежды позже потребуется подключить серверную модель.'});reset.addEventListener('click',clear)})();
+(() => {
+  'use strict';
+  const $ = (selector) => document.querySelector(selector);
+  const modal = $('#photoStudioModal');
+  const launch = $('#photoStudioBtn');
+  if (!modal || !launch) return;
+
+  const close = $('#photoStudioClose');
+  const upload = $('#photoUpload');
+  const input = $('#photoInput');
+  const image = $('#photoPreview');
+  const style = $('#styleSelect');
+  const outfit = $('#outfitSelect');
+  const background = $('#backgroundSelect');
+  const generate = $('#photoGenerate');
+  const reset = $('#photoReset');
+  const result = $('#photoStudioResult');
+  const classes = [
+    'style-cinematic','style-anime','style-western','style-bw',
+    'bg-studio','bg-city','bg-space','bg-white',
+    'outfit-suit','outfit-western','outfit-sport'
+  ];
+
+  function openStudio() {
+    modal.hidden = false;
+    document.body.style.overflow = 'hidden';
+  }
+
+  function closeStudio() {
+    modal.hidden = true;
+    document.body.style.overflow = '';
+  }
+
+  function applyPreview() {
+    upload.classList.remove(...classes);
+    if (style.value !== 'none') upload.classList.add(`style-${style.value}`);
+    if (background.value !== 'none') upload.classList.add(`bg-${background.value}`);
+    if (outfit.value !== 'none') upload.classList.add(`outfit-${outfit.value}`);
+  }
+
+  function clearStudio() {
+    input.value = '';
+    image.removeAttribute('src');
+    upload.classList.remove('has-photo', ...classes);
+    style.value = 'none';
+    outfit.value = 'none';
+    background.value = 'none';
+    result.textContent = 'Загрузи фотографию. Обработка выполняется только на устройстве и никуда не отправляется.';
+  }
+
+  launch.addEventListener('click', openStudio);
+  close.addEventListener('click', closeStudio);
+  modal.addEventListener('click', (event) => {
+    if (event.target === modal) closeStudio();
+  });
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && !modal.hidden) closeStudio();
+  });
+
+  input.addEventListener('change', () => {
+    const file = input.files && input.files[0];
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      result.textContent = 'Выбери файл фотографии.';
+      return;
+    }
+    if (file.size > 12 * 1024 * 1024) {
+      result.textContent = 'Файл слишком большой. Максимум 12 МБ.';
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      image.src = reader.result;
+      upload.classList.add('has-photo');
+      applyPreview();
+      result.textContent = 'Фото загружено. Выбери одежду, фон и стиль.';
+    };
+    reader.readAsDataURL(file);
+  });
+
+  [style, outfit, background].forEach((control) => control.addEventListener('change', applyPreview));
+  generate.addEventListener('click', () => {
+    if (!image.src) {
+      result.textContent = 'Сначала загрузи фотографию.';
+      return;
+    }
+    applyPreview();
+    result.textContent = 'Предпросмотр готов. Это бесплатный локальный режим. Для настоящей реалистичной замены одежды потребуется отдельная серверная ИИ-модель.';
+  });
+  reset.addEventListener('click', clearStudio);
+})();
