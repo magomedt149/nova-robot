@@ -12,13 +12,14 @@
   const style = $('#styleSelect');
   const outfit = $('#outfitSelect');
   const background = $('#backgroundSelect');
+  const adultConfirm = $('#adultConfirm');
   const generate = $('#photoGenerate');
   const reset = $('#photoReset');
   const result = $('#photoStudioResult');
   const classes = [
     'style-cinematic','style-anime','style-western','style-bw',
-    'bg-studio','bg-city','bg-space','bg-white',
-    'outfit-suit','outfit-western','outfit-sport'
+    'bg-studio','bg-city','bg-space','bg-white','bg-beach',
+    'outfit-suit','outfit-western','outfit-sport','outfit-swimwear'
   ];
 
   function openStudio() {
@@ -29,6 +30,10 @@
   function closeStudio() {
     modal.hidden = true;
     document.body.style.overflow = '';
+  }
+
+  function usesAdultMode() {
+    return outfit.value === 'swimwear';
   }
 
   function applyPreview() {
@@ -45,6 +50,7 @@
     style.value = 'none';
     outfit.value = 'none';
     background.value = 'none';
+    if (adultConfirm) adultConfirm.checked = false;
     result.textContent = 'Загрузи фотографию. Обработка выполняется только на устройстве и никуда не отправляется.';
   }
 
@@ -78,14 +84,25 @@
     reader.readAsDataURL(file);
   });
 
-  [style, outfit, background].forEach((control) => control.addEventListener('change', applyPreview));
+  [style, outfit, background].forEach((control) => control.addEventListener('change', () => {
+    applyPreview();
+    if (outfit.value === 'swimwear' && background.value === 'none') background.value = 'beach';
+    applyPreview();
+  }));
+
   generate.addEventListener('click', () => {
     if (!image.src) {
       result.textContent = 'Сначала загрузи фотографию.';
       return;
     }
+    if (usesAdultMode() && adultConfirm && !adultConfirm.checked) {
+      result.textContent = 'Для режима купальника подтверди, что на фотографии взрослый человек 18+ и у тебя есть разрешение на обработку.';
+      return;
+    }
     applyPreview();
-    result.textContent = 'Предпросмотр готов. Это бесплатный локальный режим. Для настоящей реалистичной замены одежды потребуется отдельная серверная ИИ-модель.';
+    result.textContent = usesAdultMode()
+      ? 'Пляжный предпросмотр готов: купальник и пляж доступны только для взрослых фотографий 18+, без наготы.'
+      : 'Предпросмотр готов. Это бесплатный локальный режим. Для настоящей реалистичной замены одежды потребуется отдельная серверная ИИ-модель.';
   });
   reset.addEventListener('click', clearStudio);
 })();
