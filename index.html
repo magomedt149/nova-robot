@@ -13,6 +13,7 @@
   <link rel="apple-touch-icon" href="./icon-192.png">
   <link rel="stylesheet" href="./styles.css?v=26.3.0">
   <link rel="stylesheet" href="./photo-studio.css?v=26.4.0">
+  <link rel="stylesheet" href="./beach-mode.css?v=26.4.1">
   <title>NOVA 26 — Free AI Agent</title>
 </head>
 <body>
@@ -74,7 +75,7 @@
 
     <section id="chatPanel" class="chat-panel" aria-label="NOVA chat">
       <button id="panelToggle" class="panel-toggle" type="button" aria-controls="chat englishLesson quickActions composer" aria-expanded="true" aria-label="Свернуть панель"><span class="panel-grip" aria-hidden="true"></span><span class="panel-chevron" aria-hidden="true">⌄</span><span id="panelToggleText" class="sr-only">Свернуть панель</span></button>
-      <div class="status-row" aria-live="polite"><span id="statusDot" class="status-dot"></span><span id="statusText">NOVA готова</span><button id="brainBtn" class="brain-chip" type="button" aria-label="Включить бесплатный локальный мозг"><span aria-hidden="true">🧠</span><b id="brainStateText">Базовый</b></button><span class="version">v26.4</span></div>
+      <div class="status-row" aria-live="polite"><span id="statusDot" class="status-dot"></span><span id="statusText">NOVA готова</span><button id="brainBtn" class="brain-chip" type="button" aria-label="Включить бесплатный локальный мозг"><span aria-hidden="true">🧠</span><b id="brainStateText">Базовый</b></button><span class="version">v26.4.1</span></div>
       <div id="chat" class="chat-log" role="log" aria-live="polite" aria-relevant="additions"></div>
 
       <section id="englishLesson" class="english-lesson" aria-label="Учим английский" hidden>
@@ -101,7 +102,7 @@
   <section id="photoStudioModal" class="photo-studio-modal" role="dialog" aria-modal="true" aria-labelledby="photoStudioTitle" hidden>
     <div class="photo-studio-card">
       <div class="photo-studio-head"><h2 id="photoStudioTitle">✨ NOVA AI Photo Studio</h2><button id="photoStudioClose" class="photo-studio-close" type="button" aria-label="Закрыть">×</button></div>
-      <p class="photo-studio-note">Загрузи свою фотографию и выбери новый образ. Сейчас работает бесплатное локальное превью без отправки фото на сервер. Только безопасная смена одежды, стиля и фона.</p>
+      <p class="photo-studio-note">Загрузи фотографию и выбери новый образ. Доступны костюмы, спортивный стиль и пляжный образ с купальником для взрослых 18+. Фото остаётся на устройстве.</p>
       <label id="photoUpload" class="photo-upload">
         <input id="photoInput" type="file" accept="image/*">
         <img id="photoPreview" alt="Загруженная фотография">
@@ -122,7 +123,8 @@
   <script src="./english-lessons.js?v=26.3.0" defer></script>
   <script src="./brain.js?v=26.3.0" defer></script>
   <script src="./voice-fix.js?v=26.3.1" defer></script>
-  <script src="./photo-studio.js?v=26.4.0" defer></script>
+  <script src="./beach-mode.js?v=26.4.1" defer></script>
+  <script src="./photo-studio.js?v=26.4.1" defer></script>
   <script src="./app.js?v=26.3.0" defer></script>
 </body>
 </html>
