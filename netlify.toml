@@ -13,6 +13,11 @@
     Cache-Control = "no-cache, no-store, must-revalidate"
 
 [[headers]]
+  for = "/voice-fix.js"
+  [headers.values]
+    Cache-Control = "no-cache, no-store, must-revalidate"
+
+[[headers]]
   for = "/service-worker.js"
   [headers.values]
     Cache-Control = "no-cache, no-store, must-revalidate"
