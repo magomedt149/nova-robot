@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <meta name="theme-color" content="#070910" />
+  <title>TUMSOEV Motion Studio — FREE</title>
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <main class="app">
+    <section class="panel">
+      <div class="eyebrow">TUMSOEV / FREE MOTION</div>
+      <h1>Motion Studio</h1>
+      <p class="lead">Анимация из текста прямо в браузере. Без кредитов.</p>
+
+      <label>Опиши анимацию
+        <textarea id="prompt" rows="3" placeholder="Например: TUMSOEV, неон, 5 секунд, вертикально, приближение"></textarea>
+      </label>
+      <button id="applyPrompt" class="secondary">Применить описание</button>
+
+      <label>Главный текст<input id="title" value="TUMSOEV" maxlength="80"></label>
+      <label>Подзаголовок<input id="subtitle" value="FREE MOTION STUDIO" maxlength="100"></label>
+
+      <div class="grid2">
+        <label>Длительность
+          <select id="duration"><option>3</option><option selected>5</option><option>8</option><option>10</option><option>15</option></select>
+        </label>
+        <label>Формат
+          <select id="ratio"><option selected>16:9</option><option>9:16</option></select>
+        </label>
+      </div>
+
+      <div class="grid2">
+        <label>Стиль
+          <select id="style">
+            <option value="neon" selected>Неон</option>
+            <option value="gold">Кино / золото</option>
+            <option value="clean">Чистый</option>
+            <option value="redcyan">Красно-голубой 3D</option>
+            <option value="hologram">Голограмма</option>
+          </select>
+        </label>
+        <label>Движение
+          <select id="motion">
+            <option value="slide" selected>Слайд</option>
+            <option value="rise">Подъём</option>
+            <option value="float">Плавание</option>
+            <option value="zoom">Приближение</option>
+            <option value="pulse">Пульс</option>
+          </select>
+        </label>
+      </div>
+
+      <div class="actions">
+        <button id="preview" class="secondary">▶ Предпросмотр</button>
+        <button id="render">Сгенерировать видео</button>
+      </div>
+      <div id="status" class="status">Готово. Генерация выполняется на твоём устройстве.</div>
+      <a id="download" class="download hidden" download>Скачать видео</a>
+    </section>
+
+    <section class="stageWrap">
+      <div class="canvasShell">
+        <canvas id="canvas" width="1280" height="720"></canvas>
+      </div>
+      <div class="badges"><span>NO API KEY</span><span>NO CREDITS</span><span>30 FPS</span></div>
+      <video id="video" controls playsinline class="video hidden"></video>
+    </section>
+  </main>
+  <script src="./app.js"></script>
+</body>
+</html>
