@@ -54,10 +54,7 @@ jobs:
                 this.voice = null;
               }
             }
-            Object.defineProperty(window, 'SpeechSynthesisUtterance', {
-              configurable: true,
-              value: FakeUtterance
-            });
+            Object.defineProperty(window, 'SpeechSynthesisUtterance', { configurable: true, value: FakeUtterance });
             Object.defineProperty(window, 'speechSynthesis', {
               configurable: true,
               value: {
@@ -81,36 +78,47 @@ jobs:
 
           const response = await page.goto(base, { waitUntil: 'networkidle', timeout: 60000 });
           if (!response || !response.ok()) throw new Error(`Main page HTTP ${response?.status()}`);
+          console.log('MAIN_PAGE_HTTP=' + response.status());
 
           await page.waitForSelector('#novaNotebookLaunch', { timeout: 30000 });
+          console.log('YOUTUBE_BUTTON=present');
           await page.click('#novaNotebookLaunch');
           await page.waitForSelector('#novaYoutubeUrl:visible', { timeout: 10000 });
           await page.fill('#novaYoutubeUrl', youtube);
           await page.selectOption('#novaYoutubeTargetLanguage', 'ru');
+          console.log('YOUTUBE_URL_FILLED=' + (await page.inputValue('#novaYoutubeUrl')));
 
           await page.click('#novaGetTranscript');
           await page.waitForFunction(() => {
             const s = document.querySelector('#novaYoutubeStatus')?.textContent || '';
-            return /Текст получен|получен/i.test(s);
-          }, { timeout: 90000 });
+            return /Текст получен|Не получилось|Ошибка/i.test(s);
+          }, null, { timeout: 90000 });
 
+          const transcriptStatus = (await page.locator('#novaYoutubeStatus').innerText()).trim();
           const transcriptPreview = (await page.locator('#novaYoutubeResult').innerText()).trim();
+          console.log('TRANSCRIPT_STATUS=' + transcriptStatus);
+          console.log('TRANSCRIPT_RESULT_PREFIX=' + transcriptPreview.slice(0, 220).replace(/\s+/g, ' '));
+          if (!/Текст получен/i.test(transcriptStatus)) {
+            throw new Error(`Transcript failed: ${transcriptStatus} | ${transcriptPreview.slice(0, 300)}`);
+          }
           if (transcriptPreview.length < 120) throw new Error(`Transcript too short: ${transcriptPreview.length}`);
 
           await page.click('#novaMakeRecap');
           await page.waitForFunction(() => {
-            const el = document.querySelector('#novaYoutubeResult');
-            const text = el?.textContent || '';
+            const text = document.querySelector('#novaYoutubeResult')?.textContent || '';
             const status = document.querySelector('#novaYoutubeStatus')?.textContent || '';
-            return /[А-Яа-яЁё]/.test(text) && (/готов/i.test(status) || text.length > 80);
-          }, { timeout: 120000 });
+            return /готов/i.test(status) || /Ошибка/i.test(status) || (/Пересказ/i.test(status) && /не/i.test(status)) || /[А-Яа-яЁё]/.test(text);
+          }, null, { timeout: 120000 });
 
+          const recapStatus = (await page.locator('#novaYoutubeStatus').innerText()).trim();
           const recap = (await page.locator('#novaYoutubeResult').innerText()).trim();
-          if (!/[А-Яа-яЁё]/.test(recap)) throw new Error('Russian recap does not contain Cyrillic text');
+          console.log('RECAP_STATUS=' + recapStatus);
+          console.log('RECAP_PREFIX=' + recap.slice(0, 220).replace(/\s+/g, ' '));
+          if (!/[А-Яа-яЁё]/.test(recap)) throw new Error(`Russian recap missing Cyrillic: ${recapStatus} | ${recap.slice(0, 300)}`);
           if (recap.length < 60) throw new Error(`Russian recap too short: ${recap.length}`);
 
           await page.click('#novaPlayRecap');
-          await page.waitForFunction(() => Array.isArray(window.__novaSpoken) && window.__novaSpoken.length > 0, { timeout: 10000 });
+          await page.waitForFunction(() => Array.isArray(window.__novaSpoken) && window.__novaSpoken.length > 0, null, { timeout: 10000 });
           const spoken = await page.evaluate(() => window.__novaSpoken.at(-1));
           if (!spoken?.text || spoken.text.length < 40) throw new Error('TTS did not receive recap text');
           if (!String(spoken.lang || '').toLowerCase().startsWith('ru')) throw new Error(`TTS language is not Russian: ${spoken.lang}`);
