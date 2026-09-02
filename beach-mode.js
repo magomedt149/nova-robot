@@ -41,7 +41,7 @@
   'use strict';
   if (document.querySelector('script[data-nova-voice-editor]')) return;
   const script = document.createElement('script');
-  script.src = './nova-voice-editor.js?v=31.0.0';
+  script.src = './nova-voice-editor.js?v=32.0.0';
   script.defer = true;
   script.dataset.novaVoiceEditor = '1';
   document.head.appendChild(script);
