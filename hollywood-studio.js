@@ -77,4 +77,31 @@
 
   exportJpg?.addEventListener('click', () => exportImage('jpg'));
   exportPng?.addEventListener('click', () => exportImage('png'));
+
+  function loadNOVAFeature(src, id) {
+    if (document.getElementById(id)) return Promise.resolve();
+    return new Promise((resolve, reject) => {
+      const script = document.createElement('script');
+      script.id = id;
+      script.src = src;
+      script.defer = true;
+      script.onload = resolve;
+      script.onerror = () => reject(new Error(`Не загрузился ${src}`));
+      document.head.appendChild(script);
+    });
+  }
+
+  async function loadVideoStudioStack() {
+    try {
+      await loadNOVAFeature('./nova-media-studio.js?v=30.0.0', 'nova-media-studio-loader');
+      await loadNOVAFeature('./nova-whisper.js?v=30.0.0', 'nova-whisper-loader');
+      await loadNOVAFeature('./nova-voice-editor.js?v=30.0.0', 'nova-voice-editor-loader');
+      await loadNOVAFeature('./nova-transcript-editor-sync.js?v=30.0.0', 'nova-transcript-editor-sync-loader');
+      await loadNOVAFeature('./nova-video-upgrade.js?v=30.0.0', 'nova-video-upgrade-loader');
+    } catch (error) {
+      console.warn('[NOVA Video Studio] optional module load failed:', error);
+    }
+  }
+
+  loadVideoStudioStack();
 })();
