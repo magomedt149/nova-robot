@@ -1,0 +1,122 @@
+name: NOVA Safe Motion v32 checks
+
+on:
+  push:
+    branches: [fix/safe-motion-quality-v32]
+  workflow_dispatch:
+
+jobs:
+  static:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Syntax and safety invariants
+        run: |
+          set -euo pipefail
+          node --check nova-safe-motion-v32.js
+          node --check hollywood-studio.js
+          node <<'NODE'
+          const fs=require('fs');
+          const safe=fs.readFileSync('nova-safe-motion-v32.js','utf8');
+          const loader=fs.readFileSync('hollywood-studio.js','utf8');
+          const must=(ok,msg)=>{if(!ok)throw new Error(msg);console.log('PASS',msg)};
+          must(loader.includes('nova-safe-motion-v32.js?v=32.0.0'),'v32 loader');
+          must(safe.includes('maxMotionPercent: 2.5'),'motion cap 2.5%');
+          must(safe.includes('minScale: .95')&&safe.includes('maxScale: 1'),'foreground scale never exceeds contain');
+          must(safe.includes('remapRect')&&safe.includes('inside'),'safe rectangle clamp');
+          must(safe.includes('Quality Gate BLOCK'),'low-quality export blocked');
+          must(safe.includes("['motion','threed','action']"),'Motion/3D/Action self-test');
+          must(!/^<<<<<<<|^=======|^>>>>>>>/m.test(safe),'no conflict markers');
+          NODE
+      - name: No production deployment
+        run: echo 'Branch-only checks. No Netlify deployment.'
+
+  chromium-render:
+    needs: static
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install Chromium
+        run: |
+          npm init -y >/dev/null 2>&1
+          npm install playwright@1.55.0 >/dev/null 2>&1
+          npx playwright install --with-deps chromium >/dev/null
+      - name: Render Motion 3D Action through Quality Gate
+        run: |
+          set -euo pipefail
+          python3 -m http.server 4191 --bind 127.0.0.1 >/tmp/nova-safe-v32.log 2>&1 &
+          PID=$!; trap 'kill $PID || true; rm -f nova-safe-v32.mjs' EXIT
+          for i in $(seq 1 40); do curl -fsS http://127.0.0.1:4191/ >/dev/null 2>&1 && break; sleep .2; done
+          cat > nova-safe-v32.mjs <<'NODE'
+          import { chromium } from 'playwright';
+          const must=(ok,msg)=>{if(!ok)throw new Error(msg);console.log('PASS',msg)};
+          const browser=await chromium.launch({headless:true});
+          const page=await browser.newPage(); const errors=[]; page.on('pageerror',e=>errors.push(String(e)));
+          const r=await page.goto('http://127.0.0.1:4191/',{waitUntil:'domcontentloaded'}); must(r?.ok(),'NOVA loads');
+          await page.waitForSelector('#novaMediaLaunch',{timeout:20000}); await page.click('#novaMediaLaunch');
+          await page.waitForFunction(()=>window.NovaSafeMotionV32?.version==='32.0.0',{timeout:20000});
+          const math=await page.evaluate(()=>window.NovaSafeMotionV32.selfTest());
+          must(math.pass&&math.minScore>=95,`math gate ${math.minScore}%`);
+          await page.evaluate(async()=>{
+            const canvas=document.createElement('canvas'); canvas.width=320; canvas.height=180; const ctx=canvas.getContext('2d');
+            const stream=canvas.captureStream(15); const type=['video/webm;codecs=vp8','video/webm'].find(t=>MediaRecorder.isTypeSupported(t))||'';
+            const rec=new MediaRecorder(stream,type?{mimeType:type}:undefined); const chunks=[]; rec.ondataavailable=e=>{if(e.data.size)chunks.push(e.data)};
+            const stopped=new Promise(res=>rec.onstop=res); rec.start(100); const start=performance.now();
+            await new Promise(res=>{const tick=(now)=>{const p=Math.min(1,(now-start)/1100);ctx.fillStyle='#202733';ctx.fillRect(0,0,320,180);ctx.fillStyle='#f5f5f5';ctx.fillRect(90+20*p,20,140,140);ctx.fillStyle='#111';ctx.fillRect(135+20*p,55,50,50);if(p>=1)res();else requestAnimationFrame(tick)};requestAnimationFrame(tick)});
+            rec.stop(); await stopped; stream.getTracks().forEach(t=>t.stop()); const blob=new Blob(chunks,{type:rec.mimeType||type||'video/webm'});
+            const file=new File([blob],'safe-motion-fixture.webm',{type:blob.type}); const input=document.querySelector('#novaLocalVideo'); const dt=new DataTransfer();dt.items.add(file);input.files=dt.files;input.dispatchEvent(new Event('change',{bubbles:true}));
+          });
+          for (const style of ['motion','threed','action']) {
+            const out=await page.evaluate(async(style)=>{const r=await window.NovaSafeMotionV32.safeRender({duration:.8,style,ratio:'9:16',prompt:style==='motion'?'pan right dolly in':style==='action'?'action camera handheld':'3d depth parallax',negative:'no crop, no flicker',refMode:'exact'});return {score:r.report.overall,crop:r.report.stats.inside?0:100,motion:r.report.stats.maxMotion,pass:r.report.verdict.pass,size:r.blob.size}},style);
+            must(out.pass&&out.score>=95&&out.crop===0&&out.motion<=2.5&&out.size>1024,`${style} ${out.score}% crop=${out.crop} motion=${out.motion.toFixed(2)}%`);
+          }
+          const relevant=errors.filter(v=>!/service worker|favicon/i.test(v)); must(relevant.length===0,`no page errors ${relevant.join(' | ')}`);
+          await browser.close();
+          NODE
+          node nova-safe-v32.mjs
+
+  iphone-webkit:
+    needs: static
+    runs-on: ubuntu-latest
+    timeout-minutes: 7
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install WebKit
+        run: |
+          npm init -y >/dev/null 2>&1
+          npm install playwright@1.55.0 >/dev/null 2>&1
+          npx playwright install --with-deps webkit >/dev/null
+      - name: iPhone WebKit quality gate smoke
+        run: |
+          set -euo pipefail
+          python3 -m http.server 4192 --bind 127.0.0.1 >/tmp/nova-safe-v32-ios.log 2>&1 &
+          PID=$!; trap 'kill $PID || true; rm -f nova-safe-v32-ios.mjs' EXIT
+          for i in $(seq 1 40); do curl -fsS http://127.0.0.1:4192/ >/dev/null 2>&1 && break; sleep .2; done
+          cat > nova-safe-v32-ios.mjs <<'NODE'
+          import { webkit } from 'playwright';
+          const must=(ok,msg)=>{if(!ok)throw new Error(msg);console.log('PASS',msg)};
+          const browser=await webkit.launch({headless:true});
+          const ctx=await browser.newContext({viewport:{width:390,height:844},isMobile:true,hasTouch:true,userAgent:'Mozilla/5.0 (iPhone; CPU iPhone OS 18_6 like Mac OS X) AppleWebKit/605.1.15 Version/18.6 Mobile/15E148 Safari/604.1'});
+          const page=await ctx.newPage(); const errors=[]; page.on('pageerror',e=>errors.push(String(e)));
+          const r=await page.goto('http://127.0.0.1:4192/',{waitUntil:'domcontentloaded'}); must(r?.ok(),'iPhone NOVA loads');
+          await page.waitForSelector('#novaMediaLaunch',{timeout:20000}); await page.click('#novaMediaLaunch');
+          await page.waitForFunction(()=>window.NovaSafeMotionV32?.version==='32.0.0',{timeout:20000});
+          const t=await page.evaluate(()=>window.NovaSafeMotionV32.selfTest()); must(t.pass&&t.minScore>=95,`WebKit math gate ${t.minScore}%`);
+          must(await page.locator('.nova-safe-quality-v32').count()>=1,'Quality Gate UI visible');
+          const relevant=errors.filter(v=>!/service worker|favicon/i.test(v)); must(relevant.length===0,`no WebKit errors ${relevant.join(' | ')}`);
+          await browser.close();
+          NODE
+          node nova-safe-v32-ios.mjs
+      - name: No production deploy
+        run: echo 'WebKit test is local only.'
