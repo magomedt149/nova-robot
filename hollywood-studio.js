@@ -97,8 +97,9 @@
       await loadNOVAFeature('./nova-whisper.js?v=30.0.0', 'nova-whisper-loader');
       await loadNOVAFeature('./nova-voice-editor.js?v=30.0.0', 'nova-voice-editor-loader');
       await loadNOVAFeature('./nova-transcript-editor-sync.js?v=30.0.0', 'nova-transcript-editor-sync-loader');
-      await loadNOVAFeature('./nova-video-upgrade.js?v=30.0.0', 'nova-video-upgrade-loader');
-      await loadNOVAFeature('./nova-multi-shorts.js?v=30.1.0', 'nova-multi-shorts-loader');
+      await loadNOVAFeature('./nova-ios-photo-save.js?v=30.2.0', 'nova-ios-photo-save-loader');
+      await loadNOVAFeature('./nova-video-upgrade.js?v=30.2.0', 'nova-video-upgrade-loader');
+      await loadNOVAFeature('./nova-multi-shorts.js?v=30.2.0', 'nova-multi-shorts-loader');
     } catch (error) {
       console.warn('[NOVA Video Studio] optional module load failed:', error);
     }
