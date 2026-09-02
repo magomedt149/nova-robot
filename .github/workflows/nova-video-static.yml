@@ -94,15 +94,18 @@ jobs:
 
       - name: Run NOVA locally and smoke-test video studio
         run: |
+          set -euo pipefail
           python3 -m http.server 4173 --bind 127.0.0.1 >/tmp/nova-http.log 2>&1 &
           SERVER_PID=$!
-          trap 'kill $SERVER_PID || true' EXIT
-          for i in $(seq 1 30); do
-            if curl -fsS http://127.0.0.1:4173/ >/dev/null; then break; fi
+          trap 'kill $SERVER_PID || true; rm -f nova-video-smoke.mjs' EXIT
+          READY=0
+          for i in $(seq 1 40); do
+            if curl -fsS http://127.0.0.1:4173/ >/dev/null 2>&1; then READY=1; break; fi
             sleep 0.2
           done
+          if [ "$READY" != "1" ]; then cat /tmp/nova-http.log; exit 1; fi
 
-          cat > /tmp/nova-video-smoke.mjs <<'NODE'
+          cat > ./nova-video-smoke.mjs <<'NODE'
           import { chromium } from 'playwright';
 
           const must = (ok, message) => {
@@ -150,7 +153,7 @@ jobs:
           await browser.close();
           NODE
 
-          node /tmp/nova-video-smoke.mjs
+          node ./nova-video-smoke.mjs
 
       - name: No live site touched
         run: echo 'Browser test used localhost only; no Netlify production deployment.'
