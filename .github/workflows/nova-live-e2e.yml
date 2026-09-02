@@ -1,0 +1,128 @@
+name: NOVA live YouTube E2E
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/nova-live-e2e.yml'
+  workflow_dispatch:
+
+jobs:
+  live-e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install Playwright
+        run: |
+          npm init -y >/dev/null 2>&1
+          npm install playwright@1.55.0 >/dev/null 2>&1
+          npx playwright install --with-deps chromium >/dev/null
+
+      - name: Test published NOVA YouTube recap end-to-end
+        env:
+          NOVA_URL: https://dashing-otter-990b47.netlify.app/
+          TEST_YOUTUBE: https://www.youtube.com/watch?v=eIho2S0ZahI
+        run: |
+          cat > /tmp/nova-e2e.mjs <<'NODE'
+          import { chromium } from 'playwright';
+
+          const base = process.env.NOVA_URL;
+          const youtube = process.env.TEST_YOUTUBE;
+          const browser = await chromium.launch({ headless: true });
+          const page = await browser.newPage();
+
+          const consoleErrors = [];
+          page.on('console', (msg) => {
+            if (msg.type() === 'error') consoleErrors.push(msg.text());
+          });
+          page.on('pageerror', (err) => consoleErrors.push(String(err)));
+
+          await page.addInitScript(() => {
+            window.__novaSpoken = [];
+            class FakeUtterance {
+              constructor(text) {
+                this.text = String(text || '');
+                this.lang = '';
+                this.rate = 1;
+                this.pitch = 1;
+                this.voice = null;
+              }
+            }
+            Object.defineProperty(window, 'SpeechSynthesisUtterance', {
+              configurable: true,
+              value: FakeUtterance
+            });
+            Object.defineProperty(window, 'speechSynthesis', {
+              configurable: true,
+              value: {
+                getVoices() {
+                  return [{ name: 'Test Russian', lang: 'ru-RU', voiceURI: 'test-ru', localService: true }];
+                },
+                cancel() {},
+                speak(utterance) {
+                  window.__novaSpoken.push({
+                    text: utterance.text,
+                    lang: utterance.lang,
+                    rate: utterance.rate,
+                    voice: utterance.voice?.name || null
+                  });
+                },
+                addEventListener() {},
+                removeEventListener() {}
+              }
+            });
+          });
+
+          const response = await page.goto(base, { waitUntil: 'networkidle', timeout: 60000 });
+          if (!response || !response.ok()) throw new Error(`Main page HTTP ${response?.status()}`);
+
+          await page.waitForSelector('#novaNotebookLaunch', { timeout: 30000 });
+          await page.click('#novaNotebookLaunch');
+          await page.waitForSelector('#novaYoutubeUrl:visible', { timeout: 10000 });
+          await page.fill('#novaYoutubeUrl', youtube);
+          await page.selectOption('#novaYoutubeTargetLanguage', 'ru');
+
+          await page.click('#novaGetTranscript');
+          await page.waitForFunction(() => {
+            const s = document.querySelector('#novaYoutubeStatus')?.textContent || '';
+            return /Текст получен|получен/i.test(s);
+          }, { timeout: 90000 });
+
+          const transcriptPreview = (await page.locator('#novaYoutubeResult').innerText()).trim();
+          if (transcriptPreview.length < 120) throw new Error(`Transcript too short: ${transcriptPreview.length}`);
+
+          await page.click('#novaMakeRecap');
+          await page.waitForFunction(() => {
+            const el = document.querySelector('#novaYoutubeResult');
+            const text = el?.textContent || '';
+            const status = document.querySelector('#novaYoutubeStatus')?.textContent || '';
+            return /[А-Яа-яЁё]/.test(text) && (/готов/i.test(status) || text.length > 80);
+          }, { timeout: 120000 });
+
+          const recap = (await page.locator('#novaYoutubeResult').innerText()).trim();
+          if (!/[А-Яа-яЁё]/.test(recap)) throw new Error('Russian recap does not contain Cyrillic text');
+          if (recap.length < 60) throw new Error(`Russian recap too short: ${recap.length}`);
+
+          await page.click('#novaPlayRecap');
+          await page.waitForFunction(() => Array.isArray(window.__novaSpoken) && window.__novaSpoken.length > 0, { timeout: 10000 });
+          const spoken = await page.evaluate(() => window.__novaSpoken.at(-1));
+          if (!spoken?.text || spoken.text.length < 40) throw new Error('TTS did not receive recap text');
+          if (!String(spoken.lang || '').toLowerCase().startsWith('ru')) throw new Error(`TTS language is not Russian: ${spoken.lang}`);
+
+          console.log('LIVE_URL=' + base);
+          console.log('TRANSCRIPT_PREVIEW_LENGTH=' + transcriptPreview.length);
+          console.log('RECAP_LENGTH=' + recap.length);
+          console.log('TTS_LANG=' + spoken.lang);
+          console.log('TTS_VOICE=' + spoken.voice);
+          console.log('TTS_TEXT_LENGTH=' + spoken.text.length);
+          if (consoleErrors.length) console.log('BROWSER_CONSOLE_ERRORS=' + JSON.stringify(consoleErrors));
+
+          await browser.close();
+          NODE
+          node /tmp/nova-e2e.mjs
