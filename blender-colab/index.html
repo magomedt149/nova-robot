@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#08090f">
+  <meta name="description" content="Ручной запуск бесплатного Blender и WanGP в Google Colab для роликов TUMSOEV.">
+  <link rel="apple-touch-icon" href="../icon-192.png">
+  <link rel="stylesheet" href="./styles.css?v=1.0.0">
+  <title>TUMSOEV Blender + WanGP</title>
+</head>
+<body>
+  <main class="shell">
+    <header><a href="../studio/">‹ Все инструменты</a><span>FREE · MANUAL</span></header>
+    <section class="hero">
+      <div class="cube" aria-hidden="true"><i></i><i></i><i></i></div>
+      <p class="eyebrow">TUMSOEV 3D PIPELINE</p>
+      <h1>Blender <em>+</em> WanGP</h1>
+      <p>Настоящий 3D‑блокинг движения и генерация реалистичного видео через бесплатную GPU‑сессию Colab.</p>
+      <div class="profile"><b>Первый запуск:</b><span>5 сек</span><span>9:16</span><span>24 fps</span><span>T4</span><span>без Drive</span></div>
+      <a class="launch" href="https://colab.research.google.com/github/magomedt149/nova-robot/blob/blender-colab-studio/blender-colab/TUMSOEV_Blender_WanGP_Studio.ipynb" target="_blank" rel="noopener">Открыть бесплатный Colab ↗</a>
+      <a class="download" href="./TUMSOEV_Blender_WanGP_Studio.ipynb" download>Скачать ноутбук</a>
+    </section>
+
+    <section class="prep">
+      <h2>Подготовьте два файла</h2>
+      <div class="prep-grid"><div><span>1</span><b>Референс‑видео</b><p>До 5 секунд, полный рост, хорошо видны руки и ноги.</p></div><div><span>2</span><b>Фото персонажа</b><p>Чёткое лицо и тело. Оно загружается уже в WanGP.</p></div></div>
+    </section>
+
+    <section class="steps">
+      <h2>Как запустить вручную</h2>
+      <label><input type="checkbox" data-step="gpu"><span><b>1. Включите GPU T4</b><small>В Colab: Runtime → Change runtime type → T4 GPU → Save.</small></span></label>
+      <label><input type="checkbox" data-step="setup"><span><b>2. Запускайте ячейки сверху вниз</b><small>Установятся WanGP, Blender и трекер позы. Ничего платного не подключается.</small></span></label>
+      <label><input type="checkbox" data-step="video"><span><b>3. Загрузите референс‑видео</b><small>Ноутбук возьмёт только первые 5 секунд и создаст motion.json, .blend и control‑ролики.</small></span></label>
+      <label><input type="checkbox" data-step="gradio"><span><b>4. Откройте ссылку gradio.live</b><small>В WanGP выберите Wan 2.2 Animate 2, загрузите фото и reference_control_9x16.mp4.</small></span></label>
+      <label><input type="checkbox" data-step="save"><span><b>5. Скачайте результат</b><small>Сохраните MP4 до закрытия Colab: временные файлы после остановки сессии исчезнут.</small></span></label>
+    </section>
+
+    <section class="outputs">
+      <h2>Что получится</h2>
+      <div><b>reference_control_9x16.mp4</b><span>главный driving‑ролик</span></div>
+      <div><b>blender_pose_control.mp4</b><span>проверка скелета и control‑вход</span></div>
+      <div><b>tumsoev_motion_blocking.blend</b><span>настоящая сцена Blender</span></div>
+      <div><b>TUMSOEV_Blender_Control_5s.zip</b><span>все промежуточные файлы</span></div>
+    </section>
+
+    <p class="notice">Сайт сам не включает GPU и не расходует кредиты. Запуск начинается только после вашего нажатия в Google Colab.</p>
+  </main>
+  <script src="./app.js?v=1.0.0"></script>
+</body>
+</html>
