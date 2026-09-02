@@ -5,18 +5,24 @@ on:
     branches: [main]
     paths:
       - '.github/workflows/nova-live-e2e.yml'
+      - 'notebook-tools.js'
+      - 'netlify/functions/youtube-transcript.js'
+      - 'netlify/functions/translate.js'
   workflow_dispatch:
 
 jobs:
   live-e2e:
     runs-on: ubuntu-latest
-    timeout-minutes: 12
+    timeout-minutes: 14
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+
+      - name: Give Netlify time to publish the commit
+        run: sleep 35
 
       - name: Install Playwright
         run: |
