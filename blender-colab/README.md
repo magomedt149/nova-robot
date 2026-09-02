@@ -8,7 +8,7 @@
 4. Рендерит цветной pose-control ролик и нормализованный reference-control ролик.
 5. Запускает локальный WanGP/Gradio на бесплатном GPU Colab.
 
-[Открыть ноутбук в Google Colab](https://colab.research.google.com/github/magomedt149/nova-robot/blob/blender-colab-studio/blender-colab/TUMSOEV_Blender_WanGP_Studio.ipynb)
+[Открыть ручную панель на сайте](./index.html) или [запустить ноутбук в Google Colab](https://colab.research.google.com/github/magomedt149/nova-robot/blob/blender-colab-studio/blender-colab/TUMSOEV_Blender_WanGP_Studio.ipynb).
 
 ## Что использовать в WanGP
 

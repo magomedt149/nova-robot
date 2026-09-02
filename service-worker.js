@@ -1,4 +1,4 @@
-const CACHE = 'nova-v26-3-microphone-fix-20260714';
+const CACHE = 'nova-v27-ai-studio-20260902';
 const CORE = [
   './',
   './index.html',
