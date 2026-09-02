@@ -33,7 +33,10 @@ async function buildPipeline(modelKey) {
     }
   }
   if (!transcriber) {
-    transcriber = await pipeline('automatic-speech-recognition', model, options);
+    // Transformers.js supports explicit `device: 'wasm'` for CPU/WebAssembly.
+    // Do not rely on automatic device selection here: in Chrome navigator.gpu may
+    // exist even when no GPU adapter is available, which can otherwise retry WebGPU.
+    transcriber = await pipeline('automatic-speech-recognition', model, { ...options, device: 'wasm' });
     progress({ stage: 'backend', backend: 'wasm', model: key });
   }
   pipelines.set(key, transcriber);
