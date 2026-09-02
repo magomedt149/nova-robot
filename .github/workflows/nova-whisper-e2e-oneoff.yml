@@ -13,7 +13,7 @@ jobs:
   e2e:
     if: contains(github.event.head_commit.message, '[whisper-e2e]')
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 12
     steps:
       - uses: actions/checkout@v4
 
@@ -121,10 +121,22 @@ jobs:
             await page.selectOption('#novaWhisperLanguage', 'ru');
             await page.click('#novaLocalWhisper');
 
-            await page.waitForFunction(() => {
-              const links = [...document.querySelectorAll('#novaDubDownloads a')].map(a => a.textContent || '');
-              return links.some(t => t.includes('Русский MP3')) && links.some(t => t.includes('English SRT')) && links.some(t => t.includes('Original transcript SRT'));
-            }, null, { timeout: 720000 });
+            let outputsReady = false;
+            for (let i = 0; i < 84; i++) {
+              await page.waitForTimeout(5000);
+              const snap = await page.evaluate(() => ({
+                status: document.querySelector('#novaMediaStatus')?.textContent || '',
+                result: document.querySelector('#novaDubResult')?.textContent || '',
+                links: [...document.querySelectorAll('#novaDubDownloads a')].map(a => a.textContent || '')
+              }));
+              console.log(`PROGRESS_${i + 1}=${snap.status} | ${snap.result.slice(0, 180).replace(/\n/g, ' | ')}`);
+              outputsReady = snap.links.some(t => t.includes('Русский MP3')) && snap.links.some(t => t.includes('English SRT')) && snap.links.some(t => t.includes('Original transcript SRT'));
+              if (outputsReady) break;
+              if (/Whisper:\s*(?!MP4)/i.test(snap.status) && /ошиб|error|не удалось|failed/i.test(snap.status + ' ' + snap.result)) {
+                throw new Error(`NOVA reported failure: ${snap.status} ${snap.result}`);
+              }
+            }
+            if (!outputsReady) throw new Error('NOVA did not produce MP3/SRT within 7 minutes');
 
             const state = await page.evaluate(async () => {
               const result = document.querySelector('#novaDubResult')?.textContent || '';
