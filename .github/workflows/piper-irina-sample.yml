@@ -1,4 +1,4 @@
-name: Piper Irina 5s sample
+name: Piper Russian dialogue 5s
 
 on:
   push:
@@ -7,7 +7,7 @@ on:
       - '.github/workflows/piper-irina-sample.yml'
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   generate:
@@ -25,40 +25,37 @@ jobs:
       - name: Install Piper
         run: python -m pip install --quiet piper-tts
 
-      - name: Download Russian Irina voice
-        run: python -m piper.download_voices ru_RU-irina-medium
+      - name: Download Russian voices
+        run: python -m piper.download_voices ru_RU-irina-medium ru_RU-dmitri-medium
 
-      - name: Synthesize exact five-second WAV
+      - name: Synthesize 5-second dialogue
         run: |
-          python -m piper -m ru_RU-irina-medium -f raw.wav -- 'Вечером, когда всё стихло, город зажёг свои огни.'
+          python -m piper -m ru_RU-irina-medium -f irina.wav -- 'Ты сегодня придёшь?'
+          python -m piper -m ru_RU-dmitri-medium -f dmitri.wav -- 'Да, Ирина, уже еду.'
           python - <<'PY'
           import wave
-          src='raw.wav'
-          dst='nova_piper_irina_5s.wav'
-          with wave.open(src,'rb') as r:
-              params=r.getparams()
-              frames=r.readframes(r.getnframes())
+          files=['irina.wav','dmitri.wav']
+          chunks=[]; params=None
+          for f in files:
+              with wave.open(f,'rb') as r:
+                  if params is None: params=r.getparams()
+                  chunks.append(r.readframes(r.getnframes()))
           frame_bytes=params.sampwidth*params.nchannels
+          silence_frames=int(params.framerate*0.20)
+          silence=b'\x00'*(silence_frames*frame_bytes)
+          data=chunks[0]+silence+chunks[1]
           target_frames=int(params.framerate*5)
           target_bytes=target_frames*frame_bytes
-          if len(frames) < target_bytes:
-              frames += b'\x00'*(target_bytes-len(frames))
-          else:
-              frames = frames[:target_bytes]
-          with wave.open(dst,'wb') as w:
-              w.setnchannels(params.nchannels)
-              w.setsampwidth(params.sampwidth)
-              w.setframerate(params.framerate)
-              w.writeframes(frames)
-          with wave.open(dst,'rb') as r:
-              print('DURATION=', r.getnframes()/r.getframerate())
+          if len(data)<target_bytes: data += b'\x00'*(target_bytes-len(data))
+          else: data=data[:target_bytes]
+          with wave.open('nova_irina_dmitri_dialogue_5s.wav','wb') as w:
+              w.setnchannels(params.nchannels); w.setsampwidth(params.sampwidth); w.setframerate(params.framerate); w.writeframes(data)
+          with wave.open('nova_irina_dmitri_dialogue_5s.wav','rb') as r:
+              print('DURATION=',r.getnframes()/r.getframerate())
           PY
-          base64 -w0 nova_piper_irina_5s.wav > nova_piper_irina_5s.b64
 
-      - name: Commit base64 sample
-        run: |
-          git config user.name 'NOVA Piper Bot'
-          git config user.email 'actions@users.noreply.github.com'
-          git add nova_piper_irina_5s.b64
-          git commit -m 'Add generated Piper Irina 5s sample'
-          git push origin HEAD:piper-irina-sample-5s
+      - uses: actions/upload-artifact@v4
+        with:
+          name: nova-irina-dmitri-dialogue-5s
+          path: nova_irina_dmitri_dialogue_5s.wav
+          retention-days: 1
