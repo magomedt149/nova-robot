@@ -10,133 +10,22 @@ jobs:
   probe:
     if: contains(github.event.head_commit.message, '[nova-probe]')
     runs-on: ubuntu-latest
-    timeout-minutes: 4
+    timeout-minutes: 2
     steps:
-      - name: Inspect public Netlify site metadata
-        run: |
-          CODE=$(curl -sS --max-time 20 -o /tmp/netlify-site.json -w '%{http_code}' 'https://api.netlify.com/api/v1/sites/dashing-otter-990b47.netlify.app' || true)
-          echo "NETLIFY_SITE_API_HTTP=$CODE"
-          head -c 1800 /tmp/netlify-site.json || true
-          echo
-
-      - name: Inspect direct production transcript response
+      - name: Inspect public Netlify deploy and build state
         env:
-          BASE: https://dashing-otter-990b47.netlify.app
-          VIDEO: https://www.youtube.com/watch?v=eIho2S0ZahI
+          SITE_ID: ae7fa0fb-e73d-413a-b122-7b9ff9419244
         run: |
-          CODE=$(curl -sS --max-time 35 -o /tmp/direct.json -w '%{http_code}' --get "$BASE/.netlify/functions/youtube-transcript" --data-urlencode "url=$VIDEO" || true)
-          echo "DIRECT_SERVER_HTTP=$CODE"
-          cat /tmp/direct.json || true
+          set +e
+          echo '=== SITE ==='
+          curl -sS --max-time 15 -w '\nHTTP=%{http_code}\n' "https://api.netlify.com/api/v1/sites/$SITE_ID" | head -c 8000
           echo
-          echo 'LIVE_SERVICE_WORKER_HEAD:'
-          curl -sS --max-time 20 "$BASE/service-worker.js" | head -n 5 || true
-
-      - name: Install lightweight browser driver
-        run: |
-          npm init -y >/dev/null 2>&1
-          npm install playwright-core@1.55.0 >/dev/null 2>&1
-          CHROME=$(command -v google-chrome || command -v google-chrome-stable || command -v chromium || command -v chromium-browser || true)
-          if [ -z "$CHROME" ]; then echo 'System Chrome not found'; exit 1; fi
-          echo "CHROME_BIN=$CHROME" >> "$GITHUB_ENV"
-
-      - name: Test published NOVA through browser and service worker
-        env:
-          BASE: https://dashing-otter-990b47.netlify.app/
-          VIDEO: https://www.youtube.com/watch?v=eIho2S0ZahI
-        run: |
-          cat > ./probe.mjs <<'NODE'
-          import { chromium } from 'playwright-core';
-
-          const browser = await chromium.launch({ headless: true, executablePath: process.env.CHROME_BIN, args: ['--no-sandbox'] });
-          const context = await browser.newContext();
-          const page = await context.newPage();
-          const browserErrors = [];
-          page.on('console', m => { if (m.type() === 'error') browserErrors.push(m.text()); });
-          page.on('pageerror', e => browserErrors.push(String(e)));
-
-          await page.addInitScript(() => {
-            window.__novaSpoken = [];
-            class FakeUtterance {
-              constructor(text) { this.text = String(text || ''); this.lang = ''; this.rate = 1; this.pitch = 1; this.voice = null; }
-            }
-            Object.defineProperty(window, 'SpeechSynthesisUtterance', { configurable: true, value: FakeUtterance });
-            Object.defineProperty(window, 'speechSynthesis', {
-              configurable: true,
-              value: {
-                getVoices() { return [{ name: 'Test Russian', lang: 'ru-RU', voiceURI: 'test-ru', localService: true }]; },
-                cancel() {},
-                speak(u) { window.__novaSpoken.push({ text: u.text, lang: u.lang, voice: u.voice?.name || null }); },
-                addEventListener() {},
-                removeEventListener() {}
-              }
-            });
-          });
-
-          const response = await page.goto(process.env.BASE, { waitUntil: 'networkidle', timeout: 60000 });
-          console.log('PAGE_HTTP=' + response?.status());
-
-          await page.evaluate(async () => {
-            if (!('serviceWorker' in navigator)) throw new Error('serviceWorker unsupported');
-            await navigator.serviceWorker.ready;
-            if (!navigator.serviceWorker.controller) {
-              await new Promise(resolve => {
-                navigator.serviceWorker.addEventListener('controllerchange', resolve, { once: true });
-                setTimeout(resolve, 5000);
-              });
-            }
-          });
-
-          if (!(await page.evaluate(() => Boolean(navigator.serviceWorker.controller)))) {
-            await page.reload({ waitUntil: 'networkidle', timeout: 60000 });
-            await page.evaluate(() => navigator.serviceWorker.ready);
-          }
-          console.log('SW_CONTROLLED=' + await page.evaluate(() => Boolean(navigator.serviceWorker.controller)));
-
-          await page.waitForSelector('#novaNotebookLaunch', { timeout: 20000 });
-          await page.click('#novaNotebookLaunch');
-          await page.waitForSelector('#novaYoutubeUrl:visible', { timeout: 10000 });
-          await page.fill('#novaYoutubeUrl', process.env.VIDEO);
-          await page.selectOption('#novaYoutubeTargetLanguage', 'ru');
-
-          await page.click('#novaGetTranscript');
-          await page.waitForFunction(() => {
-            const s = document.querySelector('#novaYoutubeStatus')?.textContent || '';
-            return /Текст получен|Не получилось|Ошибка/i.test(s);
-          }, null, { timeout: 90000 });
-
-          const transcriptStatus = (await page.locator('#novaYoutubeStatus').innerText()).trim();
-          const transcriptText = (await page.locator('#novaYoutubeResult').innerText()).trim();
-          console.log('TRANSCRIPT_STATUS=' + transcriptStatus);
-          console.log('TRANSCRIPT_LENGTH=' + transcriptText.length);
-          if (!/Текст получен/i.test(transcriptStatus) || transcriptText.length < 120) {
-            console.log('TRANSCRIPT_PREFIX=' + transcriptText.slice(0, 400));
-            console.log('BROWSER_ERRORS=' + JSON.stringify(browserErrors));
-            throw new Error('Transcript stage failed');
-          }
-
-          await page.click('#novaMakeRecap');
-          await page.waitForFunction(() => {
-            const s = document.querySelector('#novaYoutubeStatus')?.textContent || '';
-            return /Пересказ готов|Ошибка при создании/i.test(s);
-          }, null, { timeout: 120000 });
-
-          const recapStatus = (await page.locator('#novaYoutubeStatus').innerText()).trim();
-          const recap = (await page.locator('#novaYoutubeResult').innerText()).trim();
-          console.log('RECAP_STATUS=' + recapStatus);
-          console.log('RECAP_LENGTH=' + recap.length);
-          console.log('HAS_CYRILLIC=' + /[А-Яа-яЁё]/.test(recap));
-          if (!/Пересказ готов/i.test(recapStatus) || recap.length < 40 || !/[А-Яа-яЁё]/.test(recap)) throw new Error('Russian recap stage failed');
-
-          await page.click('#novaPlayRecap');
-          await page.waitForFunction(() => Array.isArray(window.__novaSpoken) && window.__novaSpoken.length > 0, null, { timeout: 10000 });
-          const spoken = await page.evaluate(() => window.__novaSpoken.at(-1));
-          console.log('TTS_LANG=' + spoken?.lang);
-          console.log('TTS_TEXT_LENGTH=' + String(spoken?.text || '').length);
-          console.log('TTS_VOICE=' + spoken?.voice);
-          if (!String(spoken?.lang || '').toLowerCase().startsWith('ru') || String(spoken?.text || '').length < 40) throw new Error('Russian TTS stage failed');
-
-          console.log('FULL_SCENARIO=PASS');
-          if (browserErrors.length) console.log('NONFATAL_BROWSER_ERRORS=' + JSON.stringify(browserErrors));
-          await browser.close();
-          NODE
-          node ./probe.mjs
+          echo '=== DEPLOYS ==='
+          curl -sS --max-time 15 -w '\nHTTP=%{http_code}\n' "https://api.netlify.com/api/v1/sites/$SITE_ID/deploys?per_page=20" | head -c 20000
+          echo
+          echo '=== BUILDS ==='
+          curl -sS --max-time 15 -w '\nHTTP=%{http_code}\n' "https://api.netlify.com/api/v1/sites/$SITE_ID/builds?per_page=20" | head -c 20000
+          echo
+          echo '=== BUILD TRIGGER TEST (no auth, expected 401 if protected) ==='
+          curl -sS --max-time 15 -X POST -H 'Content-Type: application/json' -d '{}' -w '\nHTTP=%{http_code}\n' "https://api.netlify.com/api/v1/sites/$SITE_ID/builds" | head -c 4000
+          echo
