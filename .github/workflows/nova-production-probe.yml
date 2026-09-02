@@ -12,13 +12,18 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 2
     steps:
-      - name: Show latest Netlify deploy records
+      - name: Read skipped deploy details
         env:
+          DEPLOY_ID: 6a97ce16ae7db000087d1d0e
           SITE_ID: ae7fa0fb-e73d-413a-b122-7b9ff9419244
         run: |
-          curl -sS --max-time 20 "https://api.netlify.com/api/v1/sites/$SITE_ID/deploys?per_page=8" > /tmp/deploys.json
+          echo '=== DEPLOY DETAIL ==='
+          curl -sS --max-time 20 -w '\nHTTP=%{http_code}\n' "https://api.netlify.com/api/v1/deploys/$DEPLOY_ID"
+          echo
+          echo '=== SITE SELECTED FIELDS ==='
+          curl -sS --max-time 20 "https://api.netlify.com/api/v1/sites/$SITE_ID" > /tmp/site.json
           node <<'NODE'
-          const fs = require('fs');
-          const rows = JSON.parse(fs.readFileSync('/tmp/deploys.json','utf8'));
-          for (const d of rows) console.log(JSON.stringify({id:d.id,created_at:d.created_at,state:d.state,skipped:d.skipped,commit_ref:d.commit_ref,title:d.title,error_message:d.error_message,summary:d.summary}));
+          const fs=require('fs'); const s=JSON.parse(fs.readFileSync('/tmp/site.json','utf8'));
+          const keys=['id','name','repo_url','build_settings','processing_settings','published_deploy','deploy_id','account_slug','capabilities','plugins','functions_region','default_hooks_data'];
+          for(const k of keys) console.log(k+'='+JSON.stringify(s[k]));
           NODE
