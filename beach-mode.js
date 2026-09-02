@@ -29,9 +29,26 @@
 
 (() => {
   'use strict';
+  const proto = window.BaseAudioContext?.prototype || window.AudioContext?.prototype || window.webkitAudioContext?.prototype;
+  if (!proto?.decodeAudioData || proto.__novaDecodeGuardInstalled) return;
+  const nativeDecode = proto.decodeAudioData;
+  Object.defineProperty(proto, '__novaDecodeGuardInstalled', { value: true, configurable: true });
+  proto.decodeAudioData = function guardedDecodeAudioData(...args) {
+    const result = nativeDecode.apply(this, args);
+    if (args.length > 1 || !result?.then) return result;
+    let timer = 0;
+    const timeout = new Promise((_, reject) => {
+      timer = window.setTimeout(() => reject(new Error('Web Audio decode timeout; NOVA switches to FFmpeg.')), 8000);
+    });
+    return Promise.race([result, timeout]).finally(() => window.clearTimeout(timer));
+  };
+})();
+
+(() => {
+  'use strict';
   if (document.querySelector('script[data-nova-whisper]')) return;
   const script = document.createElement('script');
-  script.src = './nova-whisper.js?v=30.0.0';
+  script.src = './nova-whisper.js?v=30.0.1';
   script.defer = true;
   script.dataset.novaWhisper = '1';
   document.head.appendChild(script);
