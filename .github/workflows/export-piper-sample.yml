@@ -1,0 +1,23 @@
+name: Export Piper sample
+
+on:
+  push:
+    branches: [piper-irina-sample-5s]
+    paths:
+      - '.github/workflows/export-piper-sample.yml'
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: piper-irina-sample-5s
+      - name: Decode sample
+        run: base64 -d nova_piper_irina_5s.b64 > nova_piper_irina_5s.wav
+      - uses: actions/upload-artifact@v4
+        with:
+          name: nova-piper-irina-5s
+          path: nova_piper_irina_5s.wav
+          retention-days: 1
