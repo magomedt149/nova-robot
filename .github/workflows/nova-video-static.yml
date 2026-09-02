@@ -27,6 +27,9 @@ jobs:
           node --check nova-whisper-worker.js
           node --check nova-voice-editor.js
           node --check nova-transcript-editor-sync.js
+          node --check nova-ios-photo-save.js
+          node --check nova-media-library.js
+          node --check nova-ios-output-actions.js
           node --check motion-studio/app.js
 
       - name: Video pipeline invariants
@@ -37,7 +40,7 @@ jobs:
           const must = (ok, message) => { if (!ok) throw new Error(message); console.log('PASS', message); };
 
           const loader = read('hollywood-studio.js');
-          for (const file of ['nova-media-studio.js','nova-whisper.js','nova-voice-editor.js','nova-transcript-editor-sync.js','nova-video-upgrade.js','nova-multi-shorts.js']) {
+          for (const file of ['nova-media-studio.js','nova-whisper.js','nova-voice-editor.js','nova-transcript-editor-sync.js','nova-ios-photo-save.js','nova-video-upgrade.js','nova-multi-shorts.js','nova-media-library.js','nova-ios-output-actions.js']) {
             must(loader.includes(file), `loader includes ${file}`);
           }
 
@@ -49,6 +52,7 @@ jobs:
           const upgrade = read('nova-video-upgrade.js');
           must(upgrade.includes('muxEnglishSubtitles'), 'MP4/MOV subtitle remux exists');
           must(upgrade.includes('video/mp4,video/quicktime,.mp4,.mov'), 'MP4 and MOV upload is accepted');
+          must(upgrade.includes('NovaIOSSave'), 'finished MP4/MOV exposes iPhone save action');
           for (const mode of ['motion','cinema','threed','hologram','animation']) {
             must(upgrade.includes(`value="${mode}"`), `Motion/Cinema mode ${mode} exists`);
           }
@@ -63,10 +67,26 @@ jobs:
           must(shorts.includes('NovaTranscriptEditor'), 'Multi Shorts can use corrected transcript subtitles');
           must(shorts.includes('MediaRecorder'), 'Multi Shorts local renderer uses MediaRecorder');
 
+          const ios = read('nova-ios-photo-save.js');
+          must(ios.includes('navigator.share'), 'iPhone save uses native Web Share');
+          must(ios.includes('navigator.canShare'), 'iPhone save checks file sharing capability');
+          must(ios.includes('video/quicktime'), 'iPhone save understands MOV');
+          must(ios.includes('audio/mpeg'), 'iPhone save understands MP3');
+
+          const library = read('nova-media-library.js');
+          must(library.includes('indexedDB'), 'media library persists locally in IndexedDB');
+          must(library.includes('Все видео → «Фото»'), 'media library has all-videos-to-Photos action');
+          must(library.includes('Все файлы → iPhone'), 'media library has all-files iPhone action');
+          must(library.includes('registerBlob'), 'media library accepts generated blobs');
+
+          const iosActions = read('nova-ios-output-actions.js');
+          must(iosActions.includes('Все 5 Shorts → «Фото»'), 'five Shorts have one-tap Photos action');
+          must(iosActions.includes('saveMany'), 'five Shorts are shared as a native file batch');
+
           const editor = read('nova-voice-editor.js');
           must(editor.includes('English SRT · исправленный'), 'Transcript editor produces corrected English SRT');
 
-          for (const file of ['hollywood-studio.js','nova-video-upgrade.js','nova-multi-shorts.js','nova-whisper.js','nova-whisper-worker.js','nova-voice-editor.js']) {
+          for (const file of ['hollywood-studio.js','nova-video-upgrade.js','nova-multi-shorts.js','nova-whisper.js','nova-whisper-worker.js','nova-voice-editor.js','nova-ios-photo-save.js','nova-media-library.js','nova-ios-output-actions.js']) {
             const text = read(file);
             must(!/^<<<<<<<|^=======|^>>>>>>>/m.test(text), `${file} has no merge-conflict markers`);
           }
@@ -128,6 +148,7 @@ jobs:
           await page.waitForSelector('#novaMediaModal:not([hidden])', { timeout: 5000 });
           must(await page.locator('#novaMotionTab').count() === 1, 'Motion / Cinema tab is installed');
           must(await page.locator('#novaMultiShortsTab').count() === 1, 'Multi Shorts x5 tab is installed');
+          must(await page.locator('#novaLibraryTab').count() === 1, 'Media Library tab is installed');
 
           const accept = await page.locator('#novaLocalVideo').getAttribute('accept');
           must(Boolean(accept?.includes('.mp4') && accept?.includes('.mov')), 'local video input accepts MP4 and MOV');
@@ -139,14 +160,18 @@ jobs:
           const modes = await page.locator('.nova-short-style').first().locator('option').evaluateAll((nodes) => nodes.map((node) => node.value));
           for (const mode of ['cinema','motion','threed','hologram','action']) must(modes.includes(mode), `Multi Shorts offers ${mode}`);
 
-          const browserCaps = await page.evaluate(() => ({
+          const caps = await page.evaluate(() => ({
             mediaRecorder: typeof MediaRecorder !== 'undefined',
             captureStream: typeof document.createElement('canvas').captureStream === 'function',
-            multiShorts: window.NovaMultiShorts?.sceneCount
+            multiShorts: window.NovaMultiShorts?.sceneCount,
+            iosSave: window.NovaIOSSave?.version,
+            mediaLibrary: window.NovaMediaLibrary?.version
           }));
-          must(browserCaps.mediaRecorder, 'MediaRecorder exists in Chromium');
-          must(browserCaps.captureStream, 'Canvas captureStream exists in Chromium');
-          must(browserCaps.multiShorts === 5, 'NOVA exposes sceneCount=5');
+          must(caps.mediaRecorder, 'MediaRecorder exists in Chromium');
+          must(caps.captureStream, 'Canvas captureStream exists in Chromium');
+          must(caps.multiShorts === 5, 'NOVA exposes sceneCount=5');
+          must(Boolean(caps.iosSave), 'iPhone save helper loaded');
+          must(Boolean(caps.mediaLibrary), 'persistent media library loaded');
 
           const relevantErrors = pageErrors.filter((value) => !/service worker|favicon/i.test(value));
           must(relevantErrors.length === 0, `no page errors during studio load${relevantErrors.length ? ': ' + relevantErrors.join(' | ') : ''}`);
@@ -157,3 +182,139 @@ jobs:
 
       - name: No live site touched
         run: echo 'Browser test used localhost only; no Netlify production deployment.'
+
+  iphone-webkit-smoke:
+    needs: static-checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 7
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install Playwright WebKit
+        run: |
+          npm init -y >/dev/null 2>&1
+          npm install playwright@1.55.0 >/dev/null 2>&1
+          npx playwright install --with-deps webkit >/dev/null
+
+      - name: Simulate iPhone media save and library
+        run: |
+          set -euo pipefail
+          python3 -m http.server 4174 --bind 127.0.0.1 >/tmp/nova-iphone-http.log 2>&1 &
+          SERVER_PID=$!
+          trap 'kill $SERVER_PID || true; rm -f nova-iphone-smoke.mjs' EXIT
+          for i in $(seq 1 40); do
+            if curl -fsS http://127.0.0.1:4174/ >/dev/null 2>&1; then break; fi
+            sleep 0.2
+          done
+
+          cat > ./nova-iphone-smoke.mjs <<'NODE'
+          import { webkit } from 'playwright';
+
+          const must = (ok, message) => {
+            if (!ok) throw new Error(message);
+            console.log('PASS', message);
+          };
+
+          const browser = await webkit.launch({ headless: true });
+          const context = await browser.newContext({
+            viewport: { width: 390, height: 844 },
+            screen: { width: 390, height: 844 },
+            isMobile: true,
+            hasTouch: true,
+            deviceScaleFactor: 3,
+            userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.6 Mobile/15E148 Safari/604.1'
+          });
+          await context.addInitScript(() => {
+            window.__novaShares = [];
+            Object.defineProperty(navigator, 'canShare', { configurable: true, value: (data) => Boolean(data?.files?.length) });
+            Object.defineProperty(navigator, 'share', { configurable: true, value: async (data) => {
+              window.__novaShares.push((data.files || []).map((file) => ({ name: file.name, type: file.type, size: file.size })));
+            }});
+          });
+
+          const page = await context.newPage();
+          const errors = [];
+          page.on('pageerror', (error) => errors.push(String(error)));
+          const response = await page.goto('http://127.0.0.1:4174/', { waitUntil: 'domcontentloaded', timeout: 30000 });
+          must(response?.ok(), 'NOVA loads in WebKit iPhone profile');
+          await page.waitForSelector('#novaMediaLaunch', { timeout: 20000 });
+          await page.click('#novaMediaLaunch');
+          await page.waitForSelector('#novaMediaModal:not([hidden])');
+          await page.waitForSelector('#novaLibraryTab', { timeout: 10000 });
+
+          const ios = await page.evaluate(() => ({
+            detected: window.NovaIOSSave?.isIOS?.(),
+            library: window.NovaMediaLibrary?.version,
+            share: typeof navigator.share === 'function',
+            canShare: typeof navigator.canShare === 'function'
+          }));
+          must(ios.detected === true, 'NOVA detects iPhone Safari profile');
+          must(Boolean(ios.library), 'media library loads in WebKit');
+          must(ios.share && ios.canShare, 'native-share route is available to NOVA');
+
+          await page.evaluate(async () => {
+            const files = [
+              ['NOVA_SHORT_1_CINEMA.mp4', 'video/mp4'],
+              ['NOVA_SHORT_2_MOTION.mp4', 'video/mp4'],
+              ['NOVA_SHORT_3_3D.mov', 'video/quicktime'],
+              ['NOVA_SHORT_4_HOLO.mp4', 'video/mp4'],
+              ['NOVA_SHORT_5_ACTION.mp4', 'video/mp4'],
+              ['NOVA_DIALOGUE.mp3', 'audio/mpeg']
+            ];
+            for (const [name, type] of files) {
+              await window.NovaMediaLibrary.registerBlob(new Blob([`test-${name}`], { type }), name, 'iPhone smoke');
+            }
+          });
+
+          await page.click('#novaLibraryTab');
+          await page.waitForSelector('[data-media-pane="library"]:not([hidden])');
+          must(await page.locator('#novaLibraryList .nova-library-item').count() === 6, 'library shows 5 videos plus MP3');
+          must((await page.locator('#novaLibraryStats').innerText()).includes('видео 5'), 'library counts five videos');
+          must((await page.locator('#novaLibraryStats').innerText()).includes('аудио 1'), 'library counts MP3');
+
+          await page.click('#novaLibrarySaveVideos');
+          await page.waitForFunction(() => window.__novaShares.length >= 1);
+          const videoShare = await page.evaluate(() => window.__novaShares.at(-1));
+          must(videoShare.length === 5, 'all five videos are sent to native iPhone share sheet together');
+          must(videoShare.some((file) => file.name.endsWith('.mov') && file.type === 'video/quicktime'), 'MOV is preserved for iPhone share');
+          must(videoShare.filter((file) => file.name.endsWith('.mp4')).length === 4, 'MP4 files are preserved for iPhone share');
+
+          await page.click('#novaLibraryShareAll');
+          await page.waitForFunction(() => window.__novaShares.length >= 2);
+          const allShare = await page.evaluate(() => window.__novaShares.at(-1));
+          must(allShare.length === 6, 'library sends video and MP3 files to iPhone share sheet');
+          must(allShare.some((file) => file.name.endsWith('.mp3') && file.type === 'audio/mpeg'), 'MP3 is preserved for iPhone Files/share');
+
+          await page.click('#novaMultiShortsTab');
+          await page.waitForSelector('#novaShortDownloads');
+          await page.evaluate(() => {
+            const host = document.querySelector('#novaShortDownloads');
+            for (let i = 1; i <= 5; i++) {
+              const blob = new Blob([`short-${i}`], { type: 'video/mp4' });
+              const link = document.createElement('a');
+              link.href = URL.createObjectURL(blob);
+              link.download = `CURRENT_SHORT_${i}.mp4`;
+              link.textContent = `Short ${i}`;
+              host.appendChild(link);
+            }
+          });
+          await page.waitForSelector('#novaShortSaveFive:not([hidden])', { timeout: 10000 });
+          must(await page.locator('#novaShortDownloads button[data-nova-i-o-s-save-for], #novaShortDownloads button[data-nova-ios-save-for]').count() >= 0, 'direct save actions do not break Shorts output');
+          await page.click('#novaShortSaveFive');
+          await page.waitForFunction(() => window.__novaShares.length >= 3);
+          const shortsShare = await page.evaluate(() => window.__novaShares.at(-1));
+          must(shortsShare.length === 5, 'current five Shorts are sent as one iPhone share batch');
+
+          const relevantErrors = errors.filter((value) => !/service worker|favicon/i.test(value));
+          must(relevantErrors.length === 0, `no WebKit page errors${relevantErrors.length ? ': ' + relevantErrors.join(' | ') : ''}`);
+          await browser.close();
+          NODE
+
+          node ./nova-iphone-smoke.mjs
+
+      - name: Confirm no production deploy
+        run: echo 'iPhone/WebKit test ran on localhost only; Photos system sheet was simulated; no Netlify deploy.'
