@@ -1,17 +1,13 @@
 name: NOVA Whisper E2E one-off
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - .github/workflows/nova-whisper-e2e-oneoff.yml
+  workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
   e2e:
-    if: contains(github.event.head_commit.message, '[whisper-e2e]')
     runs-on: ubuntu-latest
     timeout-minutes: 12
     steps:
@@ -69,6 +65,7 @@ jobs:
             </script>
             <script src="./neural-russian-tts.js"></script>
             <script src="./beach-mode.js"></script>
+            <script src="./nova-stack-loader.js"></script>
           </body>
           </html>
           HTML
@@ -95,6 +92,8 @@ jobs:
             console.log('PAGE_HTTP=' + response.status());
 
             await page.waitForFunction(() => Boolean(window.NovaRussianTTS?.synthesize), null, { timeout: 30000 });
+            const stack = await page.evaluate(async () => window.NovaStack?.ready);
+            if (!stack || stack.errors?.length) throw new Error(`NOVA stack failed: ${JSON.stringify(stack)}`);
             const tts = await page.evaluate(async () => {
               const irina = await window.NovaRussianTTS.synthesize('Ирина говорит привет.', 'irina');
               const denis = await window.NovaRussianTTS.synthesize('Денис говорит привет.', 'denis');

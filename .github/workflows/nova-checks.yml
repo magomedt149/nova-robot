@@ -1,0 +1,106 @@
+name: NOVA checks
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '**.html'
+      - '**.css'
+      - '**.js'
+      - '**.mjs'
+      - '**.cjs'
+      - '**.py'
+      - '**.ipynb'
+      - '**.webmanifest'
+      - '.github/workflows/nova-checks.yml'
+  pull_request:
+    paths:
+      - '**.html'
+      - '**.css'
+      - '**.js'
+      - '**.mjs'
+      - '**.cjs'
+      - '**.py'
+      - '**.ipynb'
+      - '**.webmanifest'
+      - '.github/workflows/nova-checks.yml'
+  workflow_dispatch:
+    inputs:
+      chromium:
+        description: 'Run Chromium UI smoke test'
+        required: false
+        type: boolean
+        default: false
+      webkit:
+        description: 'Run iPhone WebKit UI smoke test'
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nova-checks-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  static:
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Syntax, links, PWA cache, and feature invariants
+        run: |
+          node tests/nova-static-check.mjs
+          node tests/nova-runtime-unit.mjs
+          python3 -m py_compile blender-colab/scripts/extract_pose.py blender-colab/scripts/make_blender_control.py
+      - name: Economy guard
+        run: echo 'Static checks only; no Netlify deployment and no video generation.'
+
+  chromium:
+    if: github.event_name == 'workflow_dispatch' && inputs.chromium
+    needs: static
+    runs-on: ubuntu-latest
+    timeout-minutes: 7
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install Chromium
+        run: |
+          npm install --no-save playwright@1.55.0
+          npx playwright install --with-deps chromium
+      - name: Local Chromium smoke
+        run: |
+          python3 -m http.server 4173 --bind 127.0.0.1 >/tmp/nova-http.log 2>&1 &
+          SERVER_PID=$!
+          trap 'kill $SERVER_PID || true' EXIT
+          for i in $(seq 1 40); do curl -fsS http://127.0.0.1:4173/ >/dev/null 2>&1 && break; sleep .2; done
+          NOVA_BROWSER=chromium node tests/nova-browser-smoke.cjs
+
+  webkit:
+    if: github.event_name == 'workflow_dispatch' && inputs.webkit
+    needs: static
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install WebKit
+        run: |
+          npm install --no-save playwright@1.55.0
+          npx playwright install --with-deps webkit
+      - name: Local iPhone WebKit smoke
+        run: |
+          python3 -m http.server 4173 --bind 127.0.0.1 >/tmp/nova-http.log 2>&1 &
+          SERVER_PID=$!
+          trap 'kill $SERVER_PID || true' EXIT
+          for i in $(seq 1 40); do curl -fsS http://127.0.0.1:4173/ >/dev/null 2>&1 && break; sleep .2; done
+          NOVA_BROWSER=webkit node tests/nova-browser-smoke.cjs

@@ -1,4 +1,4 @@
-const CACHE = 'nova-v28-browser-first-full-20260902';
+const CACHE = 'nova-v33-complete-20260902';
 const API_CACHE = 'nova-api-economy-v2';
 const YOUTUBE_TTL_MS = 24 * 60 * 60 * 1000;
 const TRANSLATE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
@@ -7,11 +7,51 @@ const CORE = [
   './',
   './index.html',
   './styles.css',
+  './photo-studio.css',
+  './beach-mode.css',
+  './hollywood-studio.css',
   './app.js',
   './english-lessons.js',
   './brain.js',
+  './voice-fix.js',
+  './beach-mode.js',
+  './photo-studio.js',
+  './hollywood-studio.js',
+  './neural-russian-tts.js',
+  './nova-stack-loader.js',
   './notebook-tools.js',
   './local-ai-worker.js',
+  './nova-media-studio.js',
+  './nova-whisper.js',
+  './nova-whisper-worker.js',
+  './nova-voice-editor.js',
+  './nova-transcript-editor-sync.js',
+  './nova-ios-photo-save.js',
+  './nova-video-upgrade.js',
+  './nova-video-pro.js',
+  './nova-multi-shorts.js',
+  './nova-media-library.js',
+  './nova-ios-output-actions.js',
+  './studio/index.html',
+  './studio/styles.css',
+  './motion-studio/index.html',
+  './motion-studio/styles.css',
+  './motion-studio/app.js',
+  './motion-studio/manifest.webmanifest',
+  './motion-studio/service-worker.js',
+  './blender-colab/index.html',
+  './blender-colab/styles.css',
+  './blender-colab/app.js',
+  './blender-colab/TUMSOEV_Blender_WanGP_Studio.ipynb',
+  './lip-sync/index.html',
+  './lip-sync/styles.css',
+  './lip-sync/app.js',
+  './lip-sync/TUMSOEV_MuseTalk_Manual_5s.ipynb',
+  './lip-sync/TUMSOEV_LatentSync_Manual_5s.ipynb',
+  './videogpt/index.html',
+  './videogpt/styles.css',
+  './videogpt/app.js',
+  './tumsoev-music/index.html',
   './manifest.webmanifest',
   './icon-192.png',
   './icon-512.png'
@@ -43,7 +83,9 @@ self.addEventListener('activate', (event) => {
   const keep = new Set([CACHE, API_CACHE]);
   event.waitUntil(
     caches.keys()
-      .then((keys) => Promise.all(keys.filter((key) => !keep.has(key)).map((key) => caches.delete(key))))
+      .then((keys) => Promise.all(keys
+        .filter((key) => !keep.has(key) && !key.startsWith('tumsoev-motion-studio-'))
+        .map((key) => caches.delete(key))))
       .then(() => self.clients.claim())
   );
 });
@@ -438,11 +480,17 @@ self.addEventListener('fetch', (event) => {
         }
         return response;
       })
-      .catch(() => caches.match(event.request, { ignoreSearch: true })
-        .then((cached) => {
-          if (cached) return cached;
-          if (event.request.mode === 'navigate') return caches.match('./index.html');
-          return Response.error();
-        }))
+      .catch(async () => {
+        const cached = await caches.match(event.request, { ignoreSearch: true });
+        if (cached) return cached;
+        if (event.request.mode === 'navigate') {
+          const pagePath = url.pathname.endsWith('/')
+            ? `${url.pathname}index.html`
+            : /\.[a-z0-9]+$/i.test(url.pathname) ? url.pathname : `${url.pathname}/index.html`;
+          const page = await caches.match(new URL(pagePath, self.location.origin).href, { ignoreSearch: true });
+          return page || caches.match('./index.html');
+        }
+        return Response.error();
+      })
   );
 });

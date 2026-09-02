@@ -1,7 +1,7 @@
 (() => {
   'use strict';
 
-  const VERSION = '26.0.0';
+  const VERSION = '33.0.0';
   const STORAGE_KEY = 'novaAgentState:v26';
   const LEGACY_STORAGE_KEY = 'novaAgentState:v25';
   const MODEL_ID = 'Qwen2.5-0.5B-Instruct-q4f16_1-MLC';

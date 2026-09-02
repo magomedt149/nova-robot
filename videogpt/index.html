@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#080b18">
+  <meta name="description" content="NOVA VideoGPT Prompt Studio: локальная подготовка точного промпта по фото и референс-видео без автоматического расхода кредитов.">
+  <link rel="apple-touch-icon" href="../icon-192.png">
+  <link rel="stylesheet" href="./styles.css?v=33.0.0">
+  <title>VideoGPT Prompt Studio · NOVA 33</title>
+</head>
+<body>
+  <div class="glow" aria-hidden="true"></div>
+  <main class="shell">
+    <header class="topbar">
+      <a class="back" href="../studio/">‹ <span>AI Studio</span></a>
+      <div class="brand"><span>V</span><b>VideoGPT Prompt Studio</b></div>
+      <span class="release">NOVA 33</span>
+    </header>
+
+    <section class="hero">
+      <p class="eyebrow">БЫСТРЫЙ ВНЕШНИЙ ВАРИАНТ</p>
+      <h1>Точный промпт для VideoGPT</h1>
+      <p>Добавьте имена локальных файлов и детали сцены. NOVA соберёт готовую инструкцию для максимального совпадения с референсом.</p>
+    </section>
+
+    <aside class="cost-guard" role="note">
+      <span aria-hidden="true">✓</span>
+      <div><b>Без автоматических списаний</b><p>NOVA не загружает файлы и не запускает генерацию. Кредиты могут расходоваться только на внешнем сайте после вашего собственного нажатия Generate.</p></div>
+    </aside>
+
+    <form id="promptForm" class="workspace">
+      <section class="panel inputs-panel">
+        <div class="panel-head"><span>01</span><div><h2>Референсы</h2><p>Файлы остаются в этом браузере</p></div></div>
+
+        <div class="upload-grid">
+          <label class="upload" id="imageDrop">
+            <input id="personImage" type="file" accept="image/*">
+            <span class="upload-icon">◎</span>
+            <b>Фото человека</b>
+            <small id="imageName">Выбрать изображение</small>
+          </label>
+          <label class="upload" id="videoDrop">
+            <input id="referenceVideo" type="file" accept="video/*">
+            <span class="upload-icon">▶</span>
+            <b>Референс-видео</b>
+            <small id="videoName">Выбрать видео</small>
+          </label>
+        </div>
+
+        <label class="field full"><span>Что особенно важно в сцене</span><textarea id="sceneBrief" rows="4" maxlength="900" placeholder="Например: человек ведёт машину ночью; сохранить все повороты головы, руки на руле, отражения и монтаж по референсу."></textarea></label>
+
+        <div class="settings-grid">
+          <label class="field"><span>Стиль</span><select id="style"><option value="cinematic">Cinematic</option><option value="photorealistic">Photorealistic</option><option value="documentary">Documentary</option><option value="commercial">Commercial</option></select></label>
+          <label class="field"><span>Формат</span><select id="aspect"><option value="9:16">9:16 · вертикальный</option><option value="16:9">16:9 · горизонтальный</option><option value="1:1">1:1 · квадрат</option></select></label>
+          <label class="field"><span>Длительность</span><select id="duration"><option value="5">5 секунд · тест</option><option value="10">10 секунд</option><option value="15">15 секунд</option><option value="30">30 секунд</option></select></label>
+          <label class="field"><span>Голос</span><select id="voice"><option value="off">Без голоса</option><option value="reference">Сохранить голос референса</option><option value="female">Женский кинематографичный</option><option value="male">Мужской кинематографичный</option></select></label>
+          <label class="field"><span>Субтитры</span><select id="subtitles"><option value="match">Повторить из референса</option><option value="clean">Чистые русские</option><option value="off">Выключить</option></select></label>
+          <label class="field"><span>Музыка</span><select id="music"><option value="off">Не добавлять</option><option value="match">Повторить настроение</option><option value="cinematic">Cinematic low</option></select></label>
+        </div>
+
+        <label class="consent"><input id="consent" type="checkbox" required><span>У меня есть право использовать фото и видео; изображённый человек — совершеннолетний и дал согласие.</span></label>
+        <button class="build" type="submit">Собрать точный промпт</button>
+      </section>
+
+      <section class="panel output-panel">
+        <div class="panel-head"><span>02</span><div><h2>Готовый промпт</h2><p>Английский даёт генератору более точные инструкции</p></div></div>
+        <textarea id="promptOutput" class="output" spellcheck="false" readonly placeholder="Промпт появится здесь после заполнения формы."></textarea>
+        <div id="promptStatus" class="prompt-status" role="status" aria-live="polite">Готово к настройке.</div>
+        <div class="actions">
+          <button id="copyPrompt" type="button" disabled>Копировать промпт</button>
+          <button id="downloadPrompt" class="secondary" type="button" disabled>Скачать TXT</button>
+        </div>
+        <a class="external" href="https://videogpt.io/" target="_blank" rel="noopener noreferrer">Открыть VideoGPT вручную ↗</a>
+        <p class="precision-note"><b>Максимальная точность:</b> для сложного покадрового переноса движения используйте Blender + WanGP в AI Studio. VideoGPT удобнее для быстрого черновика.</p>
+      </section>
+    </form>
+  </main>
+  <script src="./app.js?v=33.0.0" defer></script>
+</body>
+</html>

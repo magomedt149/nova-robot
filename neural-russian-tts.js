@@ -292,20 +292,10 @@
     anchor.insertAdjacentElement('afterend', note);
   }
 
-  function loadMediaStudio() {
-    if (document.querySelector('script[data-nova-media-studio]')) return;
-    const script = document.createElement('script');
-    script.src = './nova-media-studio.js?v=28.0.0';
-    script.defer = true;
-    script.dataset.novaMediaStudio = '1';
-    document.head.appendChild(script);
-  }
-
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', () => { addUiNote(); loadMediaStudio(); }, { once: true });
+    document.addEventListener('DOMContentLoaded', addUiNote, { once: true });
   } else {
     addUiNote();
-    loadMediaStudio();
   }
   const observer = new MutationObserver(addUiNote);
   observer.observe(document.documentElement, { childList: true, subtree: true });

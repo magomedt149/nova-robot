@@ -132,7 +132,7 @@
       button.id = 'novaMediaLaunch';
       button.className = 'action-btn';
       button.type = 'button';
-      button.innerHTML = '<span>🎙️</span><b>Аудио/3D</b>';
+      button.innerHTML = '<span>🎬</span><b>Video PRO</b>';
       button.addEventListener('click', () => { modal.hidden = false; });
       quick.appendChild(button);
     }

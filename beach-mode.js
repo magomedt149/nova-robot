@@ -43,33 +43,3 @@
     return Promise.race([result, timeout]).finally(() => window.clearTimeout(timer));
   };
 })();
-
-(() => {
-  'use strict';
-  if (document.querySelector('script[data-nova-whisper]')) return;
-  const script = document.createElement('script');
-  script.src = './nova-whisper.js?v=30.0.1';
-  script.defer = true;
-  script.dataset.novaWhisper = '1';
-  document.head.appendChild(script);
-})();
-
-(() => {
-  'use strict';
-  if (document.querySelector('script[data-nova-voice-editor]')) return;
-  const script = document.createElement('script');
-  script.src = './nova-voice-editor.js?v=32.0.0';
-  script.defer = true;
-  script.dataset.novaVoiceEditor = '1';
-  document.head.appendChild(script);
-})();
-
-(() => {
-  'use strict';
-  if (document.querySelector('script[data-nova-transcript-sync]')) return;
-  const script = document.createElement('script');
-  script.src = './nova-transcript-editor-sync.js?v=32.0.1';
-  script.defer = true;
-  script.dataset.novaTranscriptSync = '1';
-  document.head.appendChild(script);
-})();

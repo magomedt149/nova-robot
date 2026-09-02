@@ -11,6 +11,19 @@ function progress(message) {
   self.postMessage({ type: 'progress', ...message });
 }
 
+async function hasWebGPUAdapter() {
+  if (!self.navigator?.gpu?.requestAdapter) return false;
+  try {
+    const adapter = await Promise.race([
+      self.navigator.gpu.requestAdapter(),
+      new Promise((resolve) => setTimeout(() => resolve(null), 1500))
+    ]);
+    return Boolean(adapter);
+  } catch (_) {
+    return false;
+  }
+}
+
 async function buildPipeline(modelKey) {
   const key = MODEL_IDS[modelKey] ? modelKey : 'tiny';
   if (pipelines.has(key)) return pipelines.get(key);
@@ -24,7 +37,7 @@ async function buildPipeline(modelKey) {
   };
 
   let transcriber;
-  if (self.navigator?.gpu) {
+  if (await hasWebGPUAdapter()) {
     try {
       transcriber = await pipeline('automatic-speech-recognition', model, { ...options, device: 'webgpu' });
       progress({ stage: 'backend', backend: 'webgpu', model: key });

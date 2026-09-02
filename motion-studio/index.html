@@ -10,7 +10,7 @@
   <title>TUMSOEV Motion Studio — FREE</title>
   <link rel="manifest" href="./manifest.webmanifest" />
   <link rel="apple-touch-icon" href="/icon-192.png" />
-  <link rel="stylesheet" href="./styles.css" />
+  <link rel="stylesheet" href="./styles.css?v=33.0.0" />
 </head>
 <body>
   <main class="app">
@@ -32,7 +32,7 @@
           <select id="duration"><option>3</option><option selected>5</option><option>8</option><option>10</option><option>15</option></select>
         </label>
         <label>Формат
-          <select id="ratio"><option selected>16:9</option><option>9:16</option></select>
+          <select id="ratio"><option>16:9</option><option selected>9:16</option></select>
         </label>
       </div>
 
@@ -73,10 +73,10 @@
       <video id="video" controls playsinline class="video hidden"></video>
     </section>
   </main>
-  <script src="./app.js"></script>
+  <script src="./app.js?v=33.0.0"></script>
   <script>
     if ('serviceWorker' in navigator) {
-      window.addEventListener('load', () => navigator.serviceWorker.register('./service-worker.js').catch(() => {}));
+      window.addEventListener('load', () => navigator.serviceWorker.register('./service-worker.js?v=33.0.0').catch(() => {}));
     }
   </script>
 </body>

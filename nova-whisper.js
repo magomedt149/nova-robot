@@ -146,7 +146,7 @@
 
   function getWorker() {
     if (whisperWorker) return whisperWorker;
-    whisperWorker = new Worker('./nova-whisper-worker.js?v=29.0.0', { type: 'module', name: 'nova-whisper' });
+    whisperWorker = new Worker('./nova-whisper-worker.js?v=33.0.0', { type: 'module', name: 'nova-whisper' });
     return whisperWorker;
   }
 
