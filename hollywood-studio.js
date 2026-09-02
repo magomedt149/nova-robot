@@ -104,6 +104,7 @@
       await loadNOVAFeature('./nova-ios-output-actions.js?v=30.3.0', 'nova-ios-output-actions-loader');
       await loadNOVAFeature('./nova-video-pro.js?v=31.0.0', 'nova-video-pro-loader');
       await loadNOVAFeature('./nova-safe-motion-v32.js?v=32.0.0', 'nova-safe-motion-v32-loader');
+      await loadNOVAFeature('./nova-saved-settings-v32.js?v=32.1.0', 'nova-saved-settings-v32-loader');
     } catch (error) {
       console.warn('[NOVA Video Studio] optional module load failed:', error);
     }
