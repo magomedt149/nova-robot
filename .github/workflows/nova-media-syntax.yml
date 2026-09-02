@@ -1,0 +1,23 @@
+name: NOVA media syntax check
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'neural-russian-tts.js'
+      - 'nova-media-studio.js'
+      - '.github/workflows/nova-media-syntax.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check JavaScript syntax
+        run: |
+          node --check neural-russian-tts.js
+          node --check nova-media-studio.js
