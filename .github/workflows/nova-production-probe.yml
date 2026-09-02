@@ -10,22 +10,103 @@ jobs:
   probe:
     if: contains(github.event.head_commit.message, '[nova-probe]')
     runs-on: ubuntu-latest
-    timeout-minutes: 2
+    timeout-minutes: 4
     steps:
-      - name: Inspect public Netlify deploy and build state
+      - name: Wait for forced Netlify deploy
         env:
           SITE_ID: ae7fa0fb-e73d-413a-b122-7b9ff9419244
+          EXPECTED: 2b3dc6903e0669fa406ccdcaf8f1d19f90a40b31
         run: |
-          set +e
-          echo '=== SITE ==='
-          curl -sS --max-time 15 -w '\nHTTP=%{http_code}\n' "https://api.netlify.com/api/v1/sites/$SITE_ID" | head -c 8000
+          for i in $(seq 1 12); do
+            JSON=$(curl -sS --max-time 12 "https://api.netlify.com/api/v1/sites/$SITE_ID" || true)
+            REF=$(printf '%s' "$JSON" | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{try{console.log(JSON.parse(s).published_deploy?.commit_ref||'')}catch{console.log('')}})")
+            STATE=$(printf '%s' "$JSON" | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{try{console.log(JSON.parse(s).published_deploy?.state||'')}catch{console.log('')}})")
+            echo "PUBLISHED_REF=$REF STATE=$STATE"
+            if [ "$REF" = "$EXPECTED" ] && [ "$STATE" = "ready" ]; then exit 0; fi
+            sleep 5
+          done
+          echo 'Expected deploy was not published in time'
+          exit 1
+
+      - name: Verify live assets and server transcript
+        env:
+          BASE: https://dashing-otter-990b47.netlify.app
+          VIDEO: https://www.youtube.com/watch?v=eIho2S0ZahI
+        run: |
+          echo 'SERVICE_WORKER_HEAD:'
+          curl -fsS --max-time 20 "$BASE/service-worker.js" | head -n 3
+          CODE=$(curl -sS --max-time 45 -o /tmp/direct.json -w '%{http_code}' --get "$BASE/.netlify/functions/youtube-transcript" --data-urlencode "url=$VIDEO" || true)
+          echo "DIRECT_SERVER_HTTP=$CODE"
+          head -c 1000 /tmp/direct.json || true
           echo
-          echo '=== DEPLOYS ==='
-          curl -sS --max-time 15 -w '\nHTTP=%{http_code}\n' "https://api.netlify.com/api/v1/sites/$SITE_ID/deploys?per_page=20" | head -c 20000
-          echo
-          echo '=== BUILDS ==='
-          curl -sS --max-time 15 -w '\nHTTP=%{http_code}\n' "https://api.netlify.com/api/v1/sites/$SITE_ID/builds?per_page=20" | head -c 20000
-          echo
-          echo '=== BUILD TRIGGER TEST (no auth, expected 401 if protected) ==='
-          curl -sS --max-time 15 -X POST -H 'Content-Type: application/json' -d '{}' -w '\nHTTP=%{http_code}\n' "https://api.netlify.com/api/v1/sites/$SITE_ID/builds" | head -c 4000
-          echo
+
+      - name: Install lightweight browser driver
+        run: |
+          npm init -y >/dev/null 2>&1
+          npm install playwright-core@1.55.0 >/dev/null 2>&1
+          CHROME=$(command -v google-chrome || command -v google-chrome-stable || command -v chromium || command -v chromium-browser || true)
+          test -n "$CHROME"
+          echo "CHROME_BIN=$CHROME" >> "$GITHUB_ENV"
+
+      - name: Test full published NOVA scenario
+        env:
+          BASE: https://dashing-otter-990b47.netlify.app/
+          VIDEO: https://www.youtube.com/watch?v=eIho2S0ZahI
+        run: |
+          cat > ./probe.mjs <<'NODE'
+          import { chromium } from 'playwright-core';
+          const browser = await chromium.launch({ headless: true, executablePath: process.env.CHROME_BIN, args: ['--no-sandbox'] });
+          const context = await browser.newContext();
+          const page = await context.newPage();
+          const errors = [];
+          page.on('console', m => { if (m.type() === 'error') errors.push(m.text()); });
+          page.on('pageerror', e => errors.push(String(e)));
+
+          await page.addInitScript(() => {
+            window.__novaSpoken = [];
+            class FakeUtterance { constructor(text) { this.text=String(text||''); this.lang=''; this.rate=1; this.pitch=1; this.voice=null; } }
+            Object.defineProperty(window, 'SpeechSynthesisUtterance', { configurable:true, value:FakeUtterance });
+            Object.defineProperty(window, 'speechSynthesis', { configurable:true, value:{
+              getVoices(){ return [{name:'Test Russian',lang:'ru-RU',voiceURI:'test-ru',localService:true}]; },
+              cancel(){}, speak(u){ window.__novaSpoken.push({text:u.text,lang:u.lang,voice:u.voice?.name||null}); }, addEventListener(){}, removeEventListener(){}
+            }});
+          });
+
+          const nav = await page.goto(process.env.BASE, { waitUntil:'networkidle', timeout:60000 });
+          console.log('PAGE_HTTP=' + nav?.status());
+          await page.evaluate(async () => {
+            const reg = await navigator.serviceWorker.ready;
+            await reg.update();
+            if (!navigator.serviceWorker.controller) await new Promise(r => { navigator.serviceWorker.addEventListener('controllerchange', r, {once:true}); setTimeout(r, 4000); });
+          });
+          if (!(await page.evaluate(() => !!navigator.serviceWorker.controller))) await page.reload({waitUntil:'networkidle',timeout:60000});
+          console.log('SW_CONTROLLED=' + await page.evaluate(() => !!navigator.serviceWorker.controller));
+
+          await page.click('#novaNotebookLaunch');
+          await page.waitForSelector('#novaYoutubeUrl:visible');
+          await page.fill('#novaYoutubeUrl', process.env.VIDEO);
+          await page.selectOption('#novaYoutubeTargetLanguage','ru');
+          await page.click('#novaGetTranscript');
+          await page.waitForFunction(() => /Текст получен|Не получилось|Ошибка/i.test(document.querySelector('#novaYoutubeStatus')?.textContent||''), null, {timeout:90000});
+          const ts=(await page.locator('#novaYoutubeStatus').innerText()).trim();
+          const tt=(await page.locator('#novaYoutubeResult').innerText()).trim();
+          console.log('TRANSCRIPT_STATUS='+ts); console.log('TRANSCRIPT_LENGTH='+tt.length);
+          if(!/Текст получен/i.test(ts)||tt.length<120){ console.log('TRANSCRIPT_PREFIX='+tt.slice(0,400)); console.log('ERRORS='+JSON.stringify(errors)); throw new Error('transcript failed'); }
+
+          await page.click('#novaMakeRecap');
+          await page.waitForFunction(() => /Пересказ готов|Ошибка при создании/i.test(document.querySelector('#novaYoutubeStatus')?.textContent||''), null, {timeout:120000});
+          const rs=(await page.locator('#novaYoutubeStatus').innerText()).trim();
+          const recap=(await page.locator('#novaYoutubeResult').innerText()).trim();
+          console.log('RECAP_STATUS='+rs); console.log('RECAP_LENGTH='+recap.length); console.log('HAS_CYRILLIC='+/[А-Яа-яЁё]/.test(recap));
+          if(!/Пересказ готов/i.test(rs)||recap.length<40||!/[А-Яа-яЁё]/.test(recap)) throw new Error('recap failed');
+
+          await page.click('#novaPlayRecap');
+          await page.waitForFunction(() => window.__novaSpoken?.length>0, null, {timeout:10000});
+          const spoken=await page.evaluate(() => window.__novaSpoken.at(-1));
+          console.log('TTS_LANG='+spoken?.lang); console.log('TTS_TEXT_LENGTH='+String(spoken?.text||'').length); console.log('TTS_VOICE='+spoken?.voice);
+          if(!String(spoken?.lang||'').toLowerCase().startsWith('ru')||String(spoken?.text||'').length<40) throw new Error('tts failed');
+          console.log('FULL_SCENARIO=PASS');
+          if(errors.length) console.log('NONFATAL_ERRORS='+JSON.stringify(errors));
+          await browser.close();
+          NODE
+          node ./probe.mjs
