@@ -1,5 +1,5 @@
-const CACHE = 'nova-v27-economy-first-20260902';
-const API_CACHE = 'nova-api-economy-v1';
+const CACHE = 'nova-v28-browser-first-full-20260902';
+const API_CACHE = 'nova-api-economy-v2';
 const YOUTUBE_TTL_MS = 24 * 60 * 60 * 1000;
 const TRANSLATE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -17,7 +17,7 @@ const CORE = [
   './icon-512.png'
 ];
 
-const YT_PROXY_BUILDERS = [
+const PUBLIC_PROXY_BUILDERS = [
   (url) => `https://corsproxy.io/?url=${encodeURIComponent(url)}`,
   (url) => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
   (url) => `https://thingproxy.freeboard.io/fetch/${url}`,
@@ -120,18 +120,18 @@ function parseVttOrXml(raw) {
   return vtt.join(' ').replace(/\s+/g, ' ').trim();
 }
 
-function fetchTimed(url, timeoutMs = 7500) {
+function fetchTimed(url, timeoutMs = 7500, options = {}) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
-  return fetch(url, { signal: controller.signal }).finally(() => clearTimeout(timer));
+  return fetch(url, { ...options, signal: controller.signal }).finally(() => clearTimeout(timer));
 }
 
 function raceCaptionProxies(targetUrl) {
   return new Promise((resolve) => {
     let done = false;
     let settled = 0;
-    const total = YT_PROXY_BUILDERS.length;
-    YT_PROXY_BUILDERS.forEach((build, index) => {
+    const total = PUBLIC_PROXY_BUILDERS.length;
+    PUBLIC_PROXY_BUILDERS.forEach((build, index) => {
       fetchTimed(build(targetUrl), 8000)
         .then(async (response) => {
           if (done || !response.ok) return;
@@ -312,24 +312,100 @@ async function browserYoutubeEconomy(request) {
   }
 }
 
+function splitTranslateText(text, max = 430) {
+  const clean = String(text || '').replace(/\s+/g, ' ').trim();
+  if (!clean) return [];
+  const sentences = clean.match(/[^.!?]+[.!?]+|[^.!?]+$/g) || [clean];
+  const chunks = [];
+  let current = '';
+  for (const sentence of sentences) {
+    const part = sentence.trim();
+    if (!part) continue;
+    if ((current + ' ' + part).trim().length <= max) {
+      current = (current + ' ' + part).trim();
+    } else {
+      if (current) chunks.push(current);
+      if (part.length <= max) current = part;
+      else {
+        for (let i = 0; i < part.length; i += max) chunks.push(part.slice(i, i + max));
+        current = '';
+      }
+    }
+  }
+  if (current) chunks.push(current);
+  return chunks;
+}
+
+async function fetchTranslationJson(url) {
+  try {
+    const direct = await fetchTimed(url, 7000, { headers: { Accept: 'application/json' } });
+    if (direct.ok) return await direct.json();
+  } catch (_) {}
+
+  for (const build of PUBLIC_PROXY_BUILDERS) {
+    try {
+      const response = await fetchTimed(build(url), 8000, { headers: { Accept: 'application/json,text/plain,*/*' } });
+      if (!response.ok) continue;
+      const text = await response.text();
+      try { return JSON.parse(text); } catch (_) {}
+    } catch (_) {}
+  }
+  return null;
+}
+
+async function translateChunkBrowser(chunk, from, to) {
+  const url = new URL('https://api.mymemory.translated.net/get');
+  url.searchParams.set('q', chunk);
+  url.searchParams.set('langpair', `${from}|${to}`);
+  const data = await fetchTranslationJson(url.toString());
+  const translated = data?.responseData?.translatedText;
+  if (!translated) throw new Error(data?.responseDetails || 'Translation unavailable');
+  return decodeHtml(translated);
+}
+
+async function browserTranslate(text, from, to) {
+  const chunks = splitTranslateText(text);
+  if (!chunks.length) return '';
+  const out = [];
+  for (const chunk of chunks) out.push(await translateChunkBrowser(chunk, from, to));
+  return out.join(' ').replace(/\s+/g, ' ').trim();
+}
+
 async function cachedTranslate(request) {
   let body = {};
   try { body = await request.clone().json(); } catch (_) {}
   const text = String(body?.text || '').trim();
   const from = String(body?.from || 'en').toLowerCase();
   const to = String(body?.to || 'ru').toLowerCase();
-  if (!text) return fetch(request.clone());
+  if (!text) return jsonResponse({ ok: false, error: 'Введите текст для перевода.' }, 400);
 
   const key = `${from}-${to}-${text.length}-${fastHash(text)}`;
   const cached = await getFreshApiCache('translate', key, TRANSLATE_TTL_MS);
   if (cached) return cached;
 
-  const response = await fetch(request.clone());
-  if (response.ok) {
-    const data = await response.clone().json().catch(() => null);
-    if (data?.ok && data?.translatedText) await putApiCache('translate', key, response);
-  }
-  return response;
+  let serverResponse = null;
+  try {
+    serverResponse = await fetch(request.clone());
+    if (serverResponse.ok) {
+      const data = await serverResponse.clone().json().catch(() => null);
+      if (data?.ok && data?.translatedText) {
+        await putApiCache('translate', key, serverResponse);
+        return serverResponse;
+      }
+    }
+  } catch (_) {}
+
+  try {
+    const translatedText = await browserTranslate(text, from, to);
+    if (translatedText) {
+      const response = jsonResponse({ ok: true, translatedText, from, to, provider: 'MyMemory-browser' });
+      await putApiCache('translate', key, response);
+      return response;
+    }
+  } catch (_) {}
+
+  if (serverResponse) return serverResponse;
+  return jsonResponse({ ok: false, error: 'Перевод временно недоступен.' }, 503);
 }
 
 self.addEventListener('fetch', (event) => {
