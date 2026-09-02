@@ -5,9 +5,11 @@
   window.__novaNeuralRussianTtsInstalled = true;
 
   const PIPER_IMPORT = 'https://cdn.jsdelivr.net/npm/@diffusionstudio/vits-web@1.0.3/+esm';
-  const RUSSIAN_VOICE_ID = 'ru_RU-irina-medium';
+  const VOICES = Object.freeze({
+    irina: { id: 'ru_RU-irina-medium', label: 'Ирина', gender: 'female' },
+    denis: { id: 'ru_RU-denis-medium', label: 'Денис', gender: 'male' }
+  });
   const MAX_CHUNK_CHARS = 170;
-
   const synth = window.speechSynthesis;
   if (!synth || typeof SpeechSynthesisUtterance === 'undefined') return;
 
@@ -21,18 +23,18 @@
   let currentBlobUrl = '';
 
   function setStatus(message) {
+    const studio = document.querySelector('#novaMediaStatus');
+    if (studio) studio.textContent = message;
     const youtube = document.querySelector('#novaYoutubeStatus');
     const translate = document.querySelector('#novaTranslateStatus');
     const modal = document.querySelector('#novaNotebookModal');
     const youtubePane = document.querySelector('[data-note-pane="youtube"]');
     const translatePane = document.querySelector('[data-note-pane="translate"]');
-
     if (modal && !modal.hidden) {
       if (youtubePane && !youtubePane.hidden && youtube) youtube.textContent = message;
       else if (translatePane && !translatePane.hidden && translate) translate.textContent = message;
       return;
     }
-
     const globalStatus = document.querySelector('#statusText');
     if (globalStatus) globalStatus.textContent = message;
   }
@@ -55,6 +57,11 @@
       .trim();
   }
 
+  function normalizeVoice(value) {
+    const key = String(value || 'irina').toLowerCase();
+    return VOICES[key] ? key : 'irina';
+  }
+
   function isRussianUtterance(utterance) {
     const lang = String(utterance?.lang || '').toLowerCase();
     const text = String(utterance?.text || '');
@@ -64,36 +71,27 @@
   function splitForSpeech(text, max = MAX_CHUNK_CHARS) {
     const clean = cleanRussianText(text);
     if (!clean) return [];
-
     const sentences = clean.match(/[^.!?…]+[.!?…]+|[^.!?…]+$/g) || [clean];
     const chunks = [];
     let current = '';
-
-    const pushHardSplit = (value) => {
-      let rest = value.trim();
-      while (rest.length > max) {
-        let cut = rest.lastIndexOf(' ', max);
-        if (cut < Math.floor(max * 0.55)) cut = max;
-        chunks.push(rest.slice(0, cut).trim());
-        rest = rest.slice(cut).trim();
-      }
-      if (rest) current = rest;
-    };
-
     for (const sentence of sentences) {
-      const part = sentence.trim();
+      let part = sentence.trim();
       if (!part) continue;
       const candidate = current ? `${current} ${part}` : part;
       if (candidate.length <= max) {
         current = candidate;
-      } else {
-        if (current) chunks.push(current);
-        current = '';
-        if (part.length <= max) current = part;
-        else pushHardSplit(part);
+        continue;
       }
+      if (current) chunks.push(current);
+      current = '';
+      while (part.length > max) {
+        let cut = part.lastIndexOf(' ', max);
+        if (cut < Math.floor(max * 0.55)) cut = max;
+        chunks.push(part.slice(0, cut).trim());
+        part = part.slice(cut).trim();
+      }
+      if (part) current = part;
     }
-
     if (current) chunks.push(current);
     return chunks.filter(Boolean);
   }
@@ -122,16 +120,6 @@
       }
     } catch (_) {}
     getAudio();
-  }
-
-  function bindUnlockGestures() {
-    ['#novaSpeakRussian', '#novaMakeRecap', '#novaPlayRecap'].forEach((selector) => {
-      const button = document.querySelector(selector);
-      if (!button || button.dataset.novaTtsUnlock === '1') return;
-      button.dataset.novaTtsUnlock = '1';
-      button.addEventListener('pointerdown', unlockAudio, { passive: true });
-      button.addEventListener('touchstart', unlockAudio, { passive: true });
-    });
   }
 
   async function ensurePiper() {
@@ -168,31 +156,90 @@
     const player = getAudio();
     if (currentBlobUrl) URL.revokeObjectURL(currentBlobUrl);
     currentBlobUrl = URL.createObjectURL(blob);
-
     await new Promise((resolve, reject) => {
-      const cleanup = () => {
-        player.onended = null;
-        player.onerror = null;
-      };
+      const cleanup = () => { player.onended = null; player.onerror = null; };
       player.onended = () => { cleanup(); resolve(); };
       player.onerror = () => { cleanup(); reject(new Error('Не удалось воспроизвести нейроголос.')); };
       player.src = currentBlobUrl;
       const promise = player.play();
       if (promise?.catch) promise.catch((error) => { cleanup(); reject(error); });
     });
-
     if (currentBlobUrl) {
       URL.revokeObjectURL(currentBlobUrl);
       currentBlobUrl = '';
     }
   }
 
+  async function synthesize(text, voice = 'irina', onProgress) {
+    const clean = cleanRussianText(text);
+    if (!clean) return [];
+    const key = normalizeVoice(voice);
+    const chunks = splitForSpeech(clean);
+    const engine = await ensurePiper();
+    const blobs = [];
+    for (let index = 0; index < chunks.length; index++) {
+      const blob = await engine.predict(
+        { text: chunks[index], voiceId: VOICES[key].id },
+        (progress) => {
+          if (typeof onProgress === 'function') {
+            onProgress({ ...progress, index, totalChunks: chunks.length, voice: key });
+          }
+        }
+      );
+      blobs.push(blob);
+    }
+    return blobs;
+  }
+
+  async function speak(text, voice = 'irina') {
+    const clean = cleanRussianText(text);
+    if (!clean) return;
+    const key = normalizeVoice(voice);
+    nativeCancel();
+    stopPiperAudio();
+    unlockAudio();
+    const token = playbackToken;
+    setStatus(`Первый запуск ${VOICES[key].label} может скачать модель один раз. Платных кредитов нет.`);
+    const blobs = await synthesize(clean, key, (progress) => {
+      if (token !== playbackToken || !progress?.total) return;
+      const percent = Math.max(0, Math.min(100, Math.round((progress.loaded / progress.total) * 100)));
+      setStatus(`Загружаю Piper ${VOICES[key].label}: ${percent}%…`);
+    });
+    for (let index = 0; index < blobs.length; index++) {
+      if (token !== playbackToken) return;
+      setStatus(blobs.length > 1 ? `🔊 ${VOICES[key].label}: ${index + 1}/${blobs.length}` : `🔊 ${VOICES[key].label} говорит…`);
+      await playBlob(blobs[index], token);
+    }
+    if (token === playbackToken) setStatus(`✅ Piper ${VOICES[key].label} — готово.`);
+  }
+
+  async function speakDialogue(turns) {
+    nativeCancel();
+    stopPiperAudio();
+    unlockAudio();
+    const token = playbackToken;
+    const normalized = (Array.isArray(turns) ? turns : []).map((turn, index) => ({
+      voice: normalizeVoice(turn?.voice || (index % 2 ? 'denis' : 'irina')),
+      text: cleanRussianText(turn?.text || '')
+    })).filter((turn) => turn.text);
+    for (let i = 0; i < normalized.length; i++) {
+      if (token !== playbackToken) return;
+      const turn = normalized[i];
+      const blobs = await synthesize(turn.text, turn.voice);
+      setStatus(`🎭 Диалог ${i + 1}/${normalized.length}: ${VOICES[turn.voice].label}`);
+      for (const blob of blobs) {
+        if (token !== playbackToken) return;
+        await playBlob(blob, token);
+      }
+    }
+    if (token === playbackToken) setStatus('✅ Диалог Ирина + Денис готов.');
+  }
+
   function selectClearRussianSystemVoice() {
     const voices = synth.getVoices?.() || [];
     const russian = voices.filter((voice) => String(voice.lang || '').toLowerCase().startsWith('ru'));
     if (!russian.length) return null;
-
-    const priority = ['milena', 'katya', 'svetlana', 'dariya', 'alena', 'irina', 'yuri', 'dmitry', 'pavel', 'google', 'microsoft'];
+    const priority = ['milena', 'katya', 'svetlana', 'irina', 'yuri', 'dmitry', 'pavel', 'google', 'microsoft'];
     for (const needle of priority) {
       const found = russian.find((voice) => String(voice.name || '').toLowerCase().includes(needle));
       if (found) return found;
@@ -200,61 +247,24 @@
     return russian.find((voice) => voice.localService) || russian[0];
   }
 
-  function speakSystemFallback(originalUtterance, reason) {
-    const text = cleanRussianText(originalUtterance?.text || '');
-    if (!text) return;
-
-    const fallback = new SpeechSynthesisUtterance(text);
+  function systemFallback(text) {
+    const clean = cleanRussianText(text);
+    if (!clean) return;
+    const fallback = new SpeechSynthesisUtterance(clean);
     fallback.lang = 'ru-RU';
-    fallback.rate = 0.86;
+    fallback.rate = 0.88;
     fallback.pitch = 1;
-    fallback.volume = 1;
     const voice = selectClearRussianSystemVoice();
     if (voice) fallback.voice = voice;
-
-    setStatus(reason ? 'Нейроголос недоступен — включаю чёткий системный русский TTS.' : '🔊 Русский системный TTS.');
+    setStatus('Piper временно недоступен — включаю системный русский голос.');
     nativeSpeak(fallback);
-  }
-
-  async function speakRussianNeural(originalUtterance, token) {
-    const text = cleanRussianText(originalUtterance?.text || '');
-    if (!text) return;
-
-    const chunks = splitForSpeech(text);
-    setStatus('Первый запуск русского голоса может скачать около 60 МБ один раз. Платных кредитов нет.');
-    const engine = await ensurePiper();
-
-    for (let index = 0; index < chunks.length; index++) {
-      if (token !== playbackToken) return;
-      const chunk = chunks[index];
-      const blob = await engine.predict(
-        { text: chunk, voiceId: RUSSIAN_VOICE_ID },
-        (progress) => {
-          if (token !== playbackToken || !progress?.total) return;
-          const percent = Math.max(0, Math.min(100, Math.round((progress.loaded / progress.total) * 100)));
-          setStatus(`Загружаю русский нейроголос Ирина: ${percent}%…`);
-        }
-      );
-      if (token !== playbackToken) return;
-      setStatus(chunks.length > 1 ? `🔊 Ирина читает: ${index + 1}/${chunks.length}` : '🔊 Ирина читает по-русски…');
-      await playBlob(blob, token);
-    }
-
-    if (token === playbackToken) setStatus('✅ Русский нейроголос Ирина — готово.');
   }
 
   function patchedSpeak(utterance) {
     if (!isRussianUtterance(utterance)) return nativeSpeak(utterance);
-
-    nativeCancel();
-    stopPiperAudio();
-    unlockAudio();
-    const token = playbackToken;
-
-    speakRussianNeural(utterance, token).catch((error) => {
-      if (token !== playbackToken) return;
+    speak(utterance?.text || '', 'irina').catch((error) => {
       console.warn('[NOVA Russian TTS] Piper fallback:', error);
-      speakSystemFallback(utterance, error);
+      systemFallback(utterance?.text || '');
     });
   }
 
@@ -267,44 +277,50 @@
     Object.defineProperty(synth, 'speak', { configurable: true, value: patchedSpeak });
     Object.defineProperty(synth, 'cancel', { configurable: true, value: patchedCancel });
   } catch (_) {
-    try {
-      synth.speak = patchedSpeak;
-      synth.cancel = patchedCancel;
-    } catch (_) {}
+    try { synth.speak = patchedSpeak; synth.cancel = patchedCancel; } catch (_) {}
   }
 
   function addUiNote() {
-    bindUnlockGestures();
     const modal = document.querySelector('#novaNotebookModal');
     if (!modal || modal.querySelector('#novaNeuralTtsNote')) return;
-    const notes = modal.querySelectorAll('.nova-note-meta');
-    const anchor = notes[0];
+    const anchor = modal.querySelector('.nova-note-meta');
     if (!anchor) return;
     const note = document.createElement('div');
     note.id = 'novaNeuralTtsNote';
     note.className = 'nova-note-meta';
-    note.textContent = '🇷🇺 Русская озвучка: нейроголос Piper Irina. Первый запуск ~60 МБ, потом модель хранится локально. Если Piper недоступен — NOVA автоматически использует лучший русский голос устройства.';
+    note.textContent = '🇷🇺 Основные голоса NOVA: Piper Ирина — женский/рассказчик, Piper Денис — мужской/диалоги. Работают без платного API.';
     anchor.insertAdjacentElement('afterend', note);
   }
 
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', addUiNote, { once: true });
-  } else {
-    addUiNote();
+  function loadMediaStudio() {
+    if (document.querySelector('script[data-nova-media-studio]')) return;
+    const script = document.createElement('script');
+    script.src = './nova-media-studio.js?v=28.0.0';
+    script.defer = true;
+    script.dataset.novaMediaStudio = '1';
+    document.head.appendChild(script);
   }
 
-  const observer = new MutationObserver(() => addUiNote());
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => { addUiNote(); loadMediaStudio(); }, { once: true });
+  } else {
+    addUiNote();
+    loadMediaStudio();
+  }
+  const observer = new MutationObserver(addUiNote);
   observer.observe(document.documentElement, { childList: true, subtree: true });
 
-  window.NovaRussianTTS = {
-    voiceId: RUSSIAN_VOICE_ID,
-    speak(text) {
-      unlockAudio();
-      const utterance = new SpeechSynthesisUtterance(cleanRussianText(text));
-      utterance.lang = 'ru-RU';
-      patchedSpeak(utterance);
-    },
+  window.NovaRussianTTS = Object.freeze({
+    voices: VOICES,
+    defaultNarrator: 'irina',
+    defaultMale: 'denis',
+    cleanText: cleanRussianText,
+    splitForSpeech,
+    synthesize,
+    speak,
+    speakDialogue,
     stop: patchedCancel,
-    preload: ensurePiper
-  };
+    preload: ensurePiper,
+    unlock: unlockAudio
+  });
 })();
