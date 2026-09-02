@@ -11,6 +11,13 @@ function json(statusCode, payload) {
 }
 
 const DESKTOP_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36';
+const INVIDIOUS_STATIC = [
+  'https://y.com.sb',
+  'https://invidious.flokinet.to',
+  'https://invidious.darkness.services',
+  'https://inv.nadeko.net',
+  'https://invidious.nerdvpn.de'
+];
 
 function getVideoId(input) {
   const value = String(input || '').trim();
@@ -89,12 +96,7 @@ function extractArrayAfterMarker(html, marker) {
 }
 
 function findPlayerResponseInHtml(html) {
-  const markers = [
-    'var ytInitialPlayerResponse =',
-    'ytInitialPlayerResponse =',
-    'window["ytInitialPlayerResponse"] ='
-  ];
-  for (const marker of markers) {
+  for (const marker of ['var ytInitialPlayerResponse =', 'ytInitialPlayerResponse =', 'window["ytInitialPlayerResponse"] =']) {
     const parsed = extractObjectAfterMarker(html, marker);
     if (parsed) return parsed;
   }
@@ -107,11 +109,7 @@ function tracksFromPlayerResponse(playerResponse) {
 }
 
 function findConfigString(html, key) {
-  const patterns = [
-    new RegExp(`"${key}":"([^"\\n]+)"`),
-    new RegExp(`'${key}':'([^'\\n]+)'`)
-  ];
-  for (const pattern of patterns) {
+  for (const pattern of [new RegExp(`"${key}":"([^"\\n]+)"`), new RegExp(`'${key}':'([^'\\n]+)'`)]) {
     const match = html.match(pattern);
     if (match?.[1]) return decodeJsonEscapes(match[1]);
   }
@@ -122,7 +120,6 @@ async function fetchYoutubeiPlayer(html, videoId) {
   const apiKey = findConfigString(html, 'INNERTUBE_API_KEY');
   const clientVersion = findConfigString(html, 'INNERTUBE_CLIENT_VERSION') || '2.20260831.00.00';
   if (!apiKey) return null;
-
   const response = await fetch(`https://www.youtube.com/youtubei/v1/player?key=${encodeURIComponent(apiKey)}&prettyPrint=false`, {
     method: 'POST',
     headers: {
@@ -133,15 +130,7 @@ async function fetchYoutubeiPlayer(html, videoId) {
       'Accept-Language': 'en-US,en;q=0.9'
     },
     body: JSON.stringify({
-      context: {
-        client: {
-          clientName: 'WEB',
-          clientVersion,
-          hl: 'en',
-          gl: 'US',
-          utcOffsetMinutes: 0
-        }
-      },
+      context: { client: { clientName: 'WEB', clientVersion, hl: 'en', gl: 'US', utcOffsetMinutes: 0 } },
       videoId,
       contentCheckOk: true,
       racyCheckOk: true
@@ -180,54 +169,128 @@ function transcriptFromXml(xml) {
   return pieces.join(' ').replace(/\s+/g, ' ').trim();
 }
 
+function transcriptFromVtt(vtt) {
+  const lines = String(vtt || '').replace(/\r/g, '').split('\n');
+  const pieces = [];
+  let last = '';
+  for (const raw of lines) {
+    const line = raw.trim();
+    if (!line || line === 'WEBVTT' || line.includes('-->') || /^\d+$/.test(line) || /^NOTE\b/.test(line)) continue;
+    const text = decodeHtml(line.replace(/<[^>]+>/g, '')).replace(/\s+/g, ' ').trim();
+    if (!text || text === last) continue;
+    pieces.push(text);
+    last = text;
+  }
+  return pieces.join(' ').replace(/\s+/g, ' ').trim();
+}
+
 async function fetchTranscriptFromUrl(baseUrl) {
   if (!baseUrl) return '';
   const jsonUrl = `${baseUrl}${baseUrl.includes('?') ? '&' : '?'}fmt=json3`;
-  const response = await fetch(jsonUrl, {
-    headers: {
-      'User-Agent': DESKTOP_UA,
-      'Accept-Language': 'en-US,en;q=0.9',
-      'Referer': 'https://www.youtube.com/'
-    }
-  });
+  const response = await fetch(jsonUrl, { headers: { 'User-Agent': DESKTOP_UA, 'Accept-Language': 'en-US,en;q=0.9', 'Referer': 'https://www.youtube.com/' } });
   if (response.ok) {
     const text = await response.text();
     if (text.trim()) {
       try {
-        const parsed = JSON.parse(text);
-        const transcript = transcriptFromJson3(parsed);
+        const transcript = transcriptFromJson3(JSON.parse(text));
         if (transcript) return transcript;
       } catch (_) {
-        const transcript = transcriptFromXml(text);
+        const transcript = transcriptFromXml(text) || transcriptFromVtt(text);
         if (transcript) return transcript;
       }
     }
   }
-
   const xmlResponse = await fetch(baseUrl, { headers: { 'User-Agent': DESKTOP_UA } });
   if (!xmlResponse.ok) return '';
-  return transcriptFromXml(await xmlResponse.text());
+  const text = await xmlResponse.text();
+  return transcriptFromXml(text) || transcriptFromVtt(text);
 }
 
 async function tryDirectTimedText(videoId) {
-  const languages = ['en', 'en-US', 'en-GB'];
-  for (const lang of languages) {
-    const url = `https://www.youtube.com/api/timedtext?v=${encodeURIComponent(videoId)}&lang=${encodeURIComponent(lang)}&fmt=json3`;
+  for (const lang of ['en', 'en-US', 'en-GB']) {
     try {
+      const url = `https://www.youtube.com/api/timedtext?v=${encodeURIComponent(videoId)}&lang=${encodeURIComponent(lang)}&fmt=json3`;
       const response = await fetch(url, { headers: { 'User-Agent': DESKTOP_UA } });
       if (!response.ok) continue;
       const text = await response.text();
       if (!text.trim()) continue;
-      try {
-        const transcript = transcriptFromJson3(JSON.parse(text));
-        if (transcript) return { transcript, language: lang, isAutoGenerated: false, trackName: '' };
-      } catch (_) {
-        const transcript = transcriptFromXml(text);
-        if (transcript) return { transcript, language: lang, isAutoGenerated: false, trackName: '' };
-      }
+      let transcript = '';
+      try { transcript = transcriptFromJson3(JSON.parse(text)); }
+      catch (_) { transcript = transcriptFromXml(text) || transcriptFromVtt(text); }
+      if (transcript) return { transcript, language: lang, isAutoGenerated: false, trackName: '', method: 'direct-timedtext' };
     } catch (_) {}
   }
   return null;
+}
+
+function timedFetch(url, ms = 6500) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), ms);
+  return fetch(url, { signal: controller.signal, headers: { 'User-Agent': DESKTOP_UA, 'Accept': 'application/json,text/plain,*/*' } })
+    .finally(() => clearTimeout(timer));
+}
+
+async function discoverInvidiousInstances() {
+  try {
+    const response = await timedFetch('https://api.invidious.io/instances.json?sort_by=health', 3000);
+    if (!response.ok) return INVIDIOUS_STATIC;
+    const raw = await response.json();
+    const found = (Array.isArray(raw) ? raw : [])
+      .map((entry) => entry?.[1])
+      .filter((info) => info && info.api && info.type === 'https' && info.monitor?.down !== true)
+      .sort((a, b) => (b.monitor?.uptime || 0) - (a.monitor?.uptime || 0))
+      .map((info) => String(info.uri || '').replace(/\/$/, ''))
+      .filter(Boolean)
+      .slice(0, 6);
+    return [...new Set([...found, ...INVIDIOUS_STATIC])].slice(0, 8);
+  } catch (_) {
+    return INVIDIOUS_STATIC;
+  }
+}
+
+function chooseInvidiousCaption(captions) {
+  if (!Array.isArray(captions) || !captions.length) return null;
+  const english = (c) => String(c.language_code || '').toLowerCase().startsWith('en') || /english/i.test(c.label || '');
+  const auto = (c) => /auto|generated/i.test(c.label || '');
+  return captions.find((c) => english(c) && !auto(c))
+    || captions.find(english)
+    || captions.find((c) => !auto(c))
+    || captions[0];
+}
+
+async function tryOneInvidious(instance, videoId) {
+  const videoResponse = await timedFetch(`${instance}/api/v1/videos/${encodeURIComponent(videoId)}`, 7000);
+  if (!videoResponse.ok) throw new Error(`video ${videoResponse.status}`);
+  const data = await videoResponse.json();
+  const caption = chooseInvidiousCaption(data?.captions || []);
+  if (!caption?.url) throw new Error('no captions');
+
+  const captionUrl = caption.url.startsWith('http') ? caption.url : `${instance}${caption.url}`;
+  const vttUrl = captionUrl.includes('fmt=') ? captionUrl : `${captionUrl}${captionUrl.includes('?') ? '&' : '?'}fmt=vtt`;
+  const capResponse = await timedFetch(vttUrl, 9000);
+  if (!capResponse.ok) throw new Error(`caption ${capResponse.status}`);
+  const body = await capResponse.text();
+  const transcript = transcriptFromVtt(body) || transcriptFromXml(body);
+  if (!transcript) throw new Error('empty caption');
+
+  return {
+    transcript,
+    language: caption.language_code || '',
+    trackName: caption.label || '',
+    isAutoGenerated: /auto|generated/i.test(caption.label || ''),
+    title: data?.title || '',
+    method: `invidious:${new URL(instance).hostname}`
+  };
+}
+
+async function tryInvidious(videoId) {
+  const instances = await discoverInvidiousInstances();
+  const attempts = instances.map((instance) => tryOneInvidious(instance, videoId));
+  try {
+    return await Promise.any(attempts);
+  } catch (_) {
+    return null;
+  }
 }
 
 exports.handler = async (event) => {
@@ -238,60 +301,74 @@ exports.handler = async (event) => {
     const videoId = getVideoId(input);
     if (!videoId) return json(400, { ok: false, error: 'Неверная ссылка YouTube.' });
 
-    const watchUrl = `https://www.youtube.com/watch?v=${encodeURIComponent(videoId)}&hl=en&gl=US&persist_hl=1`;
-    const watch = await fetch(watchUrl, {
-      headers: {
-        'User-Agent': DESKTOP_UA,
-        'Accept-Language': 'en-US,en;q=0.9',
-        'Cookie': 'CONSENT=YES+cb.20210328-17-p0.en+FX+410; SOCS=CAI'
-      },
-      redirect: 'follow'
-    });
-    if (!watch.ok) throw new Error(`YouTube HTTP ${watch.status}`);
-    const html = await watch.text();
-
-    let playerResponse = findPlayerResponseInHtml(html);
-    let tracks = tracksFromPlayerResponse(playerResponse);
-    let method = 'initial-player-response';
-
-    if (!tracks.length) {
-      const directTracks = extractArrayAfterMarker(html, '"captionTracks":');
-      if (Array.isArray(directTracks) && directTracks.length) {
-        tracks = directTracks;
-        method = 'watch-html-caption-tracks';
-      }
-    }
-
-    if (!tracks.length) {
-      const youtubei = await fetchYoutubeiPlayer(html, videoId);
-      if (youtubei) {
-        playerResponse = youtubei;
-        tracks = tracksFromPlayerResponse(youtubei);
-        method = 'youtubei-player';
-      }
-    }
-
-    const preferred = chooseTrack(tracks);
+    let playerResponse = null;
+    let tracks = [];
+    let preferred = null;
     let transcript = '';
     let language = '';
     let trackName = '';
     let isAutoGenerated = false;
+    let method = '';
+    let title = '';
 
-    if (preferred?.baseUrl) {
-      transcript = await fetchTranscriptFromUrl(preferred.baseUrl);
-      language = preferred.languageCode || '';
-      trackName = preferred.name?.simpleText || preferred.name?.runs?.map((r) => r.text).join('') || '';
-      isAutoGenerated = preferred.kind === 'asr';
-    }
+    try {
+      const watchUrl = `https://www.youtube.com/watch?v=${encodeURIComponent(videoId)}&hl=en&gl=US&persist_hl=1`;
+      const watch = await fetch(watchUrl, {
+        headers: {
+          'User-Agent': DESKTOP_UA,
+          'Accept-Language': 'en-US,en;q=0.9',
+          'Cookie': 'CONSENT=YES+cb.20210328-17-p0.en+FX+410; SOCS=CAI'
+        },
+        redirect: 'follow'
+      });
+      if (watch.ok) {
+        const html = await watch.text();
+        playerResponse = findPlayerResponseInHtml(html);
+        tracks = tracksFromPlayerResponse(playerResponse);
+        method = 'initial-player-response';
+
+        if (!tracks.length) {
+          const directTracks = extractArrayAfterMarker(html, '"captionTracks":');
+          if (Array.isArray(directTracks) && directTracks.length) {
+            tracks = directTracks;
+            method = 'watch-html-caption-tracks';
+          }
+        }
+
+        if (!tracks.length) {
+          const youtubei = await fetchYoutubeiPlayer(html, videoId);
+          if (youtubei) {
+            playerResponse = youtubei;
+            tracks = tracksFromPlayerResponse(youtubei);
+            method = 'youtubei-player';
+          }
+        }
+
+        preferred = chooseTrack(tracks);
+        if (preferred?.baseUrl) {
+          transcript = await fetchTranscriptFromUrl(preferred.baseUrl);
+          language = preferred.languageCode || '';
+          trackName = preferred.name?.simpleText || preferred.name?.runs?.map((r) => r.text).join('') || '';
+          isAutoGenerated = preferred.kind === 'asr';
+        }
+
+        title = playerResponse?.videoDetails?.title
+          || decodeHtml(html.match(/<title>(.*?)<\/title>/i)?.[1] || '').replace(/\s*-\s*YouTube\s*$/i, '').trim();
+      }
+    } catch (_) {}
 
     if (!transcript) {
       const direct = await tryDirectTimedText(videoId);
       if (direct) {
-        transcript = direct.transcript;
-        language = direct.language;
-        trackName = direct.trackName;
-        isAutoGenerated = direct.isAutoGenerated;
-        method = 'direct-timedtext';
+        ({ transcript, language, trackName, isAutoGenerated, method } = direct);
+      }
+    }
+
+    if (!transcript) {
+      const inv = await tryInvidious(videoId);
+      if (inv) {
+        ({ transcript, language, trackName, isAutoGenerated, method } = inv);
+        title = title || inv.title;
       }
     }
 
@@ -300,13 +377,10 @@ exports.handler = async (event) => {
       const reason = playerResponse?.playabilityStatus?.reason || '';
       return json(404, {
         ok: false,
-        error: 'Не удалось получить субтитры YouTube. Видео может не иметь доступной расшифровки или YouTube ограничил серверный доступ.',
+        error: 'Не удалось получить субтитры YouTube. Видео может не иметь доступной расшифровки или все бесплатные источники сейчас ограничены.',
         details: { playability, reason, tracksFound: tracks.length }
       });
     }
-
-    const title = playerResponse?.videoDetails?.title
-      || decodeHtml(html.match(/<title>(.*?)<\/title>/i)?.[1] || '').replace(/\s*-\s*YouTube\s*$/i, '').trim();
 
     return json(200, {
       ok: true,
