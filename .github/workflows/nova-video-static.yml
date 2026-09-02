@@ -1,0 +1,76 @@
+name: NOVA video studio static checks
+
+on:
+  push:
+    branches:
+      - fix/video-subtitles-motion-cinema-20260902
+  workflow_dispatch:
+
+jobs:
+  static-checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: JavaScript syntax
+        run: |
+          set -euo pipefail
+          node --check hollywood-studio.js
+          node --check nova-video-upgrade.js
+          node --check nova-multi-shorts.js
+          node --check nova-whisper.js
+          node --check nova-whisper-worker.js
+          node --check nova-voice-editor.js
+          node --check nova-transcript-editor-sync.js
+          node --check motion-studio/app.js
+
+      - name: Video pipeline invariants
+        run: |
+          node <<'NODE'
+          const fs = require('fs');
+          const read = (p) => fs.readFileSync(p, 'utf8');
+          const must = (ok, message) => { if (!ok) throw new Error(message); console.log('PASS', message); };
+
+          const loader = read('hollywood-studio.js');
+          for (const file of ['nova-media-studio.js','nova-whisper.js','nova-voice-editor.js','nova-transcript-editor-sync.js','nova-video-upgrade.js','nova-multi-shorts.js']) {
+            must(loader.includes(file), `loader includes ${file}`);
+          }
+
+          const worker = read('nova-whisper-worker.js');
+          must(worker.includes("return_timestamps: 'word'"), 'Whisper requests word timestamps');
+          must(worker.includes('textCoverage'), 'Whisper checks segmented-text coverage');
+          must(worker.includes('groupWordItems'), 'Whisper groups word timestamps into readable cues');
+
+          const upgrade = read('nova-video-upgrade.js');
+          must(upgrade.includes('muxEnglishSubtitles'), 'MP4/MOV subtitle remux exists');
+          must(upgrade.includes('video/mp4,video/quicktime,.mp4,.mov'), 'MP4 and MOV upload is accepted');
+          for (const mode of ['motion','cinema','threed','hologram','animation']) {
+            must(upgrade.includes(`value="${mode}"`), `Motion/Cinema mode ${mode} exists`);
+          }
+
+          const shorts = read('nova-multi-shorts.js');
+          must(shorts.includes('sceneCount: 5'), 'Multi Shorts exposes exactly five scenes');
+          must((shorts.match(/name: '/g) || []).length === 5, 'Multi Shorts defines five distinct default scene presets');
+          for (const mode of ['cinema','motion','threed','hologram','action']) {
+            must(shorts.includes(`style: '${mode}'`), `Multi Shorts preset ${mode} exists`);
+          }
+          must(shorts.includes('720') && shorts.includes('1280'), 'Multi Shorts renders vertical 9:16 canvas');
+          must(shorts.includes('NovaTranscriptEditor'), 'Multi Shorts can use corrected transcript subtitles');
+          must(shorts.includes('MediaRecorder'), 'Multi Shorts local renderer uses MediaRecorder');
+
+          const editor = read('nova-voice-editor.js');
+          must(editor.includes('English SRT · исправленный'), 'Transcript editor produces corrected English SRT');
+
+          for (const file of ['hollywood-studio.js','nova-video-upgrade.js','nova-multi-shorts.js','nova-whisper.js','nova-whisper-worker.js','nova-voice-editor.js']) {
+            const text = read(file);
+            must(!/^<<<<<<<|^=======|^>>>>>>>/m.test(text), `${file} has no merge-conflict markers`);
+          }
+          NODE
+
+      - name: No production deployment in this check
+        run: echo 'Static checks only; no Netlify deploy and no paid AI generation.'
