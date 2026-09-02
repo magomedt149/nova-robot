@@ -46,3 +46,13 @@
   script.dataset.novaVoiceEditor = '1';
   document.head.appendChild(script);
 })();
+
+(() => {
+  'use strict';
+  if (document.querySelector('script[data-nova-transcript-sync]')) return;
+  const script = document.createElement('script');
+  script.src = './nova-transcript-editor-sync.js?v=32.0.1';
+  script.defer = true;
+  script.dataset.novaTranscriptSync = '1';
+  document.head.appendChild(script);
+})();
