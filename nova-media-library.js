@@ -18,6 +18,12 @@
     if (global) global.textContent = message;
   }
 
+  function isIOS() {
+    if (window.NovaIOSSave?.isIOS) return window.NovaIOSSave.isIOS();
+    const ua = navigator.userAgent || '';
+    return /iPad|iPhone|iPod/i.test(ua) || (navigator.platform === 'MacIntel' && Number(navigator.maxTouchPoints || 0) > 1);
+  }
+
   function openDb() {
     if (dbPromise) return dbPromise;
     dbPromise = new Promise((resolve, reject) => {
@@ -57,6 +63,13 @@
     });
   }
 
+  function restoreBlob(record) {
+    if (record?.blob instanceof Blob) return record.blob;
+    if (record?.bytes instanceof ArrayBuffer) return new Blob([record.bytes], { type: record.type || 'application/octet-stream' });
+    if (ArrayBuffer.isView(record?.bytes)) return new Blob([record.bytes.buffer], { type: record.type || 'application/octet-stream' });
+    return null;
+  }
+
   async function loadStored() {
     try {
       const db = await openDb();
@@ -64,9 +77,11 @@
       const done = txDone(tx);
       const stored = await requestResult(tx.objectStore(STORE).getAll());
       await done;
-      (stored || []).forEach((record) => {
-        if (!record?.id || !(record.blob instanceof Blob)) return;
-        records.set(record.id, { ...record, persisted: true });
+      (stored || []).forEach((storedRecord) => {
+        const blob = restoreBlob(storedRecord);
+        if (!storedRecord?.id || !blob) return;
+        const { bytes, ...meta } = storedRecord;
+        records.set(storedRecord.id, { ...meta, blob, size: Number(storedRecord.size || blob.size), persisted: true });
       });
     } catch (error) {
       console.warn('[NOVA Media Library] load failed:', error);
@@ -75,22 +90,36 @@
     return recordArray();
   }
 
+  async function writeStored(payload) {
+    const db = await openDb();
+    const tx = db.transaction(STORE, 'readwrite');
+    const done = txDone(tx);
+    tx.objectStore(STORE).put(payload);
+    await done;
+  }
+
   async function persist(record) {
+    const base = {
+      id: record.id,
+      name: record.name,
+      type: record.type,
+      size: record.size,
+      createdAt: record.createdAt,
+      source: record.source,
+      fingerprint: record.fingerprint
+    };
     try {
-      const db = await openDb();
-      const tx = db.transaction(STORE, 'readwrite');
-      const done = txDone(tx);
-      tx.objectStore(STORE).put({
-        id: record.id,
-        name: record.name,
-        type: record.type,
-        size: record.size,
-        createdAt: record.createdAt,
-        source: record.source,
-        fingerprint: record.fingerprint,
-        blob: record.blob
-      });
-      await done;
+      if (isIOS()) {
+        const bytes = await record.blob.arrayBuffer();
+        await writeStored({ ...base, bytes });
+      } else {
+        try {
+          await writeStored({ ...base, blob: record.blob });
+        } catch (blobError) {
+          const bytes = await record.blob.arrayBuffer();
+          await writeStored({ ...base, bytes });
+        }
+      }
       record.persisted = true;
       return true;
     } catch (error) {
@@ -291,7 +320,7 @@
   async function downloadAll() {
     const all = recordArray();
     if (!all.length) throw new Error('Медиатека пока пустая.');
-    if (window.NovaIOSSave?.isIOS?.() && window.NovaIOSSave?.saveMany) {
+    if (isIOS() && window.NovaIOSSave?.saveMany) {
       status('На iPhone несколько загрузок часто блокируются Safari — открываю системное меню для всех файлов.');
       return window.NovaIOSSave.saveMany(all.map(({ blob, name }) => ({ blob, name })), { title: `NOVA · ${all.length} files` });
     }
@@ -411,7 +440,7 @@
     saveAllVideos,
     shareAll,
     refresh: () => { scan(document); return loadStored(); },
-    version: '1.1.0'
+    version: '1.2.0'
   });
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', install, { once: true });
