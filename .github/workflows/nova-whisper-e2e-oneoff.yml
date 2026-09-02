@@ -1,0 +1,195 @@
+name: NOVA Whisper E2E one-off
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/nova-whisper-e2e-oneoff.yml
+
+permissions:
+  contents: read
+
+jobs:
+  e2e:
+    if: contains(github.event.head_commit.message, '[whisper-e2e]')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Prepare short MP4 without SRT
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! command -v espeak-ng >/dev/null 2>&1; then
+            sudo apt-get update -y
+            sudo apt-get install -y espeak-ng
+          fi
+          command -v ffmpeg >/dev/null 2>&1 || { sudo apt-get update -y; sudo apt-get install -y ffmpeg; }
+
+          espeak-ng -v ru -s 145 -p 28 -w male1.wav "Мужчина говорит добрый вечер."
+          espeak-ng -v ru+f3 -s 150 -p 78 -w female1.wav "Женщина отвечает привет, рада тебя видеть."
+          espeak-ng -v ru -s 145 -p 30 -w male2.wav "Мужчина спрашивает как твои дела."
+          espeak-ng -v ru+f3 -s 150 -p 80 -w female2.wav "Женщина отвечает всё хорошо."
+
+          ffmpeg -y \
+            -i male1.wav -f lavfi -t 0.85 -i anullsrc=r=22050:cl=mono \
+            -i female1.wav -f lavfi -t 0.85 -i anullsrc=r=22050:cl=mono \
+            -i male2.wav -f lavfi -t 0.85 -i anullsrc=r=22050:cl=mono \
+            -i female2.wav \
+            -filter_complex '[0:a][1:a][2:a][3:a][4:a][5:a][6:a]concat=n=7:v=0:a=1[a]' \
+            -map '[a]' test-dialogue.wav
+
+          DUR=$(ffprobe -v error -show_entries format=duration -of default=nw=1:nk=1 test-dialogue.wav)
+          ffmpeg -y -f lavfi -i color=c=0x101827:s=640x360:r=25 -i test-dialogue.wav \
+            -t "$DUR" -c:v libx264 -pix_fmt yuv420p -c:a aac -b:a 128k -shortest test-no-srt.mp4
+
+          echo "TEST_MP4_DURATION=$DUR"
+          test ! -e test-no-srt.srt
+
+      - name: Prepare browser harness
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install --no-save playwright-core@1.55.0
+          cat > nova-e2e-harness.html <<'HTML'
+          <!doctype html>
+          <html lang="ru">
+          <head><meta charset="utf-8"><title>NOVA Whisper E2E</title></head>
+          <body>
+            <div id="quickActions"></div>
+            <div id="statusText"></div>
+            <script>
+              if (!window.speechSynthesis) {
+                window.speechSynthesis = { speak(){}, cancel(){}, getVoices(){ return []; } };
+              }
+              if (!window.SpeechSynthesisUtterance) {
+                window.SpeechSynthesisUtterance = function(text){ this.text = text || ''; this.lang = ''; };
+              }
+            </script>
+            <script src="./neural-russian-tts.js"></script>
+            <script src="./beach-mode.js"></script>
+          </body>
+          </html>
+          HTML
+
+          cat > nova-whisper-e2e.mjs <<'JS'
+          import fs from 'node:fs';
+          import { chromium } from 'playwright-core';
+
+          const chrome = ['/usr/bin/google-chrome','/usr/bin/chromium','/usr/bin/chromium-browser'].find(fs.existsSync);
+          if (!chrome) throw new Error('System Chrome/Chromium not found');
+          fs.mkdirSync('e2e-output', { recursive: true });
+
+          const browser = await chromium.launch({
+            executablePath: chrome,
+            headless: true,
+            args: ['--no-sandbox','--disable-dev-shm-usage','--autoplay-policy=no-user-gesture-required']
+          });
+          const page = await browser.newPage({ acceptDownloads: true });
+          page.on('console', msg => console.log('BROWSER', msg.type(), msg.text()));
+          page.on('pageerror', err => console.log('PAGEERROR', err.message));
+
+          try {
+            const response = await page.goto('http://127.0.0.1:4173/nova-e2e-harness.html', { waitUntil: 'domcontentloaded', timeout: 30000 });
+            console.log('PAGE_HTTP=' + response.status());
+
+            await page.waitForFunction(() => Boolean(window.NovaRussianTTS?.synthesize), null, { timeout: 30000 });
+            const tts = await page.evaluate(async () => {
+              const irina = await window.NovaRussianTTS.synthesize('Ирина говорит привет.', 'irina');
+              const denis = await window.NovaRussianTTS.synthesize('Денис говорит привет.', 'denis');
+              return {
+                irinaBytes: irina.reduce((sum, blob) => sum + blob.size, 0),
+                denisBytes: denis.reduce((sum, blob) => sum + blob.size, 0)
+              };
+            });
+            console.log('PIPER_IRINA_BYTES=' + tts.irinaBytes);
+            console.log('PIPER_DENIS_BYTES=' + tts.denisBytes);
+            if (tts.irinaBytes < 1000 || tts.denisBytes < 1000) throw new Error('Piper voice synthesis returned too little audio');
+
+            await page.waitForSelector('#novaLocalWhisper', { timeout: 30000 });
+            await page.setInputFiles('#novaLocalVideo', 'test-no-srt.mp4');
+            const subsCount = await page.locator('#novaLocalSubs').evaluate(el => el.files?.length || 0);
+            console.log('LOCAL_SRT_FILES=' + subsCount);
+            if (subsCount !== 0) throw new Error('SRT input must stay empty');
+
+            await page.selectOption('#novaWhisperModel', 'tiny');
+            await page.selectOption('#novaWhisperLanguage', 'ru');
+            await page.click('#novaLocalWhisper');
+
+            await page.waitForFunction(() => {
+              const links = [...document.querySelectorAll('#novaDubDownloads a')].map(a => a.textContent || '');
+              return links.some(t => t.includes('Русский MP3')) && links.some(t => t.includes('English SRT')) && links.some(t => t.includes('Original transcript SRT'));
+            }, null, { timeout: 720000 });
+
+            const state = await page.evaluate(async () => {
+              const result = document.querySelector('#novaDubResult')?.textContent || '';
+              const links = [...document.querySelectorAll('#novaDubDownloads a')];
+              const mp3 = links.find(a => (a.textContent || '').includes('Русский MP3'));
+              const en = links.find(a => (a.textContent || '').includes('English SRT'));
+              const raw = links.find(a => (a.textContent || '').includes('Original transcript SRT'));
+              const mp3Blob = await fetch(mp3.href).then(r => r.blob());
+              const enText = await fetch(en.href).then(r => r.text());
+              const rawText = await fetch(raw.href).then(r => r.text());
+              return {
+                result,
+                mp3Bytes: mp3Blob.size,
+                enText,
+                rawText,
+                status: document.querySelector('#novaMediaStatus')?.textContent || '',
+                hasIrina: /Ирина/.test(result),
+                hasDenis: /Денис/.test(result),
+                editorReady: Boolean(document.querySelector('#novaTranscriptEditor'))
+              };
+            });
+
+            console.log('RESULT_TEXT_START=' + state.result.slice(0, 700).replace(/\n/g, ' | '));
+            console.log('FINAL_STATUS=' + state.status);
+            console.log('OUTPUT_MP3_BYTES=' + state.mp3Bytes);
+            console.log('HAS_IRINA=' + state.hasIrina);
+            console.log('HAS_DENIS=' + state.hasDenis);
+            console.log('EDITOR_READY=' + state.editorReady);
+            console.log('EN_SRT_START=' + state.enText.slice(0, 700).replace(/\n/g, ' | '));
+            console.log('RAW_SRT_START=' + state.rawText.slice(0, 700).replace(/\n/g, ' | '));
+
+            if (state.mp3Bytes < 5000) throw new Error('Russian MP3 output is too small');
+            if (!/-->/.test(state.enText) || !/[A-Za-z]/.test(state.enText)) throw new Error('English SRT is missing timecodes or English text');
+            if (!/-->/.test(state.rawText)) throw new Error('Whisper original SRT is missing timecodes');
+            if (!state.hasIrina || !state.hasDenis) throw new Error('Automatic speaker assignment did not produce both Irina and Denis');
+
+            const mp3Link = page.locator('#novaDubDownloads a').filter({ hasText: 'Русский MP3' }).first();
+            const [mp3Download] = await Promise.all([page.waitForEvent('download'), mp3Link.click()]);
+            await mp3Download.saveAs('e2e-output/NOVA_E2E_RU_Irina_Denis.mp3');
+
+            const enLink = page.locator('#novaDubDownloads a').filter({ hasText: 'English SRT' }).first();
+            const [srtDownload] = await Promise.all([page.waitForEvent('download'), enLink.click()]);
+            await srtDownload.saveAs('e2e-output/NOVA_E2E_EN.srt');
+
+            fs.writeFileSync('e2e-output/result.txt', state.result + '\n\n' + state.enText);
+            console.log('E2E_PASS=true');
+          } finally {
+            await browser.close();
+          }
+          JS
+
+      - name: Run NOVA browser full cycle
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m http.server 4173 --bind 127.0.0.1 >/tmp/nova-http.log 2>&1 &
+          SERVER_PID=$!
+          trap 'kill $SERVER_PID || true' EXIT
+          for i in $(seq 1 20); do
+            if curl -fsS http://127.0.0.1:4173/nova-e2e-harness.html >/dev/null; then break; fi
+            sleep 0.5
+          done
+          node nova-whisper-e2e.mjs
+
+      - name: Upload E2E outputs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nova-whisper-e2e-output
+          path: e2e-output/
+          if-no-files-found: ignore
+          retention-days: 1
