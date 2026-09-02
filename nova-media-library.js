@@ -31,8 +31,13 @@
           store.createIndex('fingerprint', 'fingerprint');
         }
       };
-      request.onsuccess = () => resolve(request.result);
+      request.onsuccess = () => {
+        const db = request.result;
+        db.onversionchange = () => db.close();
+        resolve(db);
+      };
       request.onerror = () => reject(request.error || new Error('Не удалось открыть локальную медиатеку.'));
+      request.onblocked = () => reject(new Error('Медиатека занята другой вкладкой NOVA.'));
     });
     return dbPromise;
   }
@@ -45,25 +50,36 @@
     });
   }
 
+  function requestResult(request) {
+    return new Promise((resolve, reject) => {
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error || new Error('Ошибка чтения IndexedDB.'));
+    });
+  }
+
   async function loadStored() {
     try {
       const db = await openDb();
       const tx = db.transaction(STORE, 'readonly');
-      const request = tx.objectStore(STORE).getAll();
-      const stored = await new Promise((resolve, reject) => {
-        request.onsuccess = () => resolve(request.result || []);
-        request.onerror = () => reject(request.error);
+      const done = txDone(tx);
+      const stored = await requestResult(tx.objectStore(STORE).getAll());
+      await done;
+      (stored || []).forEach((record) => {
+        if (!record?.id || !(record.blob instanceof Blob)) return;
+        records.set(record.id, { ...record, persisted: true });
       });
-      stored.forEach((record) => records.set(record.id, { ...record, persisted: true }));
-      await txDone(tx).catch(() => {});
-    } catch (_) {}
+    } catch (error) {
+      console.warn('[NOVA Media Library] load failed:', error);
+    }
     render();
+    return recordArray();
   }
 
   async function persist(record) {
     try {
       const db = await openDb();
       const tx = db.transaction(STORE, 'readwrite');
+      const done = txDone(tx);
       tx.objectStore(STORE).put({
         id: record.id,
         name: record.name,
@@ -74,12 +90,16 @@
         fingerprint: record.fingerprint,
         blob: record.blob
       });
-      await txDone(tx);
+      await done;
       record.persisted = true;
       return true;
     } catch (error) {
       record.persisted = false;
-      if (error?.name === 'QuotaExceededError') status('🟡 Память iPhone/PWA заполнена: новый файл доступен сейчас, но не сохранён в постоянную медиатеку.');
+      if (error?.name === 'QuotaExceededError') {
+        status('🟡 Память iPhone/PWA заполнена: новый файл доступен сейчас, но не сохранён после перезапуска.');
+      } else {
+        console.warn('[NOVA Media Library] persist failed:', error);
+      }
       return false;
     }
   }
@@ -88,9 +108,12 @@
     try {
       const db = await openDb();
       const tx = db.transaction(STORE, 'readwrite');
+      const done = txDone(tx);
       tx.objectStore(STORE).delete(id);
-      await txDone(tx);
-    } catch (_) {}
+      await done;
+    } catch (error) {
+      console.warn('[NOVA Media Library] delete failed:', error);
+    }
   }
 
   function safeName(name) {
@@ -171,8 +194,7 @@
 
   async function captureLink(link) {
     if (!(link instanceof HTMLAnchorElement)) return;
-    if (link.dataset.novaLibraryOwn === '1') return;
-    if (!link.download || !link.href) return;
+    if (link.dataset.novaLibraryOwn === '1' || !link.download || !link.href) return;
     if (!link.closest('#novaMediaModal') && !link.closest('#novaShortDownloads')) return;
     if (capturedHrefs.has(link.href)) return;
     capturedHrefs.add(link.href);
@@ -231,9 +253,9 @@
     pane.dataset.mediaPane = 'library';
     pane.hidden = true;
     pane.innerHTML = `
-      <div class="nova-media-note"><b>🗂 NOVA Медиатека</b><br>Здесь автоматически собираются готовые MP3, MP4, MOV, Shorts, SRT и другие файлы NOVA. Файлы хранятся локально на этом устройстве в IndexedDB. На iPhone видео можно отправить в «Фото», а MP3/SRT — в «Файлы» через системное меню.</div>
+      <div class="nova-media-note"><b>🗂 NOVA Медиатека</b><br>Готовые MP3, MP4, MOV, Shorts, SRT и другие файлы автоматически собираются здесь и сохраняются локально на этом устройстве. На iPhone видео можно отправить в «Фото», а MP3/SRT — в «Файлы» через системное меню.</div>
       <div class="nova-library-head">
-        <div class="nova-media-actions"><button class="nova-media-btn" id="novaLibraryRefresh" type="button">↻ Обновить</button><button class="nova-media-btn primary" id="novaLibrarySaveVideos" type="button">📲 Все видео → «Фото»</button><button class="nova-media-btn" id="novaLibraryShareAll" type="button">📤 Все файлы → iPhone</button></div>
+        <div class="nova-media-actions"><button class="nova-media-btn" id="novaLibraryRefresh" type="button">↻ Обновить</button><button class="nova-media-btn" id="novaLibraryDownloadAll" type="button">⬇ Скачать всё</button><button class="nova-media-btn primary" id="novaLibrarySaveVideos" type="button">📲 Все видео → «Фото»</button><button class="nova-media-btn" id="novaLibraryShareAll" type="button">📤 Все файлы → iPhone</button></div>
         <div class="nova-library-stats" id="novaLibraryStats">0 файлов</div>
       </div>
       <div class="nova-library-list" id="novaLibraryList"></div>`;
@@ -241,6 +263,7 @@
 
     tab.addEventListener('click', () => { selectTab('library'); render(); scan(document); });
     $('#novaLibraryRefresh', pane)?.addEventListener('click', () => { scan(document); loadStored().catch(() => {}); });
+    $('#novaLibraryDownloadAll', pane)?.addEventListener('click', () => downloadAll().catch((error) => status(`Медиатека: ${error?.message || error}`)));
     $('#novaLibrarySaveVideos', pane)?.addEventListener('click', () => saveAllVideos().catch((error) => status(`Медиатека: ${error?.message || error}`)));
     $('#novaLibraryShareAll', pane)?.addEventListener('click', () => shareAll().catch((error) => status(`Медиатека: ${error?.message || error}`)));
     render();
@@ -253,16 +276,30 @@
 
   async function downloadRecord(record) {
     if (!record?.blob) return;
-    if (window.NovaIOSSave?.fallbackDownload) window.NovaIOSSave.fallbackDownload(record.blob, record.name);
-    else {
-      const url = URL.createObjectURL(record.blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = record.name;
-      link.dataset.novaLibraryOwn = '1';
-      link.click();
-      setTimeout(() => URL.revokeObjectURL(url), 30_000);
+    if (window.NovaIOSSave?.fallbackDownload) return window.NovaIOSSave.fallbackDownload(record.blob, record.name);
+    const url = URL.createObjectURL(record.blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = record.name;
+    link.dataset.novaLibraryOwn = '1';
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 30_000);
+  }
+
+  async function downloadAll() {
+    const all = recordArray();
+    if (!all.length) throw new Error('Медиатека пока пустая.');
+    if (window.NovaIOSSave?.isIOS?.() && window.NovaIOSSave?.saveMany) {
+      status('На iPhone несколько загрузок часто блокируются Safari — открываю системное меню для всех файлов.');
+      return window.NovaIOSSave.saveMany(all.map(({ blob, name }) => ({ blob, name })), { title: `NOVA · ${all.length} files` });
     }
+    for (let i = 0; i < all.length; i++) {
+      await downloadRecord(all[i]);
+      await new Promise((resolve) => setTimeout(resolve, 140));
+    }
+    status(`✅ Запущено скачивание ${all.length} файлов.`);
   }
 
   async function shareRecord(record) {
@@ -299,16 +336,19 @@
       item.innerHTML = `<div class="nova-library-icon">${iconFor(record)}</div><div><div class="nova-library-name"></div><div class="nova-library-meta">${formatBytes(record.size)} · ${record.source || 'NOVA'} · ${date}${record.persisted === false ? ' · только текущая сессия' : ''}</div></div><div class="nova-library-actions"></div>`;
       $('.nova-library-name', item).textContent = record.name;
       const actions = $('.nova-library-actions', item);
+
       const download = document.createElement('button');
       download.type = 'button';
       download.textContent = '⬇ Скачать';
       download.addEventListener('click', () => downloadRecord(record));
       actions.appendChild(download);
+
       const share = document.createElement('button');
       share.type = 'button';
       share.textContent = kind === 'video' ? '📲 В «Фото»' : '📲 На iPhone';
       share.addEventListener('click', () => shareRecord(record).catch((error) => status(`Сохранение: ${error?.message || error}`)));
       actions.appendChild(share);
+
       const remove = document.createElement('button');
       remove.type = 'button';
       remove.className = 'danger';
@@ -326,17 +366,14 @@
       for (const record of videos) await downloadRecord(record);
       return;
     }
-    return window.NovaIOSSave.saveMany(videos.map((record) => ({ blob: record.blob, name: record.name })), { title: `NOVA · ${videos.length} videos` });
+    return window.NovaIOSSave.saveMany(videos.map(({ blob, name }) => ({ blob, name })), { title: `NOVA · ${videos.length} videos` });
   }
 
   async function shareAll() {
     const all = recordArray();
     if (!all.length) throw new Error('Медиатека пока пустая.');
-    if (!window.NovaIOSSave?.saveMany) {
-      for (const record of all) await downloadRecord(record);
-      return;
-    }
-    return window.NovaIOSSave.saveMany(all.map((record) => ({ blob: record.blob, name: record.name })), { title: `NOVA · ${all.length} files` });
+    if (!window.NovaIOSSave?.saveMany) return downloadAll();
+    return window.NovaIOSSave.saveMany(all.map(({ blob, name }) => ({ blob, name })), { title: `NOVA · ${all.length} files` });
   }
 
   function startObserver() {
@@ -370,10 +407,11 @@
   window.NovaMediaLibrary = Object.freeze({
     registerBlob,
     list: () => recordArray().map(({ blob, ...meta }) => ({ ...meta })),
+    downloadAll,
     saveAllVideos,
     shareAll,
     refresh: () => { scan(document); return loadStored(); },
-    version: '1.0.0'
+    version: '1.1.0'
   });
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', install, { once: true });
