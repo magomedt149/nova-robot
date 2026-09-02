@@ -10,20 +10,76 @@ jobs:
   probe:
     if: contains(github.event.head_commit.message, '[nova-probe]')
     runs-on: ubuntu-latest
-    timeout-minutes: 2
+    timeout-minutes: 4
     steps:
-      - name: Read skipped deploy details
-        env:
-          DEPLOY_ID: 6a97ce16ae7db000087d1d0e
-          SITE_ID: ae7fa0fb-e73d-413a-b122-7b9ff9419244
+      - name: Install lightweight browser driver
         run: |
-          echo '=== DEPLOY DETAIL ==='
-          curl -sS --max-time 20 -w '\nHTTP=%{http_code}\n' "https://api.netlify.com/api/v1/deploys/$DEPLOY_ID"
-          echo
-          echo '=== SITE SELECTED FIELDS ==='
-          curl -sS --max-time 20 "https://api.netlify.com/api/v1/sites/$SITE_ID" > /tmp/site.json
-          node <<'NODE'
-          const fs=require('fs'); const s=JSON.parse(fs.readFileSync('/tmp/site.json','utf8'));
-          const keys=['id','name','repo_url','build_settings','processing_settings','published_deploy','deploy_id','account_slug','capabilities','plugins','functions_region','default_hooks_data'];
-          for(const k of keys) console.log(k+'='+JSON.stringify(s[k]));
+          npm init -y >/dev/null 2>&1
+          npm install playwright-core@1.55.0 >/dev/null 2>&1
+          CHROME=$(command -v google-chrome || command -v google-chrome-stable || command -v chromium || command -v chromium-browser || true)
+          test -n "$CHROME"
+          echo "CHROME_BIN=$CHROME" >> "$GITHUB_ENV"
+
+      - name: Test full NOVA flow on static GitHub-backed host
+        env:
+          BASE: https://rawcdn.githack.com/magomedt149/nova-robot/e653ddedfd2594b7eb9d08d0b69b55350ce716f1/index.html
+          VIDEO: https://www.youtube.com/watch?v=eIho2S0ZahI
+        run: |
+          cat > ./probe.mjs <<'NODE'
+          import { chromium } from 'playwright-core';
+          const browser = await chromium.launch({ headless:true, executablePath:process.env.CHROME_BIN, args:['--no-sandbox'] });
+          const context = await browser.newContext();
+          const page = await context.newPage();
+          const errors=[];
+          page.on('console',m=>{ if(m.type()==='error') errors.push(m.text()); });
+          page.on('pageerror',e=>errors.push(String(e)));
+
+          await page.addInitScript(() => {
+            window.__novaSpoken=[];
+            class FakeUtterance { constructor(text){ this.text=String(text||''); this.lang=''; this.rate=1; this.pitch=1; this.voice=null; } }
+            Object.defineProperty(window,'SpeechSynthesisUtterance',{configurable:true,value:FakeUtterance});
+            Object.defineProperty(window,'speechSynthesis',{configurable:true,value:{
+              getVoices(){return [{name:'Test Russian',lang:'ru-RU',voiceURI:'test-ru',localService:true}]},
+              cancel(){},speak(u){window.__novaSpoken.push({text:u.text,lang:u.lang,voice:u.voice?.name||null})},addEventListener(){},removeEventListener(){}
+            }});
+          });
+
+          const nav=await page.goto(process.env.BASE,{waitUntil:'networkidle',timeout:60000});
+          console.log('PAGE_HTTP='+nav?.status());
+          console.log('TITLE='+await page.title());
+          await page.evaluate(async()=>{ const reg=await navigator.serviceWorker.ready; await reg.update(); });
+          if(!(await page.evaluate(()=>!!navigator.serviceWorker.controller))){
+            await page.reload({waitUntil:'networkidle',timeout:60000});
+            await page.evaluate(()=>navigator.serviceWorker.ready);
+          }
+          console.log('SW_CONTROLLED='+await page.evaluate(()=>!!navigator.serviceWorker.controller));
+
+          await page.waitForSelector('#novaNotebookLaunch',{timeout:20000});
+          await page.click('#novaNotebookLaunch');
+          await page.waitForSelector('#novaYoutubeUrl:visible',{timeout:10000});
+          await page.fill('#novaYoutubeUrl',process.env.VIDEO);
+          await page.selectOption('#novaYoutubeTargetLanguage','ru');
+          await page.click('#novaGetTranscript');
+          await page.waitForFunction(()=>/Текст получен|Не получилось|Ошибка/i.test(document.querySelector('#novaYoutubeStatus')?.textContent||''),null,{timeout:90000});
+          const ts=(await page.locator('#novaYoutubeStatus').innerText()).trim();
+          const tt=(await page.locator('#novaYoutubeResult').innerText()).trim();
+          console.log('TRANSCRIPT_STATUS='+ts); console.log('TRANSCRIPT_LENGTH='+tt.length); console.log('TRANSCRIPT_PREFIX='+tt.slice(0,160).replace(/\s+/g,' '));
+          if(!/Текст получен/i.test(ts)||tt.length<120){console.log('ERRORS='+JSON.stringify(errors));throw new Error('transcript failed')}
+
+          await page.click('#novaMakeRecap');
+          await page.waitForFunction(()=>/Пересказ готов|Ошибка при создании/i.test(document.querySelector('#novaYoutubeStatus')?.textContent||''),null,{timeout:120000});
+          const rs=(await page.locator('#novaYoutubeStatus').innerText()).trim();
+          const recap=(await page.locator('#novaYoutubeResult').innerText()).trim();
+          console.log('RECAP_STATUS='+rs);console.log('RECAP_LENGTH='+recap.length);console.log('HAS_CYRILLIC='+/[А-Яа-яЁё]/.test(recap));console.log('RECAP_PREFIX='+recap.slice(0,180).replace(/\s+/g,' '));
+          if(!/Пересказ готов/i.test(rs)||recap.length<40||!/[А-Яа-яЁё]/.test(recap))throw new Error('recap failed');
+
+          await page.click('#novaPlayRecap');
+          await page.waitForFunction(()=>window.__novaSpoken?.length>0,null,{timeout:10000});
+          const spoken=await page.evaluate(()=>window.__novaSpoken.at(-1));
+          console.log('TTS_LANG='+spoken?.lang);console.log('TTS_TEXT_LENGTH='+String(spoken?.text||'').length);console.log('TTS_VOICE='+spoken?.voice);
+          if(!String(spoken?.lang||'').toLowerCase().startsWith('ru')||String(spoken?.text||'').length<40)throw new Error('tts failed');
+          console.log('FULL_SCENARIO=PASS');
+          if(errors.length)console.log('NONFATAL_ERRORS='+JSON.stringify(errors));
+          await browser.close();
           NODE
+          node ./probe.mjs
