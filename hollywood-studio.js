@@ -100,6 +100,7 @@
       await loadNOVAFeature('./nova-ios-photo-save.js?v=30.3.0', 'nova-ios-photo-save-loader');
       await loadNOVAFeature('./nova-video-upgrade.js?v=30.3.0', 'nova-video-upgrade-loader');
       await loadNOVAFeature('./nova-multi-shorts.js?v=30.2.0', 'nova-multi-shorts-loader');
+      await loadNOVAFeature('./nova-quality-gate-v31.js?v=31.0.0', 'nova-quality-gate-v31-loader');
       await loadNOVAFeature('./nova-media-library.js?v=30.3.0', 'nova-media-library-loader');
       await loadNOVAFeature('./nova-ios-output-actions.js?v=30.3.0', 'nova-ios-output-actions-loader');
     } catch (error) {
