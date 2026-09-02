@@ -124,6 +124,16 @@
     getAudio();
   }
 
+  function bindUnlockGestures() {
+    ['#novaSpeakRussian', '#novaMakeRecap', '#novaPlayRecap'].forEach((selector) => {
+      const button = document.querySelector(selector);
+      if (!button || button.dataset.novaTtsUnlock === '1') return;
+      button.dataset.novaTtsUnlock = '1';
+      button.addEventListener('pointerdown', unlockAudio, { passive: true });
+      button.addEventListener('touchstart', unlockAudio, { passive: true });
+    });
+  }
+
   async function ensurePiper() {
     if (piper) return piper;
     if (!piperLoading) {
@@ -264,6 +274,7 @@
   }
 
   function addUiNote() {
+    bindUnlockGestures();
     const modal = document.querySelector('#novaNotebookModal');
     if (!modal || modal.querySelector('#novaNeuralTtsNote')) return;
     const notes = modal.querySelectorAll('.nova-note-meta');
