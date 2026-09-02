@@ -207,16 +207,28 @@
       generatedUrls.push(url);
       const downloads = $('#novaDubDownloads');
       if (downloads) {
-        downloads.querySelectorAll('[data-nova-video-mux]').forEach((n) => n.remove());
+        downloads.querySelectorAll('[data-nova-video-mux],[data-nova-video-photo]').forEach((n) => n.remove());
         const link = document.createElement('a');
         const base = file.name.replace(/\.[^.]+$/, '') || 'NOVA_video';
+        const outputName = `${base}_EN_SUBTITLES_FIXED.${originalExt}`;
         link.href = url;
-        link.download = `${base}_EN_SUBTITLES_FIXED.${originalExt}`;
+        link.download = outputName;
         link.textContent = `⬇ Новое ${originalExt.toUpperCase()} + исправленный EN SRT`;
         link.dataset.novaVideoMux = '1';
         downloads.appendChild(link);
+
+        if (window.NovaIOSSave?.makePhotoButton) {
+          const photoButton = window.NovaIOSSave.makePhotoButton({
+            blob,
+            name: outputName,
+            label: `📲 ${originalExt.toUpperCase()} → «Фото»`,
+            className: 'nova-media-btn',
+            dataset: { novaVideoPhoto: '1' }
+          });
+          downloads.appendChild(photoButton);
+        }
       }
-      status(`✅ Новое ${originalExt.toUpperCase()} готово: оригинальное видео/аудио сохранены, добавлена английская subtitle track.`);
+      status(`✅ Новое ${originalExt.toUpperCase()} готово. На iPhone нажми «${originalExt.toUpperCase()} → Фото» и в системном меню выбери «Сохранить видео».`);
     } catch (error) {
       status(`Не удалось собрать новое видео: ${error?.message || error}`);
     } finally {
@@ -298,7 +310,7 @@
       <div class="nova-video-preview-wrap"><video id="novaLocalPreview" controls playsinline></video><div class="nova-video-overlay" id="novaVideoOverlay" hidden></div></div>
       <div class="nova-subtitle-quality warn" id="novaSubtitleQuality">English SRT ещё не создан. После Whisper NOVA автоматически проверит полноту и повторы.</div>
       <div class="nova-media-actions"><button class="nova-media-btn" id="novaSubtitleCheck" type="button">✓ Проверить EN SRT</button><button class="nova-media-btn primary" id="novaMuxSubtitleVideo" type="button">🎥 Новое MP4/MOV + EN subtitles</button></div>
-      <div class="nova-media-note">Кнопка создаёт новый MP4/MOV с отдельной английской subtitle track и не пережимает исходное видео. Для проверки текста субтитры также показываются поверх preview. Если Whisper ошибся — исправь строки в редакторе и затем собери видео снова.</div>`;
+      <div class="nova-media-note">Кнопка создаёт новый MP4/MOV с отдельной английской subtitle track и не пережимает исходное видео. На iPhone после сборки появится отдельная кнопка «В Фото», которая открывает системное меню iOS. Для проверки текста субтитры также показываются поверх preview.</div>`;
     grid.insertAdjacentElement('afterend', box);
 
     const preview = $('#novaLocalPreview');
