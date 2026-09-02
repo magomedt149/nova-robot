@@ -28,14 +28,32 @@ jobs:
       - name: Download Russian Irina voice
         run: python -m piper.download_voices ru_RU-irina-medium
 
-      - name: Synthesize and fit to five seconds
+      - name: Synthesize exact five-second WAV
         run: |
           python -m piper -m ru_RU-irina-medium -f raw.wav -- 'Вечером, когда всё стихло, город зажёг свои огни.'
-          DUR=$(ffprobe -v error -show_entries format=duration -of default=nw=1:nk=1 raw.wav)
-          TEMPO=$(python -c "print(max(0.5,min(2.0,float('$DUR')/5.0)))")
-          ffmpeg -y -i raw.wav -filter:a "atempo=${TEMPO},apad=pad_dur=5" -t 5 -ar 22050 -ac 1 -c:a libmp3lame -b:a 128k nova_piper_irina_5s.mp3 >/dev/null 2>&1
-          ffprobe -v error -show_entries format=duration -of default=nw=1:nk=1 nova_piper_irina_5s.mp3
-          base64 -w0 nova_piper_irina_5s.mp3 > nova_piper_irina_5s.b64
+          python - <<'PY'
+          import wave
+          src='raw.wav'
+          dst='nova_piper_irina_5s.wav'
+          with wave.open(src,'rb') as r:
+              params=r.getparams()
+              frames=r.readframes(r.getnframes())
+          frame_bytes=params.sampwidth*params.nchannels
+          target_frames=int(params.framerate*5)
+          target_bytes=target_frames*frame_bytes
+          if len(frames) < target_bytes:
+              frames += b'\x00'*(target_bytes-len(frames))
+          else:
+              frames = frames[:target_bytes]
+          with wave.open(dst,'wb') as w:
+              w.setnchannels(params.nchannels)
+              w.setsampwidth(params.sampwidth)
+              w.setframerate(params.framerate)
+              w.writeframes(frames)
+          with wave.open(dst,'rb') as r:
+              print('DURATION=', r.getnframes()/r.getframerate())
+          PY
+          base64 -w0 nova_piper_irina_5s.wav > nova_piper_irina_5s.b64
 
       - name: Commit base64 sample
         run: |
