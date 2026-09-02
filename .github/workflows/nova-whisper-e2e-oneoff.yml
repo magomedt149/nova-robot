@@ -107,7 +107,11 @@ jobs:
             console.log('PIPER_DENIS_BYTES=' + tts.denisBytes);
             if (tts.irinaBytes < 1000 || tts.denisBytes < 1000) throw new Error('Piper voice synthesis returned too little audio');
 
-            await page.waitForSelector('#novaLocalWhisper', { timeout: 30000 });
+            await page.waitForSelector('#novaMediaLaunch', { state: 'visible', timeout: 30000 });
+            await page.click('#novaMediaLaunch');
+            await page.click('[data-media-tab="dub"]');
+            await page.waitForSelector('#novaLocalWhisper', { state: 'visible', timeout: 30000 });
+
             await page.setInputFiles('#novaLocalVideo', 'test-no-srt.mp4');
             const subsCount = await page.locator('#novaLocalSubs').evaluate(el => el.files?.length || 0);
             console.log('LOCAL_SRT_FILES=' + subsCount);
