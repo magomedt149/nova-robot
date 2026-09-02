@@ -12,18 +12,24 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 4
     steps:
-      - name: Wait for Netlify
-        run: sleep 12
+      - name: Inspect public Netlify site metadata
+        run: |
+          CODE=$(curl -sS --max-time 20 -o /tmp/netlify-site.json -w '%{http_code}' 'https://api.netlify.com/api/v1/sites/dashing-otter-990b47.netlify.app' || true)
+          echo "NETLIFY_SITE_API_HTTP=$CODE"
+          head -c 1800 /tmp/netlify-site.json || true
+          echo
 
-      - name: Inspect direct server response
+      - name: Inspect direct production transcript response
         env:
           BASE: https://dashing-otter-990b47.netlify.app
           VIDEO: https://www.youtube.com/watch?v=eIho2S0ZahI
         run: |
           CODE=$(curl -sS --max-time 35 -o /tmp/direct.json -w '%{http_code}' --get "$BASE/.netlify/functions/youtube-transcript" --data-urlencode "url=$VIDEO" || true)
           echo "DIRECT_SERVER_HTTP=$CODE"
-          head -c 500 /tmp/direct.json || true
+          cat /tmp/direct.json || true
           echo
+          echo 'LIVE_SERVICE_WORKER_HEAD:'
+          curl -sS --max-time 20 "$BASE/service-worker.js" | head -n 5 || true
 
       - name: Install lightweight browser driver
         run: |
@@ -33,13 +39,12 @@ jobs:
           if [ -z "$CHROME" ]; then echo 'System Chrome not found'; exit 1; fi
           echo "CHROME_BIN=$CHROME" >> "$GITHUB_ENV"
 
-      - name: Test published NOVA through real browser and service worker
+      - name: Test published NOVA through browser and service worker
         env:
           BASE: https://dashing-otter-990b47.netlify.app/
           VIDEO: https://www.youtube.com/watch?v=eIho2S0ZahI
         run: |
-          cat > /tmp/probe.mjs <<'NODE'
-          import fs from 'node:fs';
+          cat > ./probe.mjs <<'NODE'
           import { chromium } from 'playwright-core';
 
           const browser = await chromium.launch({ headless: true, executablePath: process.env.CHROME_BIN, args: ['--no-sandbox'] });
@@ -120,10 +125,7 @@ jobs:
           console.log('RECAP_STATUS=' + recapStatus);
           console.log('RECAP_LENGTH=' + recap.length);
           console.log('HAS_CYRILLIC=' + /[А-Яа-яЁё]/.test(recap));
-          if (!/Пересказ готов/i.test(recapStatus) || recap.length < 40 || !/[А-Яа-яЁё]/.test(recap)) {
-            console.log('RECAP_PREFIX=' + recap.slice(0, 400));
-            throw new Error('Russian recap stage failed');
-          }
+          if (!/Пересказ готов/i.test(recapStatus) || recap.length < 40 || !/[А-Яа-яЁё]/.test(recap)) throw new Error('Russian recap stage failed');
 
           await page.click('#novaPlayRecap');
           await page.waitForFunction(() => Array.isArray(window.__novaSpoken) && window.__novaSpoken.length > 0, null, { timeout: 10000 });
@@ -131,12 +133,10 @@ jobs:
           console.log('TTS_LANG=' + spoken?.lang);
           console.log('TTS_TEXT_LENGTH=' + String(spoken?.text || '').length);
           console.log('TTS_VOICE=' + spoken?.voice);
-          if (!String(spoken?.lang || '').toLowerCase().startsWith('ru') || String(spoken?.text || '').length < 40) {
-            throw new Error('Russian TTS stage failed');
-          }
+          if (!String(spoken?.lang || '').toLowerCase().startsWith('ru') || String(spoken?.text || '').length < 40) throw new Error('Russian TTS stage failed');
 
           console.log('FULL_SCENARIO=PASS');
           if (browserErrors.length) console.log('NONFATAL_BROWSER_ERRORS=' + JSON.stringify(browserErrors));
           await browser.close();
           NODE
-          node /tmp/probe.mjs
+          node ./probe.mjs
