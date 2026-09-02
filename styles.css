@@ -398,17 +398,19 @@ button:focus-visible,input:focus-visible,[role="button"]:focus-visible{
 .bubble{max-width:min(82%,560px);padding:7px 10px;border-radius:13px 13px 13px 4px;color:#e9f9ff;background:rgba(25,58,92,.68);font-size:13px;line-height:1.34;white-space:pre-line;overflow-wrap:anywhere}
 .message.user .bubble{border-radius:13px 13px 4px 13px;color:#fff;background:linear-gradient(135deg,#3d7dff,#5d50d8)}
 @keyframes messageIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
-.quick-actions{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;margin:8px 0}
+.quick-actions{display:grid;grid-template-columns:repeat(9,1fr);gap:6px;margin:8px 0}
 .action-btn{
   min-width:0;height:46px;padding:4px 2px;border:1px solid rgba(119,220,255,.14);border-radius:13px;
   display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;
   color:#dcecff;background:linear-gradient(180deg,rgba(24,47,84,.86),rgba(12,26,52,.86));
   box-shadow:inset 0 1px rgba(255,255,255,.06),0 5px 12px rgba(0,0,0,.14);cursor:pointer;transition:.15s ease}
+.action-btn{text-decoration:none;font-family:inherit}
 .action-btn span{font-size:18px;line-height:1}.action-btn b{max-width:100%;overflow:hidden;text-overflow:ellipsis;font-size:9px;font-weight:780;white-space:nowrap}
 .action-btn:hover{border-color:rgba(107,233,255,.35);filter:brightness(1.08)}
 .action-btn:active,.action-btn.running{transform:translateY(1px) scale(.96);border-color:rgba(109,239,255,.58);background:linear-gradient(180deg,rgba(38,104,151,.9),rgba(26,55,98,.9));box-shadow:0 0 17px rgba(44,210,255,.2)}
 .guitar-action{border-color:rgba(255,181,72,.2);background:linear-gradient(180deg,rgba(90,57,38,.84),rgba(40,30,43,.88))}
 .english-action{border-color:rgba(255,96,126,.24);background:linear-gradient(180deg,rgba(43,74,141,.9),rgba(82,31,74,.86))}
+.studio-hub-launch{border-color:rgba(255,194,87,.32);background:linear-gradient(180deg,rgba(104,69,28,.9),rgba(46,30,48,.9));color:#fff0b8}
 
 /* Free daily English lesson */
 .english-lesson{

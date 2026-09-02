@@ -1,7 +1,7 @@
 (() => {
   'use strict';
 
-  const VERSION = '26.3.0';
+  const VERSION = '33.0.0';
   const $ = (selector) => document.querySelector(selector);
   const $$ = (selector) => [...document.querySelectorAll(selector)];
 
@@ -2218,7 +2218,7 @@
 
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
-      navigator.serviceWorker.register('./service-worker.js?v=26.3.0')
+      navigator.serviceWorker.register('./service-worker.js?v=33.0.0')
         .then((registration) => registration.update())
         .catch(() => {});
     });

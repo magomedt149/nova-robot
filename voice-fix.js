@@ -1,7 +1,7 @@
 (() => {
   'use strict';
 
-  const VERSION = '27.0.0';
+  const VERSION = '33.0.0';
   const PROFILE_KEY = 'novaBehaviorProfile:v27';
   const SPEECH_KEY = 'novaSpeechCorrections:v27';
   const RECENT_KEY = 'novaRecentRequests:v27';

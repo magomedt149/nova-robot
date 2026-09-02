@@ -1,4 +1,4 @@
-const CACHE = 'tumsoev-motion-studio-v1';
+const CACHE = 'tumsoev-motion-studio-v33';
 const ASSETS = [
   '/motion-studio/',
   '/motion-studio/index.html',
@@ -16,7 +16,9 @@ self.addEventListener('install', event => {
 
 self.addEventListener('activate', event => {
   event.waitUntil(
-    caches.keys().then(keys => Promise.all(keys.filter(key => key !== CACHE).map(key => caches.delete(key))))
+    caches.keys().then(keys => Promise.all(keys
+      .filter(key => key.startsWith('tumsoev-motion-studio-') && key !== CACHE)
+      .map(key => caches.delete(key))))
   );
   self.clients.claim();
 });
@@ -24,7 +26,7 @@ self.addEventListener('activate', event => {
 self.addEventListener('fetch', event => {
   if (event.request.method !== 'GET') return;
   event.respondWith(
-    caches.match(event.request).then(cached => cached || fetch(event.request).then(response => {
+    caches.match(event.request, { ignoreSearch: true }).then(cached => cached || fetch(event.request).then(response => {
       const copy = response.clone();
       caches.open(CACHE).then(cache => cache.put(event.request, copy));
       return response;

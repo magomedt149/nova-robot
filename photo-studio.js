@@ -224,6 +224,10 @@
     if (event.key === 'Escape' && !modal.hidden) closeStudio();
   });
 
+  if (new URLSearchParams(window.location.search).get('open') === 'hollywood') {
+    openStudio();
+  }
+
   input.addEventListener('change', () => {
     const file = input.files && input.files[0];
     if (!file) return;

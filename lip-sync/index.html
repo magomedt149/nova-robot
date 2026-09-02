@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#090712">
+  <meta name="description" content="Ручные бесплатные Colab-инструменты TUMSOEV для русского lip-sync.">
+  <link rel="apple-touch-icon" href="../icon-192.png">
+  <link rel="stylesheet" href="./styles.css?v=33.0.0">
+  <title>TUMSOEV Russian Lip‑Sync</title>
+</head>
+<body>
+  <main class="shell">
+    <header><a href="../studio/">‹ Все инструменты</a><span>FREE · COLAB</span></header>
+    <section class="hero">
+      <div class="mouth" aria-hidden="true"><i></i></div>
+      <p class="eyebrow">TUMSOEV VOICE LAB</p>
+      <h1>Russian Lip‑Sync</h1>
+      <p>Загрузите своё видео и готовую русскую аудиодорожку. Вы сами запускаете один бесплатный тест в Google Colab.</p>
+      <div class="profile"><span>5 секунд</span><span>25 fps</span><span>GPU T4</span><span>без платных API</span></div>
+    </section>
+
+    <section class="choices">
+      <article class="choice recommended">
+        <div class="choice-head"><span class="number">01</span><span class="badge">НАЧНИТЕ С ЭТОГО</span></div>
+        <h2>MuseTalk 1.5</h2>
+        <p>Быстрее и легче для бесплатной T4. Хороший первый тест русской речи.</p>
+        <ul><li>Меньше нагрузка</li><li>Настройка рта bbox_shift</li><li>MP4 на выходе</li></ul>
+        <a class="launch" href="https://colab.research.google.com/github/magomedt149/nova-robot/blob/main/lip-sync/TUMSOEV_MuseTalk_Manual_5s.ipynb" target="_blank" rel="noopener">Открыть MuseTalk в Colab ↗</a>
+        <a class="download" href="./TUMSOEV_MuseTalk_Manual_5s.ipynb" download>Скачать ноутбук</a>
+      </article>
+
+      <article class="choice">
+        <div class="choice-head"><span class="number">02</span><span class="badge purple">ТОЧНЕЕ · МЕДЛЕННЕЕ</span></div>
+        <h2>LatentSync 1.5</h2>
+        <p>Диффузионный lip‑sync с более тяжёлой обработкой. Версия 1.5 рассчитана примерно на 8 ГБ VRAM.</p>
+        <ul><li>Точнее движение губ</li><li>guidance 1.5</li><li>20 шагов для теста</li></ul>
+        <a class="launch purple-btn" href="https://colab.research.google.com/github/magomedt149/nova-robot/blob/main/lip-sync/TUMSOEV_LatentSync_Manual_5s.ipynb" target="_blank" rel="noopener">Открыть LatentSync в Colab ↗</a>
+        <a class="download" href="./TUMSOEV_LatentSync_Manual_5s.ipynb" download>Скачать ноутбук</a>
+      </article>
+    </section>
+
+    <section class="manual">
+      <h2>Общий порядок</h2>
+      <label><input type="checkbox" data-step="gpu"><span><b>1. Выберите T4 GPU</b><small>Runtime → Change runtime type → T4 GPU.</small></span></label>
+      <label><input type="checkbox" data-step="run"><span><b>2. Нажмите Run all</b><small>Дождитесь установки модели. Первая загрузка занимает дольше.</small></span></label>
+      <label><input type="checkbox" data-step="upload"><span><b>3. Загрузите видео и аудио</b><small>Один человек в кадре, лицо крупное и без перекрытий. Используйте только материалы, на которые у вас есть разрешение.</small></span></label>
+      <label><input type="checkbox" data-step="download"><span><b>4. Скачайте MP4</b><small>Ноутбук ограничит первый тест пятью секундами и предложит готовый файл.</small></span></label>
+    </section>
+
+    <section class="compare">
+      <h2>Как выбрать</h2>
+      <div><b>MuseTalk</b><span>первый быстрый тест, слабее нагрузка</span></div>
+      <div><b>LatentSync</b><span>когда нужен более точный рот и T4 выдерживает</span></div>
+    </section>
+    <p class="notice">Исходные файлы не публикуются на этом сайте: вы загружаете их только во временную Colab‑сессию. После скачивания результата отключите и удалите runtime.</p>
+  </main>
+  <script src="./app.js?v=33.0.0"></script>
+</body>
+</html>

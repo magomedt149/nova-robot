@@ -819,7 +819,7 @@
   }
 
   window.NovaVideoPro = Object.freeze({
-    version: '31.0.0',
+    version: '33.0.0',
     renderLocalClip,
     renderTimeline,
     renderFive: () => renderFiveLegacy(),
