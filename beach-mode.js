@@ -31,7 +31,7 @@
   'use strict';
   if (document.querySelector('script[data-nova-whisper]')) return;
   const script = document.createElement('script');
-  script.src = './nova-whisper.js?v=29.0.0';
+  script.src = './nova-whisper.js?v=30.0.0';
   script.defer = true;
   script.dataset.novaWhisper = '1';
   document.head.appendChild(script);
