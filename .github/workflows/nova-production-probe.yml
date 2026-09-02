@@ -1,0 +1,60 @@
+name: NOVA production probe
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/nova-production-probe.yml'
+
+jobs:
+  probe:
+    if: contains(github.event.head_commit.message, '[nova-probe]')
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Wait briefly for Netlify deploy
+        run: sleep 45
+
+      - name: Check transcript and Russian translation on production
+        env:
+          BASE: https://dashing-otter-990b47.netlify.app
+          VIDEO: https://www.youtube.com/watch?v=eIho2S0ZahI
+        run: |
+          set -euo pipefail
+          curl -fsS --max-time 45 --get "$BASE/.netlify/functions/youtube-transcript" \
+            --data-urlencode "url=$VIDEO" > /tmp/transcript.json
+
+          node <<'NODE'
+          const fs = require('fs');
+          const data = JSON.parse(fs.readFileSync('/tmp/transcript.json','utf8'));
+          console.log('TRANSCRIPT_OK=' + Boolean(data.ok));
+          console.log('TRANSCRIPT_METHOD=' + (data.method || ''));
+          console.log('TRANSCRIPT_LANGUAGE=' + (data.language || ''));
+          console.log('TRANSCRIPT_LENGTH=' + String(data.transcript || '').length);
+          if (!data.ok || String(data.transcript || '').length < 300) {
+            console.error(JSON.stringify(data));
+            process.exit(1);
+          }
+          fs.writeFileSync('/tmp/summary-source.txt', String(data.transcript).slice(0, 700));
+          NODE
+
+          TEXT=$(cat /tmp/summary-source.txt)
+          curl -fsS --max-time 45 --get "$BASE/.netlify/functions/translate" \
+            --data-urlencode "text=$TEXT" \
+            --data-urlencode "from=en" \
+            --data-urlencode "to=ru" > /tmp/translation.json
+
+          node <<'NODE'
+          const fs = require('fs');
+          const data = JSON.parse(fs.readFileSync('/tmp/translation.json','utf8'));
+          const text = String(data.translatedText || '');
+          console.log('TRANSLATE_OK=' + Boolean(data.ok));
+          console.log('TRANSLATED_LENGTH=' + text.length);
+          console.log('HAS_CYRILLIC=' + /[А-Яа-яЁё]/.test(text));
+          if (!data.ok || text.length < 30 || !/[А-Яа-яЁё]/.test(text)) {
+            console.error(JSON.stringify(data));
+            process.exit(1);
+          }
+          NODE
+
+          echo 'PRODUCTION_CHAIN=transcript+ru-translation OK'
