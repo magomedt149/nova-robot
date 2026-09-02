@@ -32,17 +32,10 @@ jobs:
         run: |
           python -m piper -m ru_RU-irina-medium -f raw.wav -- 'Вечером, когда всё стихло, город зажёг свои огни.'
           DUR=$(ffprobe -v error -show_entries format=duration -of default=nw=1:nk=1 raw.wav)
-          TEMPO=$(python - <<'PY'
-          import os
-          dur=float(os.environ['DUR'])
-          print(max(0.5,min(2.0,dur/5.0)))
-          PY
-          )
+          TEMPO=$(python -c "print(max(0.5,min(2.0,float('$DUR')/5.0)))")
           ffmpeg -y -i raw.wav -filter:a "atempo=${TEMPO},apad=pad_dur=5" -t 5 -ar 22050 -ac 1 -c:a libmp3lame -b:a 128k nova_piper_irina_5s.mp3 >/dev/null 2>&1
           ffprobe -v error -show_entries format=duration -of default=nw=1:nk=1 nova_piper_irina_5s.mp3
           base64 -w0 nova_piper_irina_5s.mp3 > nova_piper_irina_5s.b64
-        env:
-          DUR: ${{ env.DUR }}
 
       - name: Commit base64 sample
         run: |
