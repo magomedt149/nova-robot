@@ -10,51 +10,133 @@ jobs:
   probe:
     if: contains(github.event.head_commit.message, '[nova-probe]')
     runs-on: ubuntu-latest
-    timeout-minutes: 3
+    timeout-minutes: 4
     steps:
-      - name: Wait briefly for Netlify deploy
-        run: sleep 45
+      - name: Wait for Netlify
+        run: sleep 12
 
-      - name: Check transcript and Russian translation on production
+      - name: Inspect direct server response
         env:
           BASE: https://dashing-otter-990b47.netlify.app
           VIDEO: https://www.youtube.com/watch?v=eIho2S0ZahI
         run: |
-          set -euo pipefail
-          curl -fsS --max-time 45 --get "$BASE/.netlify/functions/youtube-transcript" \
-            --data-urlencode "url=$VIDEO" > /tmp/transcript.json
+          CODE=$(curl -sS --max-time 35 -o /tmp/direct.json -w '%{http_code}' --get "$BASE/.netlify/functions/youtube-transcript" --data-urlencode "url=$VIDEO" || true)
+          echo "DIRECT_SERVER_HTTP=$CODE"
+          head -c 500 /tmp/direct.json || true
+          echo
 
-          node <<'NODE'
-          const fs = require('fs');
-          const data = JSON.parse(fs.readFileSync('/tmp/transcript.json','utf8'));
-          console.log('TRANSCRIPT_OK=' + Boolean(data.ok));
-          console.log('TRANSCRIPT_METHOD=' + (data.method || ''));
-          console.log('TRANSCRIPT_LANGUAGE=' + (data.language || ''));
-          console.log('TRANSCRIPT_LENGTH=' + String(data.transcript || '').length);
-          if (!data.ok || String(data.transcript || '').length < 300) {
-            console.error(JSON.stringify(data));
-            process.exit(1);
+      - name: Install lightweight browser driver
+        run: |
+          npm init -y >/dev/null 2>&1
+          npm install playwright-core@1.55.0 >/dev/null 2>&1
+          CHROME=$(command -v google-chrome || command -v google-chrome-stable || command -v chromium || command -v chromium-browser || true)
+          if [ -z "$CHROME" ]; then echo 'System Chrome not found'; exit 1; fi
+          echo "CHROME_BIN=$CHROME" >> "$GITHUB_ENV"
+
+      - name: Test published NOVA through real browser and service worker
+        env:
+          BASE: https://dashing-otter-990b47.netlify.app/
+          VIDEO: https://www.youtube.com/watch?v=eIho2S0ZahI
+        run: |
+          cat > /tmp/probe.mjs <<'NODE'
+          import fs from 'node:fs';
+          import { chromium } from 'playwright-core';
+
+          const browser = await chromium.launch({ headless: true, executablePath: process.env.CHROME_BIN, args: ['--no-sandbox'] });
+          const context = await browser.newContext();
+          const page = await context.newPage();
+          const browserErrors = [];
+          page.on('console', m => { if (m.type() === 'error') browserErrors.push(m.text()); });
+          page.on('pageerror', e => browserErrors.push(String(e)));
+
+          await page.addInitScript(() => {
+            window.__novaSpoken = [];
+            class FakeUtterance {
+              constructor(text) { this.text = String(text || ''); this.lang = ''; this.rate = 1; this.pitch = 1; this.voice = null; }
+            }
+            Object.defineProperty(window, 'SpeechSynthesisUtterance', { configurable: true, value: FakeUtterance });
+            Object.defineProperty(window, 'speechSynthesis', {
+              configurable: true,
+              value: {
+                getVoices() { return [{ name: 'Test Russian', lang: 'ru-RU', voiceURI: 'test-ru', localService: true }]; },
+                cancel() {},
+                speak(u) { window.__novaSpoken.push({ text: u.text, lang: u.lang, voice: u.voice?.name || null }); },
+                addEventListener() {},
+                removeEventListener() {}
+              }
+            });
+          });
+
+          const response = await page.goto(process.env.BASE, { waitUntil: 'networkidle', timeout: 60000 });
+          console.log('PAGE_HTTP=' + response?.status());
+
+          await page.evaluate(async () => {
+            if (!('serviceWorker' in navigator)) throw new Error('serviceWorker unsupported');
+            await navigator.serviceWorker.ready;
+            if (!navigator.serviceWorker.controller) {
+              await new Promise(resolve => {
+                navigator.serviceWorker.addEventListener('controllerchange', resolve, { once: true });
+                setTimeout(resolve, 5000);
+              });
+            }
+          });
+
+          if (!(await page.evaluate(() => Boolean(navigator.serviceWorker.controller)))) {
+            await page.reload({ waitUntil: 'networkidle', timeout: 60000 });
+            await page.evaluate(() => navigator.serviceWorker.ready);
           }
-          fs.writeFileSync('/tmp/summary-source.txt', String(data.transcript).slice(0, 700));
-          NODE
+          console.log('SW_CONTROLLED=' + await page.evaluate(() => Boolean(navigator.serviceWorker.controller)));
 
-          TEXT=$(cat /tmp/summary-source.txt)
-          curl -fsS --max-time 45 --get "$BASE/.netlify/functions/translate" \
-            --data-urlencode "text=$TEXT" \
-            --data-urlencode "from=en" \
-            --data-urlencode "to=ru" > /tmp/translation.json
+          await page.waitForSelector('#novaNotebookLaunch', { timeout: 20000 });
+          await page.click('#novaNotebookLaunch');
+          await page.waitForSelector('#novaYoutubeUrl:visible', { timeout: 10000 });
+          await page.fill('#novaYoutubeUrl', process.env.VIDEO);
+          await page.selectOption('#novaYoutubeTargetLanguage', 'ru');
 
-          node <<'NODE'
-          const fs = require('fs');
-          const data = JSON.parse(fs.readFileSync('/tmp/translation.json','utf8'));
-          const text = String(data.translatedText || '');
-          console.log('TRANSLATE_OK=' + Boolean(data.ok));
-          console.log('TRANSLATED_LENGTH=' + text.length);
-          console.log('HAS_CYRILLIC=' + /[А-Яа-яЁё]/.test(text));
-          if (!data.ok || text.length < 30 || !/[А-Яа-яЁё]/.test(text)) {
-            console.error(JSON.stringify(data));
-            process.exit(1);
+          await page.click('#novaGetTranscript');
+          await page.waitForFunction(() => {
+            const s = document.querySelector('#novaYoutubeStatus')?.textContent || '';
+            return /Текст получен|Не получилось|Ошибка/i.test(s);
+          }, null, { timeout: 90000 });
+
+          const transcriptStatus = (await page.locator('#novaYoutubeStatus').innerText()).trim();
+          const transcriptText = (await page.locator('#novaYoutubeResult').innerText()).trim();
+          console.log('TRANSCRIPT_STATUS=' + transcriptStatus);
+          console.log('TRANSCRIPT_LENGTH=' + transcriptText.length);
+          if (!/Текст получен/i.test(transcriptStatus) || transcriptText.length < 120) {
+            console.log('TRANSCRIPT_PREFIX=' + transcriptText.slice(0, 400));
+            console.log('BROWSER_ERRORS=' + JSON.stringify(browserErrors));
+            throw new Error('Transcript stage failed');
           }
-          NODE
 
-          echo 'PRODUCTION_CHAIN=transcript+ru-translation OK'
+          await page.click('#novaMakeRecap');
+          await page.waitForFunction(() => {
+            const s = document.querySelector('#novaYoutubeStatus')?.textContent || '';
+            return /Пересказ готов|Ошибка при создании/i.test(s);
+          }, null, { timeout: 120000 });
+
+          const recapStatus = (await page.locator('#novaYoutubeStatus').innerText()).trim();
+          const recap = (await page.locator('#novaYoutubeResult').innerText()).trim();
+          console.log('RECAP_STATUS=' + recapStatus);
+          console.log('RECAP_LENGTH=' + recap.length);
+          console.log('HAS_CYRILLIC=' + /[А-Яа-яЁё]/.test(recap));
+          if (!/Пересказ готов/i.test(recapStatus) || recap.length < 40 || !/[А-Яа-яЁё]/.test(recap)) {
+            console.log('RECAP_PREFIX=' + recap.slice(0, 400));
+            throw new Error('Russian recap stage failed');
+          }
+
+          await page.click('#novaPlayRecap');
+          await page.waitForFunction(() => Array.isArray(window.__novaSpoken) && window.__novaSpoken.length > 0, null, { timeout: 10000 });
+          const spoken = await page.evaluate(() => window.__novaSpoken.at(-1));
+          console.log('TTS_LANG=' + spoken?.lang);
+          console.log('TTS_TEXT_LENGTH=' + String(spoken?.text || '').length);
+          console.log('TTS_VOICE=' + spoken?.voice);
+          if (!String(spoken?.lang || '').toLowerCase().startsWith('ru') || String(spoken?.text || '').length < 40) {
+            throw new Error('Russian TTS stage failed');
+          }
+
+          console.log('FULL_SCENARIO=PASS');
+          if (browserErrors.length) console.log('NONFATAL_BROWSER_ERRORS=' + JSON.stringify(browserErrors));
+          await browser.close();
+          NODE
+          node /tmp/probe.mjs
