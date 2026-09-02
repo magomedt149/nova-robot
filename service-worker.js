@@ -1,4 +1,4 @@
-const CACHE = 'nova-v26-3-microphone-fix-20260714';
+const CACHE = 'nova-v26-7-notebook-languages-voices-20260901';
 const CORE = [
   './',
   './index.html',
@@ -6,6 +6,7 @@ const CORE = [
   './app.js',
   './english-lessons.js',
   './brain.js',
+  './notebook-tools.js',
   './local-ai-worker.js',
   './manifest.webmanifest',
   './icon-192.png',
