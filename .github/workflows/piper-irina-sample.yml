@@ -1,4 +1,4 @@
-name: Piper Russian dialogue 5s
+name: Piper Russian male voice comparison
 
 on:
   push:
@@ -25,37 +25,20 @@ jobs:
       - name: Install Piper
         run: python -m pip install --quiet piper-tts
 
-      - name: Download Russian voices
-        run: python -m piper.download_voices ru_RU-irina-medium ru_RU-dmitri-medium
+      - name: Download Russian male voices
+        run: python -m piper.download_voices ru_RU-denis-medium ru_RU-dmitri-medium ru_RU-ruslan-medium
 
-      - name: Synthesize 5-second dialogue
+      - name: Synthesize same male line
         run: |
-          python -m piper -m ru_RU-irina-medium -f irina.wav -- 'Ты сегодня придёшь?'
-          python -m piper -m ru_RU-dmitri-medium -f dmitri.wav -- 'Да, Ирина, уже еду.'
-          python - <<'PY'
-          import wave
-          files=['irina.wav','dmitri.wav']
-          chunks=[]; params=None
-          for f in files:
-              with wave.open(f,'rb') as r:
-                  if params is None: params=r.getparams()
-                  chunks.append(r.readframes(r.getnframes()))
-          frame_bytes=params.sampwidth*params.nchannels
-          silence_frames=int(params.framerate*0.20)
-          silence=b'\x00'*(silence_frames*frame_bytes)
-          data=chunks[0]+silence+chunks[1]
-          target_frames=int(params.framerate*5)
-          target_bytes=target_frames*frame_bytes
-          if len(data)<target_bytes: data += b'\x00'*(target_bytes-len(data))
-          else: data=data[:target_bytes]
-          with wave.open('nova_irina_dmitri_dialogue_5s.wav','wb') as w:
-              w.setnchannels(params.nchannels); w.setsampwidth(params.sampwidth); w.setframerate(params.framerate); w.writeframes(data)
-          with wave.open('nova_irina_dmitri_dialogue_5s.wav','rb') as r:
-              print('DURATION=',r.getnframes()/r.getframerate())
-          PY
+          python -m piper -m ru_RU-denis-medium -f Denis.wav -- 'Да, Ирина, уже еду.'
+          python -m piper -m ru_RU-dmitri-medium -f Dmitri.wav -- 'Да, Ирина, уже еду.'
+          python -m piper -m ru_RU-ruslan-medium -f Ruslan.wav -- 'Да, Ирина, уже еду.'
 
       - uses: actions/upload-artifact@v4
         with:
-          name: nova-irina-dmitri-dialogue-5s
-          path: nova_irina_dmitri_dialogue_5s.wav
+          name: nova-russian-male-voices
+          path: |
+            Denis.wav
+            Dmitri.wav
+            Ruslan.wav
           retention-days: 1
