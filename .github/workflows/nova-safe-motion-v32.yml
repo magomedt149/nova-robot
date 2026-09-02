@@ -18,19 +18,27 @@ jobs:
         run: |
           set -euo pipefail
           node --check nova-safe-motion-v32.js
+          node --check nova-saved-settings-v32.js
           node --check hollywood-studio.js
           node <<'NODE'
           const fs=require('fs');
           const safe=fs.readFileSync('nova-safe-motion-v32.js','utf8');
+          const saved=fs.readFileSync('nova-saved-settings-v32.js','utf8');
           const loader=fs.readFileSync('hollywood-studio.js','utf8');
           const must=(ok,msg)=>{if(!ok)throw new Error(msg);console.log('PASS',msg)};
           must(loader.includes('nova-safe-motion-v32.js?v=32.0.0'),'v32 loader');
+          must(loader.includes('nova-saved-settings-v32.js?v=32.1.0'),'saved settings loader');
           must(safe.includes('maxMotionPercent: 2.5'),'motion cap 2.5%');
           must(safe.includes('minScale: .95')&&safe.includes('maxScale: 1'),'foreground scale never exceeds contain');
           must(safe.includes('remapRect')&&safe.includes('inside'),'safe rectangle clamp');
           must(safe.includes('Quality Gate BLOCK'),'low-quality export blocked');
           must(safe.includes("['motion','threed','action']"),'Motion/3D/Action self-test');
-          must(!/^<<<<<<<|^=======|^>>>>>>>/m.test(safe),'no conflict markers');
+          must(saved.includes("nova.video.saved.settings.v32"),'versioned settings key');
+          must(saved.includes('passScore: 95')&&saved.includes('maxMotionPercent: 2.5'),'saved safety thresholds');
+          must(saved.includes("refMode: 'exact'")&&saved.includes("ratio: '9:16'")&&saved.includes("style: 'motion'"),'safe phone defaults');
+          must(saved.includes('preserveWholeFrame: true')&&saved.includes('blockLowScoreExport: true'),'whole-frame and block defaults');
+          must(saved.includes('localStorage.setItem')&&saved.includes("window.addEventListener('pageshow'"),'persistent restore');
+          must(!/^<<<<<<<|^=======|^>>>>>>>/m.test(safe+saved),'no conflict markers');
           NODE
       - name: No production deployment
         run: echo 'Branch-only checks. No Netlify deployment.'
@@ -62,7 +70,10 @@ jobs:
           const page=await browser.newPage(); const errors=[]; page.on('pageerror',e=>errors.push(String(e)));
           const r=await page.goto('http://127.0.0.1:4191/',{waitUntil:'domcontentloaded'}); must(r?.ok(),'NOVA loads');
           await page.waitForSelector('#novaMediaLaunch',{timeout:20000}); await page.click('#novaMediaLaunch');
-          await page.waitForFunction(()=>window.NovaSafeMotionV32?.version==='32.0.0',{timeout:20000});
+          await page.waitForFunction(()=>window.NovaSafeMotionV32?.version==='32.0.0'&&window.NovaSavedSettingsV32?.version==='32.1.0',{timeout:20000});
+          const defaults=await page.evaluate(()=>window.NovaSavedSettingsV32.load());
+          must(defaults.refMode==='exact'&&defaults.ratio==='9:16'&&defaults.style==='motion'&&defaults.duration==='5','fresh safe settings defaults');
+          must(defaults.passScore===95&&defaults.maxMotionPercent===2.5&&defaults.preserveWholeFrame===true,'fresh safety policy');
           const math=await page.evaluate(()=>window.NovaSafeMotionV32.selfTest());
           must(math.pass&&math.minScore>=95,`math gate ${math.minScore}%`);
           await page.evaluate(async()=>{
@@ -86,7 +97,7 @@ jobs:
   iphone-webkit:
     needs: static
     runs-on: ubuntu-latest
-    timeout-minutes: 7
+    timeout-minutes: 8
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -97,7 +108,7 @@ jobs:
           npm init -y >/dev/null 2>&1
           npm install playwright@1.55.0 >/dev/null 2>&1
           npx playwright install --with-deps webkit >/dev/null
-      - name: iPhone WebKit quality gate smoke
+      - name: iPhone WebKit settings restore and quality gate smoke
         run: |
           set -euo pipefail
           python3 -m http.server 4192 --bind 127.0.0.1 >/tmp/nova-safe-v32-ios.log 2>&1 &
@@ -109,11 +120,37 @@ jobs:
           const browser=await webkit.launch({headless:true});
           const ctx=await browser.newContext({viewport:{width:390,height:844},isMobile:true,hasTouch:true,userAgent:'Mozilla/5.0 (iPhone; CPU iPhone OS 18_6 like Mac OS X) AppleWebKit/605.1.15 Version/18.6 Mobile/15E148 Safari/604.1'});
           const page=await ctx.newPage(); const errors=[]; page.on('pageerror',e=>errors.push(String(e)));
-          const r=await page.goto('http://127.0.0.1:4192/',{waitUntil:'domcontentloaded'}); must(r?.ok(),'iPhone NOVA loads');
+          const open=async()=>{
+            const r=await page.goto('http://127.0.0.1:4192/',{waitUntil:'domcontentloaded'}); must(r?.ok(),'iPhone NOVA loads');
+            await page.waitForSelector('#novaMediaLaunch',{timeout:20000}); await page.click('#novaMediaLaunch');
+            await page.waitForFunction(()=>window.NovaSafeMotionV32?.version==='32.0.0'&&window.NovaSavedSettingsV32?.version==='32.1.0',{timeout:20000});
+            await page.waitForSelector('#novaProTab',{timeout:15000}); await page.click('#novaProTab'); await page.waitForSelector('#novaProPane:not([hidden])');
+          };
+          await open();
+          const initial=await page.evaluate(()=>window.NovaSavedSettingsV32.load());
+          must(initial.refMode==='exact'&&initial.ratio==='9:16'&&initial.style==='motion'&&initial.duration==='5','new iPhone gets ready defaults');
+          must(initial.passScore===95&&initial.maxMotionPercent===2.5&&initial.preserveWholeFrame===true,'iPhone safety locked');
+          await page.selectOption('#novaProRefMode','style');
+          await page.selectOption('#novaProRatio','16:9');
+          await page.selectOption('#novaProStyle','threed');
+          await page.selectOption('#novaProDuration','8');
+          await page.waitForTimeout(300);
+          const beforeReload=await page.evaluate(()=>window.NovaSavedSettingsV32.load());
+          must(beforeReload.refMode==='style'&&beforeReload.ratio==='16:9'&&beforeReload.style==='threed'&&beforeReload.duration==='8','iPhone changes saved');
+          await page.reload({waitUntil:'domcontentloaded'});
           await page.waitForSelector('#novaMediaLaunch',{timeout:20000}); await page.click('#novaMediaLaunch');
-          await page.waitForFunction(()=>window.NovaSafeMotionV32?.version==='32.0.0',{timeout:20000});
+          await page.waitForFunction(()=>window.NovaSavedSettingsV32?.version==='32.1.0',{timeout:20000});
+          await page.waitForSelector('#novaProTab',{timeout:15000}); await page.click('#novaProTab'); await page.waitForSelector('#novaProPane:not([hidden])');
+          await page.waitForTimeout(150);
+          must(await page.locator('#novaProRefMode').inputValue()==='style','ref mode restored after restart');
+          must(await page.locator('#novaProRatio').inputValue()==='16:9','ratio restored after restart');
+          must(await page.locator('#novaProStyle').inputValue()==='threed','style restored after restart');
+          must(await page.locator('#novaProDuration').inputValue()==='8','duration restored after restart');
+          const locked=await page.evaluate(()=>window.NovaSavedSettingsV32.load());
+          must(locked.passScore===95&&locked.maxMotionPercent===2.5&&locked.preserveWholeFrame===true&&locked.blockLowScoreExport===true,'safety remains locked after restart');
           const t=await page.evaluate(()=>window.NovaSafeMotionV32.selfTest()); must(t.pass&&t.minScore>=95,`WebKit math gate ${t.minScore}%`);
           must(await page.locator('.nova-safe-quality-v32').count()>=1,'Quality Gate UI visible');
+          must(await page.locator('.nova-settings-v32-badge').count()>=1,'saved settings badge visible');
           const relevant=errors.filter(v=>!/service worker|favicon/i.test(v)); must(relevant.length===0,`no WebKit errors ${relevant.join(' | ')}`);
           await browser.close();
           NODE
