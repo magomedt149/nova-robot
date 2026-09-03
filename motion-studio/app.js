@@ -4,8 +4,38 @@ const ctx=canvas.getContext('2d');
 let raf=0, previewStart=performance.now();
 const controls=['title','subtitle','duration','ratio','style','motion','camera','vfx','intensity'];
 
+const VFX_PRESETS={
+  fire:{label:'Огонь',vfx:'fire',intensity:'0.65',duration:'5',camera:'push',style:'gold',motion:'pulse',info:'Огонь • 5 сек • средняя сила • Push-in'},
+  smoke:{label:'Дым',vfx:'smoke',intensity:'0.65',duration:'8',camera:'handheld',style:'clean',motion:'float',info:'Дым • 8 сек • средняя сила • Handheld'},
+  sparks:{label:'Искры',vfx:'sparks',intensity:'1',duration:'5',camera:'push',style:'gold',motion:'zoom',info:'Искры • 5 сек • сильный эффект • Push-in'},
+  lightning:{label:'Молния',vfx:'lightning',intensity:'1',duration:'5',camera:'orbit',style:'neon',motion:'pulse',info:'Молния • 5 сек • сильный эффект • Orbit'},
+  debris:{label:'Обломки',vfx:'debris',intensity:'0.65',duration:'8',camera:'handheld',style:'redcyan',motion:'rise',info:'Обломки • 8 сек • средняя сила • Handheld'},
+  explosion:{label:'Взрыв',vfx:'explosion',intensity:'1',duration:'5',camera:'push',style:'gold',motion:'zoom',info:'Взрыв • 5 сек • сильный эффект • Push-in'},
+  fog:{label:'Туман',vfx:'fog',intensity:'0.35',duration:'10',camera:'static',style:'clean',motion:'float',info:'Туман • 10 сек • лёгкий эффект • Static'},
+  rain:{label:'Дождь',vfx:'rain',intensity:'0.65',duration:'10',camera:'handheld',style:'neon',motion:'slide',info:'Дождь • 10 сек • средняя сила • Handheld'}
+};
+
 function config(){return{title:$('title').value.trim()||'TUMSOEV',subtitle:$('subtitle').value.trim()||'FREE MOTION + VFX STUDIO',duration:+$('duration').value,ratio:$('ratio').value,style:$('style').value,motion:$('motion').value,camera:$('camera').value,vfx:$('vfx').value,intensity:+$('intensity').value}}
 function setCanvasSize(){const c=config(); const portrait=c.ratio==='9:16'; canvas.width=portrait?720:1280; canvas.height=portrait?1280:720;}
+
+function setPresetActive(name){
+  document.querySelectorAll('.preset-chip').forEach(btn=>btn.classList.toggle('active',btn.dataset.preset===name));
+}
+function applyPreset(name){
+  const p=VFX_PRESETS[name];
+  if(!p)return;
+  $('vfx').value=p.vfx;
+  $('intensity').value=p.intensity;
+  $('duration').value=p.duration;
+  $('camera').value=p.camera;
+  $('style').value=p.style;
+  $('motion').value=p.motion;
+  const info=$('presetInfo');
+  if(info)info.textContent=p.info+' — всё можно изменить вручную до рендера.';
+  setPresetActive(name);
+  restart();
+  $('status').textContent=`Пресет «${p.label}» применён. Предпросмотр обновлён — рендер ещё не запущен.`;
+}
 function clamp(v,a,b){return Math.max(a,Math.min(b,v))}
 function easeOutCubic(x){return 1-Math.pow(1-x,3)}
 function hexAlpha(hex,a){return hex+Math.round(clamp(a,0,1)*255).toString(16).padStart(2,'0')}
@@ -99,7 +129,10 @@ function draw(t,c){
 }
 function frame(now){const c=config();draw(((now-previewStart)/1000)%c.duration,c);raf=requestAnimationFrame(frame)}
 function restart(){cancelAnimationFrame(raf);setCanvasSize();previewStart=performance.now();raf=requestAnimationFrame(frame)}
-controls.forEach(id=>$(id).addEventListener('input',restart));$('preview').addEventListener('click',restart);restart();
+controls.forEach(id=>$(id).addEventListener('input',()=>{setPresetActive('');restart()}));
+$('preview').addEventListener('click',restart);
+document.querySelectorAll('.preset-chip').forEach(btn=>btn.addEventListener('click',()=>applyPreset(btn.dataset.preset)));
+restart();
 
 $('applyPrompt').addEventListener('click',()=>{const q=$('prompt').value.toLowerCase();if(!q.trim())return;
   const sec=q.match(/(3|5|8|10|15)\s*(сек|sec|s)/);if(sec)$('duration').value=sec[1];
