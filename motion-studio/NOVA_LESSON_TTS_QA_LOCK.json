@@ -1,0 +1,33 @@
+{
+  "id": "nova-lesson-tts-qa-lock-v1",
+  "appliesTo": "all NOVA lessons and explainer renders",
+  "rules": {
+    "requireFreshTtsForRequestedText": true,
+    "forbidReusedDemoSamples": true,
+    "forbidAudioLooping": true,
+    "forbidPhraseDuplication": true,
+    "requireScriptAudioMatchBeforeExport": true,
+    "preserveSelectedVoiceIdentity": true,
+    "allowPitchShift": false,
+    "allowFormantShift": false,
+    "allowedPostProcessing": [
+      "resample",
+      "loudness normalization",
+      "tiny anti-click fades",
+      "trim accidental leading or trailing silence"
+    ]
+  },
+  "forbiddenLegacySamples": [
+    {
+      "file": "nova_piper_irina_5s.wav",
+      "text": "Вечером, когда всё стихло, город зажёг свои огни.",
+      "reason": "voice reference/demo only; never use as lesson narration"
+    }
+  ],
+  "exportGate": [
+    "Narration must be generated from the exact current lesson script.",
+    "No old narration clip may be reused to stand in for new text.",
+    "If narration content cannot be verified, stop export instead of guessing.",
+    "For Irina use ru_RU-irina-medium with unchanged pitch and formants."
+  ]
+}
