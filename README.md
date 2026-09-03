@@ -17,7 +17,23 @@ NOVA — бесплатный браузерный ИИ-агент Тумсое�
 - перевод, погода, Wikipedia, карты и поиск;
 - компас, анимации NOVA, Тумсоева и лунной кошки;
 - Motion + VFX Studio: бесплатные локальные camera moves и эффекты дождя, дыма, тумана, искр, молнии, огня, обломков и взрыва;
+- NOVA Auto Director: из описания сцены автоматически создаёт shot plan, 3D blocking, объектив, camera path, continuity lock и финальный AI prompt; платные вызовы по умолчанию отключены;
 - установка на главный экран как PWA.
+
+## NOVA Auto Director / Blender
+
+В Motion + VFX Studio кнопка «Собрать сцену автоматически» сначала делает бесплатный режиссёрский план и continuity-проверку. Из браузера можно скачать:
+- `NOVA_scene_pack.json`;
+- `NOVA_blender_blocking.py`;
+- финальный AI prompt после одобрения preview.
+
+Для локального компьютера есть zero-credit runner:
+
+```bash
+python3 automation/nova_pipeline.py --prompt "two people in a room, 5 sec, orbit camera, rain" --run-blender
+```
+
+Он не использует сеть и платные API. Если Blender установлен, NOVA создаёт headless blocking scene + preview MP4. Только после одобрения preview имеет смысл вручную отправлять финальный prompt в Seedance/Higgsfield/другую внешнюю модель.
 
 ## Правила поведения NOVA 27
 
