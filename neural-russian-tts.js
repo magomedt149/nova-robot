@@ -23,28 +23,9 @@
   });
 
   const VOICES = Object.freeze({
-    liza: Object.freeze({
-      id: '55f8c0f546884f9cbdefa113f5e7b682',
-      label: 'Лиза — Elizabeth Friendly',
-      provider: 'heygen',
-      locale: 'ru-RU',
-      exactReference: true
-    }),
-    irina: Object.freeze({
-      id: IRINA_LOCK.voiceId,
-      label: 'Ирина',
-      provider: IRINA_LOCK.provider,
-      locale: IRINA_LOCK.locale,
-      gender: 'female',
-      locked: true
-    }),
-    denis: Object.freeze({
-      id: 'ru_RU-denis-medium',
-      label: 'Денис',
-      provider: 'piper',
-      locale: 'ru-RU',
-      gender: 'male'
-    })
+    liza: Object.freeze({ id: '55f8c0f546884f9cbdefa113f5e7b682', label: 'Лиза — Elizabeth Friendly', provider: 'heygen', locale: 'ru-RU', exactReference: true }),
+    irina: Object.freeze({ id: IRINA_LOCK.voiceId, label: 'Ирина', provider: IRINA_LOCK.provider, locale: IRINA_LOCK.locale, gender: 'female', locked: true }),
+    denis: Object.freeze({ id: 'ru_RU-denis-medium', label: 'Денис', provider: 'piper', locale: 'ru-RU', gender: 'male' })
   });
 
   const synth = window.speechSynthesis;
@@ -54,6 +35,8 @@
 
   let piper = null;
   let piperLoading = null;
+  let pronunciationLoading = null;
+  let diagnosticsLoading = null;
   let audio = null;
   let playbackToken = 0;
   let currentBlobUrl = '';
@@ -76,6 +59,46 @@
     }
     const globalStatus = document.querySelector('#statusText');
     if (globalStatus) globalStatus.textContent = message;
+  }
+
+  function loadLocalScript(src, marker) {
+    const existing = document.querySelector(`script[data-${marker}]`);
+    if (existing) {
+      return new Promise((resolve) => {
+        if (existing.dataset.loaded === '1') return resolve();
+        existing.addEventListener('load', () => resolve(), { once: true });
+        existing.addEventListener('error', () => resolve(), { once: true });
+      });
+    }
+    return new Promise((resolve) => {
+      const script = document.createElement('script');
+      script.src = src;
+      script.defer = true;
+      script.dataset[marker] = '1';
+      script.addEventListener('load', () => { script.dataset.loaded = '1'; resolve(); }, { once: true });
+      script.addEventListener('error', () => resolve(), { once: true });
+      document.head.appendChild(script);
+    });
+  }
+
+  async function ensurePronunciation() {
+    if (window.NovaRussianPronunciation?.normalize) return window.NovaRussianPronunciation;
+    if (!pronunciationLoading) {
+      pronunciationLoading = loadLocalScript('./nova-russian-pronunciation.js?v=28.2.0', 'novaPronunciation')
+        .then(() => window.NovaRussianPronunciation || null)
+        .finally(() => { pronunciationLoading = null; });
+    }
+    return pronunciationLoading;
+  }
+
+  async function ensureDiagnostics() {
+    if (window.NovaTtsDiagnostics?.run) return window.NovaTtsDiagnostics;
+    if (!diagnosticsLoading) {
+      diagnosticsLoading = loadLocalScript('./nova-tts-diagnostics.js?v=28.2.0', 'novaTtsDiagnostics')
+        .then(() => window.NovaTtsDiagnostics || null)
+        .finally(() => { diagnosticsLoading = null; });
+    }
+    return diagnosticsLoading;
   }
 
   function decodeEntities(text) {
@@ -168,19 +191,13 @@
     const key = normalizeVoice(voice);
     const item = VOICES[key];
     if (!item) return '';
-    if (key === 'irina') {
-      return `${IRINA_LOCK.provider}:${IRINA_LOCK.voiceId}:${IRINA_LOCK.locale}:pitch=${IRINA_LOCK.pitchFactor}:formant=${IRINA_LOCK.formantFactor}`;
-    }
+    if (key === 'irina') return `${IRINA_LOCK.provider}:${IRINA_LOCK.voiceId}:${IRINA_LOCK.locale}:pitch=${IRINA_LOCK.pitchFactor}:formant=${IRINA_LOCK.formantFactor}`;
     return `${item.provider}:${item.id}:${item.locale}`;
   }
 
   function assertIrinaLocked() {
-    if (VOICES.irina.id !== IRINA_LOCK.voiceId || VOICES.irina.provider !== IRINA_LOCK.provider) {
-      throw new Error('Irina voice lock mismatch.');
-    }
-    if (IRINA_LOCK.pitchFactor !== 1 || IRINA_LOCK.formantFactor !== 1 || IRINA_LOCK.perVideoVariation !== false) {
-      throw new Error('Irina timbre/pitch lock is not intact.');
-    }
+    if (VOICES.irina.id !== IRINA_LOCK.voiceId || VOICES.irina.provider !== IRINA_LOCK.provider) throw new Error('Irina voice lock mismatch.');
+    if (IRINA_LOCK.pitchFactor !== 1 || IRINA_LOCK.formantFactor !== 1 || IRINA_LOCK.perVideoVariation !== false) throw new Error('Irina timbre/pitch lock is not intact.');
     return true;
   }
 
@@ -229,14 +246,8 @@
     if (piper) return piper;
     if (!piperLoading) {
       piperLoading = import(PIPER_IMPORT)
-        .then((module) => {
-          piper = module;
-          return module;
-        })
-        .catch((error) => {
-          piperLoading = null;
-          throw error;
-        });
+        .then((module) => { piper = module; return module; })
+        .catch((error) => { piperLoading = null; throw error; });
     }
     return piperLoading;
   }
@@ -284,12 +295,11 @@
   }
 
   async function synthesize(text, voice = 'irina', onProgress) {
+    await ensurePronunciation();
     const clean = cleanRussianText(text);
     if (!clean) return [];
     const key = normalizeVoice(voice);
-    if (key === 'liza') {
-      throw new Error('Лиза использует точный HeyGen Elizabeth Friendly; Piper не должен подменять этот голос.');
-    }
+    if (key === 'liza') throw new Error('Лиза использует точный HeyGen Elizabeth Friendly; Piper не должен подменять этот голос.');
     if (key === 'irina') assertIrinaLocked();
 
     const chunks = splitForSpeech(clean);
@@ -300,9 +310,7 @@
       const blob = await engine.predict(
         { text: chunks[index], voiceId: selectedVoiceId },
         (progress) => {
-          if (typeof onProgress === 'function') {
-            onProgress({ ...progress, index, totalChunks: chunks.length, voice: key, voiceSignature: getVoiceSignature(key) });
-          }
+          if (typeof onProgress === 'function') onProgress({ ...progress, index, totalChunks: chunks.length, voice: key, voiceSignature: getVoiceSignature(key) });
         }
       );
       blobs.push(blob);
@@ -316,21 +324,19 @@
   }
 
   async function speakExactLiza(text) {
+    await ensurePronunciation();
     const clean = cleanRussianText(text);
     if (!clean) return;
     const provider = window.NovaExactLizaTTS;
     if (provider && typeof provider.speak === 'function') {
-      return provider.speak(clean, {
-        voiceId: VOICES.liza.id,
-        locale: VOICES.liza.locale,
-        speed: 0.9
-      });
+      return provider.speak(clean, { voiceId: VOICES.liza.id, locale: VOICES.liza.locale, speed: 0.9 });
     }
     setStatus('🎙️ Лиза закреплена как HeyGen Elizabeth – Friendly. Точная озвучка не заменяется другим голосом; внешний HeyGen TTS не подключён к браузерной NOVA.');
     throw new Error('Exact Liza provider is not connected. Automatic fallback is disabled.');
   }
 
   async function speakNow(text, voice = getDefaultVoice()) {
+    await ensurePronunciation();
     const clean = cleanRussianText(text);
     if (!clean) return;
     const key = normalizeVoice(voice);
@@ -361,39 +367,28 @@
   }
 
   function enqueueSpeak(text, voice = getDefaultVoice()) {
-    const clean = cleanRussianText(text);
+    const clean = basicClean(text);
     if (!clean) return Promise.resolve();
     queuedCount += 1;
     const jobToken = playbackToken;
     const job = async () => {
       if (jobToken !== playbackToken) return;
-      try {
-        await speakNow(clean, voice);
-      } finally {
-        queuedCount = Math.max(0, queuedCount - 1);
-      }
+      try { await speakNow(clean, voice); }
+      finally { queuedCount = Math.max(0, queuedCount - 1); }
     };
     queue = queue.then(job, job);
     return queue;
   }
 
-  function speak(text, voice = getDefaultVoice()) {
-    return enqueueSpeak(text, voice);
-  }
-
-  function speakIrina(text) {
-    assertIrinaLocked();
-    return enqueueSpeak(text, 'irina');
-  }
+  function speak(text, voice = getDefaultVoice()) { return enqueueSpeak(text, voice); }
+  function speakIrina(text) { assertIrinaLocked(); return enqueueSpeak(text, 'irina'); }
 
   async function speakDialogue(turns) {
     const normalized = (Array.isArray(turns) ? turns : []).map((turn, index) => ({
       voice: normalizeVoice(turn?.voice || (index % 2 ? 'denis' : 'irina')),
-      text: cleanRussianText(turn?.text || '')
+      text: basicClean(turn?.text || '')
     })).filter((turn) => turn.text);
-    for (let i = 0; i < normalized.length; i++) {
-      await enqueueSpeak(normalized[i].text, normalized[i].voice);
-    }
+    for (let i = 0; i < normalized.length; i++) await enqueueSpeak(normalized[i].text, normalized[i].voice);
   }
 
   function patchedSpeak(utterance) {
@@ -422,7 +417,6 @@
     ['#novaTranslateVoice', '#novaYoutubeVoice'].forEach((selector) => {
       const select = document.querySelector(selector);
       if (!select) return;
-
       if (!select.querySelector('option[value="nova:liza"]')) {
         const liza = document.createElement('option');
         liza.value = 'nova:liza';
@@ -436,7 +430,6 @@
         const liza = select.querySelector('option[value="nova:liza"]');
         liza?.insertAdjacentElement('afterend', irina);
       }
-
       if (!select.dataset.novaVoicePresetBound) {
         select.dataset.novaVoicePresetBound = '1';
         select.addEventListener('change', () => {
@@ -444,10 +437,7 @@
           else if (select.value === 'nova:irina') setDefaultVoice('irina');
         });
       }
-
-      if (!select.value || select.value.startsWith('nova:')) {
-        select.value = selectedPreset === 'liza' ? 'nova:liza' : 'nova:irina';
-      }
+      if (!select.value || select.value.startsWith('nova:')) select.value = selectedPreset === 'liza' ? 'nova:liza' : 'nova:irina';
     });
   }
 
@@ -478,21 +468,16 @@
     installUnlockListeners();
     addUiNote();
     loadMediaStudio();
-    setTimeout(() => {
-      try { window.NovaTtsDiagnostics?.run?.({ updateUi: false }); } catch (_) {}
-    }, 0);
+    ensurePronunciation()
+      .then(() => ensureDiagnostics())
+      .then((diagnostics) => diagnostics?.run?.({ updateUi: false }))
+      .catch(() => {});
   }
 
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', init, { once: true });
-  } else {
-    init();
-  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init, { once: true });
+  else init();
 
-  const observer = new MutationObserver(() => {
-    addUiNote();
-    injectVoicePresetOptions();
-  });
+  const observer = new MutationObserver(() => { addUiNote(); injectVoicePresetOptions(); });
   observer.observe(document.documentElement, { childList: true, subtree: true });
 
   window.NovaRussianTTS = Object.freeze({
@@ -514,6 +499,8 @@
     speakDialogue,
     stop: patchedCancel,
     preload: ensurePiper,
+    preloadPronunciation: ensurePronunciation,
+    diagnostics: () => window.NovaTtsDiagnostics?.run?.() || null,
     unlock: unlockAudio,
     queueSize: () => queuedCount
   });
