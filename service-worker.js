@@ -1,4 +1,4 @@
-const CACHE = 'nova-v28-browser-first-full-20260902';
+const CACHE = 'nova-v29-motion-vfx-20260903';
 const API_CACHE = 'nova-api-economy-v2';
 const YOUTUBE_TTL_MS = 24 * 60 * 60 * 1000;
 const TRANSLATE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
