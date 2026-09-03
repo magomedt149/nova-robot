@@ -1,0 +1,129 @@
+{
+  "id": "nova-chatgpt-studio-explainer-v1",
+  "name": "NOVA / ChatGPT Studio Explainer",
+  "savedFromReference": "ScreenRecording_08-28-2026 04-23-21_1.mp4",
+  "savedAt": "2026-09-03",
+  "purpose": "Recreate the polished Tumsoev + Liza AI-studio explainer/presentation look from the reference video.",
+  "triggerPhrases": [
+    "Лиза, сделай как ролик AI-студия",
+    "Сделай в стиле NOVA Studio Explainer",
+    "Сделай как то видео с Лизой и инфографикой"
+  ],
+  "referenceAnalysis": {
+    "screenRecording": {
+      "containerResolution": "512x1110",
+      "fps": 30,
+      "codec": "H.264",
+      "durationSeconds": 61.4,
+      "audio": "AAC stereo 44.1 kHz"
+    },
+    "masterTarget": {
+      "aspectRatio": "16:9",
+      "resolution": "1920x1080",
+      "fps": 30,
+      "codec": "H.264",
+      "note": "The uploaded file is a portrait screen recording; the actual designed video is a horizontal 16:9 panel centered inside it. Do not bake the black screen-recording bars into the master unless explicitly requested."
+    }
+  },
+  "visualSystem": {
+    "overallStyle": "premium dark technology presentation / motion-graphics explainer",
+    "background": "very dark navy-to-black, subtle grid/technical lines, restrained glow",
+    "primaryAccent": "cyan/teal",
+    "secondaryAccents": ["muted blue", "occasional coral/red", "occasional green"],
+    "text": "clean bold white sans-serif headings; smaller cool-gray supporting text",
+    "layout": "persistent presenter on left; headline and narrative in center; animated media/diagram/card panel on right; top brand strip; small footer/status captions",
+    "branding": "Tumsoev mark/top-left, technical section labels, compact interface labels; no random external logos or watermarks",
+    "density": "clean, information-rich, not cluttered"
+  },
+  "presenter": {
+    "name": "Liza",
+    "type": "2D anime/chibi virtual presenter",
+    "placement": "left side, approximately one-third of the visual width",
+    "look": "blue-gray hair, bright cyan/blue eyes, dark navy outfit with LIZA name tag",
+    "motion": [
+      "subtle idle breathing/floating",
+      "blink animation",
+      "small mouth movement when speaking",
+      "occasional hand/arm presentation gesture",
+      "avoid excessive body motion"
+    ],
+    "continuity": "same face, hair, outfit, proportions and placement across all scenes"
+  },
+  "sceneDesign": {
+    "averageSceneSeconds": "4-6",
+    "structure": "about 10-14 short visual chapters across a one-minute explainer",
+    "sceneTypes": [
+      "mission/title slide",
+      "radar/orbit diagram",
+      "music waveform and guitar card",
+      "game/world animation card",
+      "NOVA robot/network diagram",
+      "app/service list card",
+      "milestone/progress counter",
+      "final studio/brand statement"
+    ],
+    "transitions": [
+      "short crossfade",
+      "soft slide from 12-40 px equivalent",
+      "opacity + scale 0.97 to 1.00",
+      "line/graph draw-on",
+      "card reveal/stagger"
+    ],
+    "camera": "mostly locked 2D composition; no unnecessary cinematic pans, shakes or dramatic zooms"
+  },
+  "motionLanguage": {
+    "easing": "smooth ease-out / cubic, no bouncy cartoon easing",
+    "uiAnimation": [
+      "progress bars filling",
+      "nodes pulsing",
+      "thin lines drawing",
+      "waveforms moving",
+      "icons/cards fading and sliding in",
+      "small glow pulses",
+      "number/count-up animation"
+    ],
+    "readabilityRule": "motion supports comprehension; never animate every element at once"
+  },
+  "typography": {
+    "headline": "bold geometric/system sans, high contrast, 2-4 short lines maximum",
+    "labels": "small uppercase technical labels with increased tracking",
+    "body": "short phrases, not paragraphs",
+    "captions": "small lower caption/status line when useful"
+  },
+  "audio": {
+    "speech": "Russian narration/host voice when requested",
+    "voicePriority": "voice must remain clearly intelligible",
+    "music": "optional subtle electronic/ambient bed only after speech is clear",
+    "sfx": "soft interface ticks/whooshes only where they support a transition",
+    "rule": "never let music or SFX cover speech"
+  },
+  "productionRecipe": [
+    "1. Write a concise Russian script and split it into 4-6 second chapters.",
+    "2. Build one reusable 16:9 master layout with fixed Liza presenter, brand bar and dark tech background.",
+    "3. Give each chapter one main visual idea only: card, diagram, waveform, metric, robot, app list, or photo.",
+    "4. Animate with restrained slide/fade/scale/line-draw motions and smooth cubic easing.",
+    "5. Keep Liza continuous; use blink/mouth/hand micro-animation rather than regenerating her every scene.",
+    "6. Add narration; align captions/graphic beats to spoken phrases.",
+    "7. Add subtle ambience/SFX only after voice timing is approved.",
+    "8. Export one clean 16:9 MP4 master; create 9:16 adaptation separately if requested."
+  ],
+  "negativeRules": [
+    "no random camera movement",
+    "no photorealistic presenter unless explicitly requested",
+    "no excessive neon bloom",
+    "no dense paragraphs",
+    "no fast unreadable transitions",
+    "no changing Liza identity between scenes",
+    "no watermarks",
+    "no black screen-recording bars in the clean master",
+    "no paid generation or automatic paid retry without explicit permission"
+  ],
+  "defaultDelivery": {
+    "oneResult": true,
+    "paidCreditsAllowed": false,
+    "automaticPaidRetry": false,
+    "preferredTools": ["Remotion", "FFmpeg", "browser Canvas/SVG/CSS", "existing NOVA assets"],
+    "note": "Use deterministic motion graphics first because this reference is primarily a designed explainer, not a photorealistic text-to-video shot."
+  },
+  "assistantCommandMeaning": "When Tumsoev says one of the trigger phrases, use this preset as the default look and workflow, then adapt only the script/topic/media while preserving the presenter, layout language, pacing, transitions and dark cyan technical branding."
+}
