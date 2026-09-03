@@ -1,0 +1,57 @@
+{
+  "id": "nova-lessons-irina-voice-lock-v1",
+  "scope": "all future NOVA lesson narration",
+  "enabled": true,
+  "defaultVoice": "irina",
+  "voice": {
+    "provider": "Piper / vits-web",
+    "voiceId": "ru_RU-irina-medium",
+    "displayName": "Ирина",
+    "locale": "ru-RU",
+    "locked": true,
+    "mustBeExactVoice": true,
+    "allowSystemFallback": false,
+    "allowAutomaticVoiceSubstitution": false,
+    "allowPitchShift": false,
+    "allowFormantShift": false,
+    "allowTimbreChange": false,
+    "pitchFactor": 1.0,
+    "formantFactor": 1.0
+  },
+  "delivery": {
+    "pace": "natural, calm, clear Russian",
+    "preferredSentencePauseSeconds": 0.22,
+    "preferredQuestionPauseSeconds": 0.26,
+    "maxPauseSeconds": 0.32,
+    "phraseEndingFadeMs": "8-15",
+    "phraseAttackFadeMs": "5-10"
+  },
+  "allowedPostProcessing": {
+    "normalization": true,
+    "gentleCompression": true,
+    "clickRemoval": true,
+    "microfades": true,
+    "pauseCleanup": true,
+    "pitchChange": false,
+    "formantChange": false,
+    "voiceStyleTransfer": false
+  },
+  "mastering": {
+    "sampleRateHz": 48000,
+    "channels": 1,
+    "integratedLufsTarget": -16.5,
+    "truePeakDbtp": -2.0,
+    "warmthEq": "+0.6 dB around 180 Hz",
+    "clarityEq": "+0.3 dB around 3.2 kHz",
+    "compression": "gentle 1.2:1"
+  },
+  "rules": [
+    "Use real Piper ru_RU-irina-medium for every NOVA lesson by default.",
+    "Never change Irina pitch, formants, timbre or voice identity.",
+    "Never apply Liza-style or any voice-style transfer to Irina.",
+    "Never substitute eSpeak, iPhone/macOS system voices or another TTS and call it Irina.",
+    "Only normalize level, clean clicks, trim excessive silence and apply tiny microfades.",
+    "Keep natural punctuation-driven pauses around 0.20-0.30 seconds.",
+    "Changing this locked voice requires an explicit new user request."
+  ]
+}
