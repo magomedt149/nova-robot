@@ -1,6 +1,6 @@
 {
-  "id": "nova-lessons-irina-voice-lock-v1",
-  "scope": "all future NOVA lesson narration",
+  "id": "nova-lessons-irina-voice-lock-v2",
+  "scope": "all future NOVA lesson narration, stories and Russian speech",
   "enabled": true,
   "defaultVoice": "irina",
   "voice": {
@@ -17,6 +17,17 @@
     "allowTimbreChange": false,
     "pitchFactor": 1.0,
     "formantFactor": 1.0
+  },
+  "contentPolicy": {
+    "textMayChangeEveryRender": true,
+    "storiesMayChangeEveryRender": true,
+    "lessonsMayChangeEveryRender": true,
+    "synthesizeFreshAudioForEveryNewText": true,
+    "mustSpeakExactProvidedText": true,
+    "allowOldAudioSampleReuse": false,
+    "allowDemoPhraseReuse": false,
+    "allowPhraseLooping": false,
+    "allowTextParaphraseDuringTts": false
   },
   "delivery": {
     "pace": "natural, calm, clear Russian",
@@ -46,7 +57,11 @@
     "compression": "gentle 1.2:1"
   },
   "rules": [
-    "Use real Piper ru_RU-irina-medium for every NOVA lesson by default.",
+    "Use real Piper ru_RU-irina-medium for every NOVA lesson, story and Russian narration by default.",
+    "The words and story may change freely; the Irina voice must not change.",
+    "For every new text, synthesize a fresh TTS track from that exact text using Irina.",
+    "Never reuse an old demo phrase or old lesson audio as the narration for new text.",
+    "Never loop or repeat a previous Irina phrase to fill video duration.",
     "Never change Irina pitch, formants, timbre or voice identity.",
     "Never apply Liza-style or any voice-style transfer to Irina.",
     "Never substitute eSpeak, iPhone/macOS system voices or another TTS and call it Irina.",
