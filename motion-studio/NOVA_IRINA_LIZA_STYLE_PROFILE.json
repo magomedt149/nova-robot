@@ -1,0 +1,73 @@
+{
+  "id": "nova-irina-liza-style-v1",
+  "name": "Irina → Liza-style",
+  "reference": {
+    "file": "ScreenRecording_08-28-2026 04-23-21_1(1).mp4",
+    "durationSeconds": 61.4,
+    "audioSampleRateHz": 44100,
+    "measuredVoice": {
+      "medianF0HzApprox": 245,
+      "f0P10HzApprox": 204,
+      "f0P90HzApprox": 307,
+      "character": "young, bright, calm, friendly, clear Russian explainer delivery"
+    }
+  },
+  "sourceVoice": {
+    "provider": "Piper / vits-web",
+    "voiceId": "ru_RU-irina-medium",
+    "displayName": "Ирина",
+    "allowFallback": false
+  },
+  "targetStyle": {
+    "goal": "Bring Irina closer to Liza's youthful bright delivery while preserving Irina's identity and Russian clarity.",
+    "targetMedianF0Hz": 240,
+    "pitchFactor": 1.414,
+    "tempoFactor": 0.98,
+    "preserveFormants": true,
+    "transients": "smooth",
+    "detector": "soft",
+    "pauseSeconds": {
+      "sentence": 0.20,
+      "question": 0.24,
+      "max": 0.30
+    }
+  },
+  "mastering": {
+    "sampleRateHz": 48000,
+    "channels": 1,
+    "highpassHz": 75,
+    "eq": [
+      {"frequencyHz": 220, "gainDb": 0.6, "purpose": "body"},
+      {"frequencyHz": 3200, "gainDb": 0.9, "purpose": "clarity"},
+      {"frequencyHz": 6500, "gainDb": -1.4, "purpose": "reduce harsh sibilance"}
+    ],
+    "compression": "gentle, ratio about 1.7:1",
+    "loudnessLUFS": -16,
+    "truePeakDbTP": -1.5,
+    "microFadeMs": 12
+  },
+  "videoStyle": {
+    "preset": "NOVA / ChatGPT Studio Explainer",
+    "master": "16:9 1920x1080 30fps H.264",
+    "presenter": "Liza on the left, persistent identity",
+    "background": "dark navy/black technology UI with subtle grid and cyan accents",
+    "layout": "presenter left; headline/idea center; cards, diagrams or waveform right",
+    "sceneLengthSeconds": "4-6",
+    "motion": "restrained fade/slide/scale/line-draw, no random camera movement",
+    "audioOrder": "voice first, then timing, then subtle ambience/SFX"
+  },
+  "freePipeline": {
+    "paidCreditsAllowed": false,
+    "automaticPaidRetry": false,
+    "voiceEngine": "Piper Irina",
+    "postProcess": "FFmpeg rubberband + EQ + compression + loudnorm",
+    "video": "Canvas/SVG/CSS/Remotion/FFmpeg"
+  },
+  "rules": [
+    "Do not claim Irina is the exact Liza voice; this is a prosody/style match.",
+    "Never substitute espeak or a system voice and call it Irina.",
+    "Use one continuous narration chunk when possible to avoid clicks and chopped pauses.",
+    "Keep speech intelligibility above music and SFX.",
+    "For short lessons, default to one 5-10 second sample before any longer render."
+  ]
+}
