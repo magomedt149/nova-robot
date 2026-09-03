@@ -6,35 +6,51 @@
 
   const PIPER_IMPORT = 'https://cdn.jsdelivr.net/npm/@diffusionstudio/vits-web@1.0.3/+esm';
   const PRESET_KEY = 'novaRussianVoicePreset:v1';
+  const MAX_CHUNK_CHARS = 260;
+
+  const IRINA_LOCK = Object.freeze({
+    provider: 'piper',
+    voiceId: 'ru_RU-irina-medium',
+    locale: 'ru-RU',
+    pitchFactor: 1,
+    formantFactor: 1,
+    perVideoVariation: false,
+    allowSystemFallback: false,
+    allowAutomaticVoiceSubstitution: false,
+    allowPitchShift: false,
+    allowFormantShift: false,
+    allowDemoSampleReuse: false
+  });
+
   const VOICES = Object.freeze({
-    liza: {
+    liza: Object.freeze({
       id: '55f8c0f546884f9cbdefa113f5e7b682',
       label: 'Лиза — Elizabeth Friendly',
       provider: 'heygen',
       locale: 'ru-RU',
       exactReference: true
-    },
-    irina: {
-      id: 'ru_RU-irina-medium',
+    }),
+    irina: Object.freeze({
+      id: IRINA_LOCK.voiceId,
       label: 'Ирина',
-      provider: 'piper',
-      locale: 'ru-RU',
-      gender: 'female'
-    },
-    denis: {
+      provider: IRINA_LOCK.provider,
+      locale: IRINA_LOCK.locale,
+      gender: 'female',
+      locked: true
+    }),
+    denis: Object.freeze({
       id: 'ru_RU-denis-medium',
       label: 'Денис',
       provider: 'piper',
       locale: 'ru-RU',
       gender: 'male'
-    }
+    })
   });
-  const MAX_CHUNK_CHARS = 260;
-  const synth = window.speechSynthesis;
-  if (!synth || typeof SpeechSynthesisUtterance === 'undefined') return;
 
-  const nativeSpeak = synth.speak.bind(synth);
-  const nativeCancel = synth.cancel.bind(synth);
+  const synth = window.speechSynthesis;
+  const hasNativeSpeech = Boolean(synth && typeof SpeechSynthesisUtterance !== 'undefined');
+  const nativeSpeak = hasNativeSpeech ? synth.speak.bind(synth) : null;
+  const nativeCancel = hasNativeSpeech ? synth.cancel.bind(synth) : null;
 
   let piper = null;
   let piperLoading = null;
@@ -70,15 +86,24 @@
     return el.value;
   }
 
-  function cleanRussianText(text) {
+  function basicClean(text) {
     return decodeEntities(text)
       .replace(/\u00a0/g, ' ')
-      .replace(/[“”„]/g, '"')
+      .replace(/[“”„«»]/g, '"')
       .replace(/[’‘]/g, "'")
       .replace(/\s+([,.;:!?])/g, '$1')
-      .replace(/([.!?…]){2,}/g, '$1')
+      .replace(/([!?]){2,}/g, '$1')
       .replace(/\s+/g, ' ')
       .trim();
+  }
+
+  function cleanRussianText(text) {
+    const clean = basicClean(text);
+    const pronunciation = window.NovaRussianPronunciation;
+    if (pronunciation && typeof pronunciation.normalize === 'function') {
+      try { return pronunciation.normalize(clean); } catch (_) {}
+    }
+    return clean;
   }
 
   function normalizeVoice(value) {
@@ -137,6 +162,26 @@
     }
     if (current) chunks.push(current);
     return chunks.filter(Boolean);
+  }
+
+  function getVoiceSignature(voice = 'irina') {
+    const key = normalizeVoice(voice);
+    const item = VOICES[key];
+    if (!item) return '';
+    if (key === 'irina') {
+      return `${IRINA_LOCK.provider}:${IRINA_LOCK.voiceId}:${IRINA_LOCK.locale}:pitch=${IRINA_LOCK.pitchFactor}:formant=${IRINA_LOCK.formantFactor}`;
+    }
+    return `${item.provider}:${item.id}:${item.locale}`;
+  }
+
+  function assertIrinaLocked() {
+    if (VOICES.irina.id !== IRINA_LOCK.voiceId || VOICES.irina.provider !== IRINA_LOCK.provider) {
+      throw new Error('Irina voice lock mismatch.');
+    }
+    if (IRINA_LOCK.pitchFactor !== 1 || IRINA_LOCK.formantFactor !== 1 || IRINA_LOCK.perVideoVariation !== false) {
+      throw new Error('Irina timbre/pitch lock is not intact.');
+    }
+    return true;
   }
 
   function getAudio() {
@@ -245,21 +290,29 @@
     if (key === 'liza') {
       throw new Error('Лиза использует точный HeyGen Elizabeth Friendly; Piper не должен подменять этот голос.');
     }
+    if (key === 'irina') assertIrinaLocked();
+
     const chunks = splitForSpeech(clean);
     const engine = await ensurePiper();
     const blobs = [];
     for (let index = 0; index < chunks.length; index++) {
+      const selectedVoiceId = key === 'irina' ? IRINA_LOCK.voiceId : VOICES[key].id;
       const blob = await engine.predict(
-        { text: chunks[index], voiceId: VOICES[key].id },
+        { text: chunks[index], voiceId: selectedVoiceId },
         (progress) => {
           if (typeof onProgress === 'function') {
-            onProgress({ ...progress, index, totalChunks: chunks.length, voice: key });
+            onProgress({ ...progress, index, totalChunks: chunks.length, voice: key, voiceSignature: getVoiceSignature(key) });
           }
         }
       );
       blobs.push(blob);
     }
     return blobs;
+  }
+
+  function synthesizeIrina(text, onProgress) {
+    assertIrinaLocked();
+    return synthesize(text, 'irina', onProgress);
   }
 
   async function speakExactLiza(text) {
@@ -282,6 +335,7 @@
     if (!clean) return;
     const key = normalizeVoice(voice);
     if (key === 'liza') return speakExactLiza(clean);
+    if (key === 'irina') assertIrinaLocked();
 
     const token = playbackToken;
     if (!userUnlockedAudio) getAudio();
@@ -327,6 +381,11 @@
     return enqueueSpeak(text, voice);
   }
 
+  function speakIrina(text) {
+    assertIrinaLocked();
+    return enqueueSpeak(text, 'irina');
+  }
+
   async function speakDialogue(turns) {
     const normalized = (Array.isArray(turns) ? turns : []).map((turn, index) => ({
       voice: normalizeVoice(turn?.voice || (index % 2 ? 'denis' : 'irina')),
@@ -338,26 +397,24 @@
   }
 
   function patchedSpeak(utterance) {
-    if (!isRussianUtterance(utterance)) return nativeSpeak(utterance);
-
-    // If the user explicitly picked an iPhone/Mac/system voice in NOVA Notebook,
-    // respect that exact system choice and never reroute it to Piper.
+    if (!nativeSpeak || !isRussianUtterance(utterance)) return nativeSpeak?.(utterance);
     if (utterance?.voice) return nativeSpeak(utterance);
-
     enqueueSpeak(utterance?.text || '', getDefaultVoice()).catch(() => {});
   }
 
   function patchedCancel() {
     stopNeuralAudio();
-    nativeCancel();
+    nativeCancel?.();
     setStatus('Русский TTS остановлен.');
   }
 
-  try {
-    Object.defineProperty(synth, 'speak', { configurable: true, value: patchedSpeak });
-    Object.defineProperty(synth, 'cancel', { configurable: true, value: patchedCancel });
-  } catch (_) {
-    try { synth.speak = patchedSpeak; synth.cancel = patchedCancel; } catch (_) {}
+  if (hasNativeSpeech) {
+    try {
+      Object.defineProperty(synth, 'speak', { configurable: true, value: patchedSpeak });
+      Object.defineProperty(synth, 'cancel', { configurable: true, value: patchedCancel });
+    } catch (_) {
+      try { synth.speak = patchedSpeak; synth.cancel = patchedCancel; } catch (_) {}
+    }
   }
 
   function injectVoicePresetOptions() {
@@ -375,7 +432,7 @@
       if (!select.querySelector('option[value="nova:irina"]')) {
         const irina = document.createElement('option');
         irina.value = 'nova:irina';
-        irina.textContent = 'Ирина — Piper · бесплатно на устройстве';
+        irina.textContent = 'Ирина — Piper · голос зафиксирован';
         const liza = select.querySelector('option[value="nova:liza"]');
         liza?.insertAdjacentElement('afterend', irina);
       }
@@ -404,7 +461,7 @@
     const note = document.createElement('div');
     note.id = 'novaNeuralTtsNote';
     note.className = 'nova-note-meta';
-    note.textContent = '🇷🇺 Голос фиксируется: Лиза = HeyGen Elizabeth – Friendly (точный выбранный профиль), Ирина = Piper ru_RU-irina-medium (бесплатно). NOVA больше не подменяет выбранный русский голос.';
+    note.textContent = '🇷🇺 Ирина зафиксирована: Piper ru_RU-irina-medium, pitch 1.0, formants 1.0, без подмены и без изменения от видео. Русский текст проходит через NOVA pronunciation layer.';
     anchor.insertAdjacentElement('afterend', note);
   }
 
@@ -421,6 +478,9 @@
     installUnlockListeners();
     addUiNote();
     loadMediaStudio();
+    setTimeout(() => {
+      try { window.NovaTtsDiagnostics?.run?.({ updateUi: false }); } catch (_) {}
+    }, 0);
   }
 
   if (document.readyState === 'loading') {
@@ -437,15 +497,20 @@
 
   window.NovaRussianTTS = Object.freeze({
     voices: VOICES,
+    irinaLock: IRINA_LOCK,
     exactLiza: VOICES.liza,
     defaultNarrator: getDefaultVoice(),
     defaultMale: 'denis',
     getDefaultVoice,
     setDefaultVoice,
+    getVoiceSignature,
+    assertIrinaLocked,
     cleanText: cleanRussianText,
     splitForSpeech,
     synthesize,
+    synthesizeIrina,
     speak,
+    speakIrina,
     speakDialogue,
     stop: patchedCancel,
     preload: ensurePiper,
