@@ -1,16 +1,20 @@
 {
-  "id": "nova-lesson-04-irina-tts-natural-v3",
+  "id": "nova-lesson-04-irina-tts-natural-v4",
   "lesson": 4,
   "title": "Как ответить на первый заказ",
   "language": "ru-RU",
+  "globalVoiceLock": "motion-studio/NOVA_LESSON_IRINA_VOICE_LOCK.json",
   "voice": {
     "provider": "Piper / vits-web",
     "voiceId": "ru_RU-irina-medium",
     "displayName": "Ирина",
-    "styleProfile": "natural-irina",
+    "styleProfile": "natural-irina-locked",
     "mustBeExactVoice": true,
     "allowSystemFallback": false,
-    "allowAutomaticVoiceSubstitution": false
+    "allowAutomaticVoiceSubstitution": false,
+    "allowPitchShift": false,
+    "allowFormantShift": false,
+    "allowTimbreChange": false
   },
   "script": "Урок четыре. Нашёл заказ? Покажи клиенту, что понял задачу, как её выполнишь и какой результат он получит.",
   "delivery": {
@@ -40,9 +44,11 @@
     "visualPreset": "NOVA / ChatGPT Studio Explainer"
   },
   "rules": [
+    "Inherit the permanent NOVA lesson voice lock.",
     "Use real Piper ru_RU-irina-medium only.",
-    "Do not pitch-shift Irina toward Liza.",
-    "Do not change Irina formants or voice identity.",
+    "Do not pitch-shift Irina.",
+    "Do not change Irina formants, timbre or voice identity.",
+    "Never apply Liza-style to Irina.",
     "Never call espeak, an iPhone system voice, or another fallback Irina.",
     "Keep punctuation-driven natural pauses around 0.20-0.30 seconds.",
     "Use only tiny microfades to prevent clicks; do not soften consonants or cut word endings.",
