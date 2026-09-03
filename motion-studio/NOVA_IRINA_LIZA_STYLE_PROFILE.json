@@ -1,5 +1,5 @@
 {
-  "id": "nova-irina-liza-style-v1",
+  "id": "nova-irina-liza-style-v2",
   "name": "Irina → Liza-style",
   "reference": {
     "file": "ScreenRecording_08-28-2026 04-23-21_1(1).mp4",
@@ -9,7 +9,13 @@
       "medianF0HzApprox": 245,
       "f0P10HzApprox": 204,
       "f0P90HzApprox": 307,
-      "character": "young, bright, calm, friendly, clear Russian explainer delivery"
+      "typicalMicroPauseSeconds": {
+        "p25": 0.09,
+        "median": 0.115,
+        "p75": 0.163,
+        "p90": 0.22
+      },
+      "character": "young, warm-bright, calm, friendly, connected Russian explainer delivery"
     }
   },
   "sourceVoice": {
@@ -19,55 +25,60 @@
     "allowFallback": false
   },
   "targetStyle": {
-    "goal": "Bring Irina closer to Liza's youthful bright delivery while preserving Irina's identity and Russian clarity.",
-    "targetMedianF0Hz": 240,
-    "pitchFactor": 1.414,
-    "tempoFactor": 0.98,
+    "goal": "Bring Irina closer to Liza's warm, youthful delivery while preserving Irina's identity and Russian clarity.",
+    "targetMedianF0HzApprox": 245,
+    "pitchFactor": 1.055,
+    "tempoFactor": 1.0,
     "preserveFormants": true,
     "transients": "smooth",
     "detector": "soft",
     "pauseSeconds": {
-      "sentence": 0.20,
-      "question": 0.24,
-      "max": 0.30
-    }
+      "minor": 0.12,
+      "sentence": 0.14,
+      "questionOrMajor": 0.16,
+      "absoluteMax": 0.22
+    },
+    "endingStyle": "soften final 35-70 ms of spoken phrases; use 18-25 ms fade-in after pauses; avoid hard digital silence"
   },
   "mastering": {
     "sampleRateHz": 48000,
     "channels": 1,
-    "highpassHz": 75,
     "eq": [
-      {"frequencyHz": 220, "gainDb": 0.6, "purpose": "body"},
-      {"frequencyHz": 3200, "gainDb": 0.9, "purpose": "clarity"},
-      {"frequencyHz": 6500, "gainDb": -1.4, "purpose": "reduce harsh sibilance"}
+      {"frequencyHz": 175, "gainDb": 2.0, "q": 0.85, "purpose": "warmth/body"},
+      {"frequencyHz": 520, "gainDb": 0.7, "q": 1.0, "purpose": "soft chest presence"},
+      {"frequencyHz": 3000, "gainDb": 0.25, "q": 1.1, "purpose": "retain articulation without sharpness"},
+      {"frequencyHz": 6200, "gainDb": -1.35, "q": 1.0, "purpose": "soften sibilance and hard edges"}
     ],
-    "compression": "gentle, ratio about 1.7:1",
-    "loudnessLUFS": -16,
-    "truePeakDbTP": -1.5,
-    "microFadeMs": 12
+    "deEsser": "gentle",
+    "compression": "very gentle, ratio about 1.35:1, slower attack and release",
+    "loudnessLUFS": -16.7,
+    "truePeakDbTP": -3.3,
+    "microFadeMs": "18-70 depending on phrase boundary",
+    "roomToneDbFSApprox": -58
   },
   "videoStyle": {
     "preset": "NOVA / ChatGPT Studio Explainer",
-    "master": "16:9 1920x1080 30fps H.264",
+    "master": "16:9, 30fps H.264; 1280x720 acceptable for 10-second free previews, 1920x1080 for clean master",
     "presenter": "Liza on the left, persistent identity",
     "background": "dark navy/black technology UI with subtle grid and cyan accents",
     "layout": "presenter left; headline/idea center; cards, diagrams or waveform right",
-    "sceneLengthSeconds": "4-6",
     "motion": "restrained fade/slide/scale/line-draw, no random camera movement",
-    "audioOrder": "voice first, then timing, then subtle ambience/SFX"
+    "audioOrder": "voice first, match reference micro-pauses, then subtle ambience/SFX"
   },
   "freePipeline": {
     "paidCreditsAllowed": false,
     "automaticPaidRetry": false,
-    "voiceEngine": "Piper Irina",
-    "postProcess": "FFmpeg rubberband + EQ + compression + loudnorm",
+    "voiceEngine": "Piper Irina ru_RU-irina-medium",
+    "postProcess": "phrase-boundary microfades + short room tone + FFmpeg rubberband formant-preserved pitch + warm EQ + gentle de-ess/compression + loudness match",
     "video": "Canvas/SVG/CSS/Remotion/FFmpeg"
   },
   "rules": [
     "Do not claim Irina is the exact Liza voice; this is a prosody/style match.",
     "Never substitute espeak or a system voice and call it Irina.",
-    "Use one continuous narration chunk when possible to avoid clicks and chopped pauses.",
-    "Keep speech intelligibility above music and SFX.",
-    "For short lessons, default to one 5-10 second sample before any longer render."
+    "Avoid synthetic gaps above 0.22 seconds in short explainer narration unless the script explicitly requires a dramatic pause.",
+    "Use soft phrase endings and low-level room tone instead of hard zero-silence edits.",
+    "Do not over-compress; preserve a relaxed spoken feel.",
+    "Keep speech intelligibility above ambience and SFX.",
+    "For short lessons, default to one 5-10 second free sample before any longer render."
   ]
 }
