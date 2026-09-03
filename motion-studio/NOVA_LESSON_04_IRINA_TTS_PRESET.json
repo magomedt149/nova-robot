@@ -1,0 +1,45 @@
+{
+  "id": "nova-lesson-04-irina-tts-v1",
+  "lesson": 4,
+  "title": "Как ответить на первый заказ",
+  "language": "ru-RU",
+  "voice": {
+    "provider": "Piper / vits-web",
+    "voiceId": "ru_RU-irina-medium",
+    "displayName": "Ирина",
+    "mustBeExactVoice": true,
+    "allowSystemFallback": false,
+    "allowAutomaticVoiceSubstitution": false
+  },
+  "script": "Урок четыре. Нашёл заказ? Покажи клиенту, что понял задачу, как её выполнишь и какой результат он получит.",
+  "delivery": {
+    "targetDurationSeconds": 5,
+    "pace": "calm, clear, natural",
+    "speedFactorPost": 0.86,
+    "preferredSentencePauseSeconds": 0.20,
+    "preferredQuestionPauseSeconds": 0.24,
+    "maxInsertedPauseSeconds": 0.30
+  },
+  "mastering": {
+    "sampleRateHz": 48000,
+    "channels": 1,
+    "highpassHz": 70,
+    "lowpassHz": 12000,
+    "warmthEq": "+1.1 dB around 180 Hz",
+    "clarityEq": "+0.7 dB around 3.2 kHz",
+    "deEssEq": "-1.2 dB around 6.5 kHz",
+    "compression": "gentle 2:1",
+    "integratedLufsTarget": -16,
+    "truePeakDbtp": -1.5,
+    "microFadeMs": 8
+  },
+  "rules": [
+    "Use the real Piper ru_RU-irina-medium model only.",
+    "Never call espeak, an iPhone system voice, or any other fallback 'Irina'.",
+    "Do not leave long synthetic pauses between phrases.",
+    "Keep natural punctuation pauses approximately 0.20-0.30 seconds.",
+    "Use microfades at edit boundaries to prevent clicks.",
+    "Voice must stay clear and warmer than the old Liza reference mix.",
+    "No paid TTS credits are required for this preset."
+  ]
+}
