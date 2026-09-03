@@ -1,0 +1,55 @@
+name: NOVA Irina fresh 6s example
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/nova-irina-6s-example.yml'
+  workflow_dispatch:
+
+jobs:
+  render:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Download Piper and Irina
+        run: |
+          set -euo pipefail
+          curl -L --fail --retry 3 -o piper.tar.gz https://github.com/rhasspy/piper/releases/download/2023.11.14-2/piper_linux_x86_64.tar.gz
+          tar -xzf piper.tar.gz
+          curl -L --fail --retry 3 -o irina.onnx 'https://huggingface.co/rhasspy/piper-voices/resolve/main/ru/ru_RU/irina/medium/ru_RU-irina-medium.onnx?download=true'
+          curl -L --fail --retry 3 -o irina.onnx.json 'https://huggingface.co/rhasspy/piper-voices/resolve/main/ru/ru_RU/irina/medium/ru_RU-irina-medium.onnx.json?download=true'
+      - name: Fresh Irina narration
+        run: |
+          set -euo pipefail
+          printf '%s\n' 'Урок пять. Сначала пойми задачу клиента. Потом назови результат и срок.' | ./piper/piper --model irina.onnx --config irina.onnx.json --output_file irina-fresh.wav
+          ffprobe -v error -show_entries format=duration -of default=nw=1:nk=1 irina-fresh.wav
+      - name: Build six second NOVA Explainer
+        run: |
+          set -euo pipefail
+          FONT=/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf
+          ffmpeg -y -f lavfi -i color=c=0x050b1d:s=1280x720:r=30:d=6 -i irina-fresh.wav \
+            -filter_complex "[0:v]drawbox=x=58:y=54:w=1164:h=612:color=0x0b1738@0.92:t=fill,drawbox=x=58:y=54:w=14:h=612:color=0x31d6ff:t=fill,drawtext=fontfile=${FONT}:text='TUMSOEV  •  NOVA EXPLAINER':fontcolor=0x75e8ff:fontsize=30:x=98:y=92,drawtext=fontfile=${FONT}:text='УРОК 05':fontcolor=white:fontsize=54:x=98:y=175,drawtext=fontfile=${FONT}:text='Сначала пойми задачу клиента.':fontcolor=white:fontsize=43:x=98:y=285,drawtext=fontfile=${FONT}:text='Потом назови результат и срок.':fontcolor=0x83e8ff:fontsize=43:x=98:y=355,drawtext=fontfile=${FONT}:text='ИРИНА • ru_RU-irina-medium • VOICE LOCK':fontcolor=0x91a7c9:fontsize=24:x=98:y=560[v]" \
+            -map '[v]' -map 1:a -c:v libx264 -preset medium -crf 18 -pix_fmt yuv420p -c:a aac -b:a 192k -ar 48000 \
+            -af 'apad=pad_dur=6,atrim=0:6' -t 6 -movflags +faststart NOVA_IRINA_FRESH_6S.mp4
+          ffmpeg -y -i irina-fresh.wav -af 'apad=pad_dur=6,atrim=0:6' -ar 48000 -ac 1 NOVA_IRINA_FRESH_6S.wav
+      - name: Verify output
+        run: |
+          set -euo pipefail
+          test -s NOVA_IRINA_FRESH_6S.mp4
+          test -s NOVA_IRINA_FRESH_6S.wav
+          D=$(ffprobe -v error -show_entries format=duration -of default=nw=1:nk=1 NOVA_IRINA_FRESH_6S.mp4)
+          python3 - <<'PY'
+          import subprocess
+          d=float(subprocess.check_output(['ffprobe','-v','error','-show_entries','format=duration','-of','default=nw=1:nk=1','NOVA_IRINA_FRESH_6S.mp4']).decode())
+          assert 5.95 <= d <= 6.05, d
+          PY
+      - name: Upload six second example
+        uses: actions/upload-artifact@v4
+        with:
+          name: NOVA_IRINA_FRESH_6S
+          path: |
+            NOVA_IRINA_FRESH_6S.mp4
+            NOVA_IRINA_FRESH_6S.wav
+          if-no-files-found: error
+          retention-days: 1
