@@ -5,9 +5,29 @@
   window.__novaNeuralRussianTtsInstalled = true;
 
   const PIPER_IMPORT = 'https://cdn.jsdelivr.net/npm/@diffusionstudio/vits-web@1.0.3/+esm';
+  const PRESET_KEY = 'novaRussianVoicePreset:v1';
   const VOICES = Object.freeze({
-    irina: { id: 'ru_RU-irina-medium', label: 'Ирина', gender: 'female' },
-    denis: { id: 'ru_RU-denis-medium', label: 'Денис', gender: 'male' }
+    liza: {
+      id: '55f8c0f546884f9cbdefa113f5e7b682',
+      label: 'Лиза — Elizabeth Friendly',
+      provider: 'heygen',
+      locale: 'ru-RU',
+      exactReference: true
+    },
+    irina: {
+      id: 'ru_RU-irina-medium',
+      label: 'Ирина',
+      provider: 'piper',
+      locale: 'ru-RU',
+      gender: 'female'
+    },
+    denis: {
+      id: 'ru_RU-denis-medium',
+      label: 'Денис',
+      provider: 'piper',
+      locale: 'ru-RU',
+      gender: 'male'
+    }
   });
   const MAX_CHUNK_CHARS = 260;
   const synth = window.speechSynthesis;
@@ -62,8 +82,26 @@
   }
 
   function normalizeVoice(value) {
-    const key = String(value || 'irina').toLowerCase();
-    return VOICES[key] ? key : 'irina';
+    const raw = String(value || '').toLowerCase().replace(/^nova:/, '');
+    if (raw === 'elizabeth' || raw === 'elizabeth-friendly' || raw === 'lisa') return 'liza';
+    return VOICES[raw] ? raw : 'irina';
+  }
+
+  function getDefaultVoice() {
+    try {
+      const stored = normalizeVoice(localStorage.getItem(PRESET_KEY) || 'liza');
+      return stored === 'denis' ? 'irina' : stored;
+    } catch (_) {
+      return 'liza';
+    }
+  }
+
+  function setDefaultVoice(value) {
+    const key = normalizeVoice(value);
+    const selected = key === 'denis' ? 'irina' : key;
+    try { localStorage.setItem(PRESET_KEY, selected); } catch (_) {}
+    injectVoicePresetOptions();
+    return selected;
   }
 
   function isRussianUtterance(utterance) {
@@ -158,7 +196,7 @@
     return piperLoading;
   }
 
-  function stopPiperAudio() {
+  function stopNeuralAudio() {
     playbackToken += 1;
     queuedCount = 0;
     queue = Promise.resolve();
@@ -204,6 +242,9 @@
     const clean = cleanRussianText(text);
     if (!clean) return [];
     const key = normalizeVoice(voice);
+    if (key === 'liza') {
+      throw new Error('Лиза использует точный HeyGen Elizabeth Friendly; Piper не должен подменять этот голос.');
+    }
     const chunks = splitForSpeech(clean);
     const engine = await ensurePiper();
     const blobs = [];
@@ -221,38 +262,30 @@
     return blobs;
   }
 
-  async function systemFallback(text) {
+  async function speakExactLiza(text) {
     const clean = cleanRussianText(text);
     if (!clean) return;
-    await new Promise((resolve) => {
-      const fallback = new SpeechSynthesisUtterance(clean);
-      fallback.lang = 'ru-RU';
-      fallback.rate = 0.88;
-      fallback.pitch = 1;
-      const voices = synth.getVoices?.() || [];
-      const russian = voices.filter((voice) => String(voice.lang || '').toLowerCase().startsWith('ru'));
-      const priority = ['milena', 'katya', 'svetlana', 'irina', 'yuri', 'dmitry', 'pavel', 'google', 'microsoft'];
-      let selected = null;
-      for (const needle of priority) {
-        selected = russian.find((voice) => String(voice.name || '').toLowerCase().includes(needle));
-        if (selected) break;
-      }
-      if (!selected) selected = russian.find((voice) => voice.localService) || russian[0] || null;
-      if (selected) fallback.voice = selected;
-      fallback.onend = resolve;
-      fallback.onerror = resolve;
-      setStatus('Piper временно недоступен — включаю системный русский голос.');
-      nativeSpeak(fallback);
-    });
+    const provider = window.NovaExactLizaTTS;
+    if (provider && typeof provider.speak === 'function') {
+      return provider.speak(clean, {
+        voiceId: VOICES.liza.id,
+        locale: VOICES.liza.locale,
+        speed: 0.9
+      });
+    }
+    setStatus('🎙️ Лиза закреплена как HeyGen Elizabeth – Friendly. Точная озвучка не заменяется другим голосом; внешний HeyGen TTS не подключён к браузерной NOVA.');
+    throw new Error('Exact Liza provider is not connected. Automatic fallback is disabled.');
   }
 
-  async function speakNow(text, voice = 'irina') {
+  async function speakNow(text, voice = getDefaultVoice()) {
     const clean = cleanRussianText(text);
     if (!clean) return;
     const key = normalizeVoice(voice);
+    if (key === 'liza') return speakExactLiza(clean);
+
     const token = playbackToken;
     if (!userUnlockedAudio) getAudio();
-    setStatus(`Первый запуск ${VOICES[key].label} может скачать модель один раз. Платных кредитов нет.`);
+    setStatus(`Первый запуск Piper ${VOICES[key].label} может скачать модель один раз. Платных кредитов нет.`);
     try {
       const blobs = await synthesize(clean, key, (progress) => {
         if (token !== playbackToken || !progress?.total) return;
@@ -267,12 +300,13 @@
       if (token === playbackToken) setStatus(`✅ Piper ${VOICES[key].label} — готово.`);
     } catch (error) {
       if (token !== playbackToken) return;
-      console.warn('[NOVA Russian TTS] Piper fallback:', error);
-      await systemFallback(clean);
+      console.warn('[NOVA Russian TTS] selected voice failed:', error);
+      setStatus(`Не удалось загрузить Piper ${VOICES[key].label}. Голос НЕ заменён другим — попробуй ещё раз.`);
+      throw error;
     }
   }
 
-  function enqueueSpeak(text, voice = 'irina') {
+  function enqueueSpeak(text, voice = getDefaultVoice()) {
     const clean = cleanRussianText(text);
     if (!clean) return Promise.resolve();
     queuedCount += 1;
@@ -289,7 +323,7 @@
     return queue;
   }
 
-  function speak(text, voice = 'irina') {
+  function speak(text, voice = getDefaultVoice()) {
     return enqueueSpeak(text, voice);
   }
 
@@ -299,18 +333,22 @@
       text: cleanRussianText(turn?.text || '')
     })).filter((turn) => turn.text);
     for (let i = 0; i < normalized.length; i++) {
-      const turn = normalized[i];
-      await enqueueSpeak(turn.text, turn.voice);
+      await enqueueSpeak(normalized[i].text, normalized[i].voice);
     }
   }
 
   function patchedSpeak(utterance) {
     if (!isRussianUtterance(utterance)) return nativeSpeak(utterance);
-    enqueueSpeak(utterance?.text || '', 'irina');
+
+    // If the user explicitly picked an iPhone/Mac/system voice in NOVA Notebook,
+    // respect that exact system choice and never reroute it to Piper.
+    if (utterance?.voice) return nativeSpeak(utterance);
+
+    enqueueSpeak(utterance?.text || '', getDefaultVoice()).catch(() => {});
   }
 
   function patchedCancel() {
-    stopPiperAudio();
+    stopNeuralAudio();
     nativeCancel();
     setStatus('Русский TTS остановлен.');
   }
@@ -322,15 +360,51 @@
     try { synth.speak = patchedSpeak; synth.cancel = patchedCancel; } catch (_) {}
   }
 
+  function injectVoicePresetOptions() {
+    const selectedPreset = getDefaultVoice();
+    ['#novaTranslateVoice', '#novaYoutubeVoice'].forEach((selector) => {
+      const select = document.querySelector(selector);
+      if (!select) return;
+
+      if (!select.querySelector('option[value="nova:liza"]')) {
+        const liza = document.createElement('option');
+        liza.value = 'nova:liza';
+        liza.textContent = 'Лиза — Elizabeth Friendly · точный выбранный голос';
+        select.insertBefore(liza, select.firstChild?.nextSibling || null);
+      }
+      if (!select.querySelector('option[value="nova:irina"]')) {
+        const irina = document.createElement('option');
+        irina.value = 'nova:irina';
+        irina.textContent = 'Ирина — Piper · бесплатно на устройстве';
+        const liza = select.querySelector('option[value="nova:liza"]');
+        liza?.insertAdjacentElement('afterend', irina);
+      }
+
+      if (!select.dataset.novaVoicePresetBound) {
+        select.dataset.novaVoicePresetBound = '1';
+        select.addEventListener('change', () => {
+          if (select.value === 'nova:liza') setDefaultVoice('liza');
+          else if (select.value === 'nova:irina') setDefaultVoice('irina');
+        });
+      }
+
+      if (!select.value || select.value.startsWith('nova:')) {
+        select.value = selectedPreset === 'liza' ? 'nova:liza' : 'nova:irina';
+      }
+    });
+  }
+
   function addUiNote() {
     const modal = document.querySelector('#novaNotebookModal');
-    if (!modal || modal.querySelector('#novaNeuralTtsNote')) return;
+    if (!modal) return;
+    injectVoicePresetOptions();
+    if (modal.querySelector('#novaNeuralTtsNote')) return;
     const anchor = modal.querySelector('.nova-note-meta');
     if (!anchor) return;
     const note = document.createElement('div');
     note.id = 'novaNeuralTtsNote';
     note.className = 'nova-note-meta';
-    note.textContent = '🇷🇺 NOVA TTS: Piper Ирина — женский голос по умолчанию. Реплики идут по очереди без взаимного обрыва. Piper Денис доступен для мужских реплик.';
+    note.textContent = '🇷🇺 Голос фиксируется: Лиза = HeyGen Elizabeth – Friendly (точный выбранный профиль), Ирина = Piper ru_RU-irina-medium (бесплатно). NOVA больше не подменяет выбранный русский голос.';
     anchor.insertAdjacentElement('afterend', note);
   }
 
@@ -354,13 +428,20 @@
   } else {
     init();
   }
-  const observer = new MutationObserver(addUiNote);
+
+  const observer = new MutationObserver(() => {
+    addUiNote();
+    injectVoicePresetOptions();
+  });
   observer.observe(document.documentElement, { childList: true, subtree: true });
 
   window.NovaRussianTTS = Object.freeze({
     voices: VOICES,
-    defaultNarrator: 'irina',
+    exactLiza: VOICES.liza,
+    defaultNarrator: getDefaultVoice(),
     defaultMale: 'denis',
+    getDefaultVoice,
+    setDefaultVoice,
     cleanText: cleanRussianText,
     splitForSpeech,
     synthesize,
