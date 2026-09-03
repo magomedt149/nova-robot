@@ -1,5 +1,5 @@
 {
-  "id": "nova-chatgpt-studio-explainer-v1",
+  "id": "nova-chatgpt-studio-explainer-v2",
   "name": "NOVA / ChatGPT Studio Explainer",
   "savedFromReference": "ScreenRecording_08-28-2026 04-23-21_1.mp4",
   "savedAt": "2026-09-03",
@@ -40,48 +40,40 @@
     "type": "2D anime/chibi virtual presenter",
     "placement": "left side, approximately one-third of the visual width",
     "look": "blue-gray hair, bright cyan/blue eyes, dark navy outfit with LIZA name tag",
-    "motion": [
-      "subtle idle breathing/floating",
-      "blink animation",
-      "small mouth movement when speaking",
-      "occasional hand/arm presentation gesture",
-      "avoid excessive body motion"
-    ],
+    "motion": ["subtle idle breathing/floating", "blink animation", "small mouth movement when speaking", "occasional hand/arm presentation gesture", "avoid excessive body motion"],
     "continuity": "same face, hair, outfit, proportions and placement across all scenes"
+  },
+  "narrationLock": {
+    "defaultNarrator": "Irina",
+    "provider": "Piper / vits-web",
+    "voiceId": "ru_RU-irina-medium",
+    "freshTtsForEveryNewText": true,
+    "mustSpeakExactCurrentScript": true,
+    "pitchFactor": 1.0,
+    "formantFactor": 1.0,
+    "allowTimbreChange": false,
+    "allowOldAudioReuse": false,
+    "allowPhraseLooping": false,
+    "allowVoiceSubstitution": false
+  },
+  "freeRenderDefault": {
+    "enabled": true,
+    "paidAiCreditsAllowed": false,
+    "oneResultOnly": true,
+    "preferredTools": ["Piper ru_RU-irina-medium", "FFmpeg", "Remotion", "browser Canvas/SVG/CSS", "existing NOVA assets"],
+    "fallback": "If exact Piper Irina is unavailable locally, use one short GitHub Actions render with the official Piper Irina model; avoid extra runs or variants.",
+    "requiredQa": ["exact current script synthesized fresh", "no old audio sample reuse", "no repeated audio fragment >= about 1 second", "voice identity unchanged", "duration and codec verified"]
   },
   "sceneDesign": {
     "averageSceneSeconds": "4-6",
     "structure": "about 10-14 short visual chapters across a one-minute explainer",
-    "sceneTypes": [
-      "mission/title slide",
-      "radar/orbit diagram",
-      "music waveform and guitar card",
-      "game/world animation card",
-      "NOVA robot/network diagram",
-      "app/service list card",
-      "milestone/progress counter",
-      "final studio/brand statement"
-    ],
-    "transitions": [
-      "short crossfade",
-      "soft slide from 12-40 px equivalent",
-      "opacity + scale 0.97 to 1.00",
-      "line/graph draw-on",
-      "card reveal/stagger"
-    ],
+    "sceneTypes": ["mission/title slide", "radar/orbit diagram", "music waveform and guitar card", "game/world animation card", "NOVA robot/network diagram", "app/service list card", "milestone/progress counter", "final studio/brand statement"],
+    "transitions": ["short crossfade", "soft slide from 12-40 px equivalent", "opacity + scale 0.97 to 1.00", "line/graph draw-on", "card reveal/stagger"],
     "camera": "mostly locked 2D composition; no unnecessary cinematic pans, shakes or dramatic zooms"
   },
   "motionLanguage": {
     "easing": "smooth ease-out / cubic, no bouncy cartoon easing",
-    "uiAnimation": [
-      "progress bars filling",
-      "nodes pulsing",
-      "thin lines drawing",
-      "waveforms moving",
-      "icons/cards fading and sliding in",
-      "small glow pulses",
-      "number/count-up animation"
-    ],
+    "uiAnimation": ["progress bars filling", "nodes pulsing", "thin lines drawing", "waveforms moving", "icons/cards fading and sliding in", "small glow pulses", "number/count-up animation"],
     "readabilityRule": "motion supports comprehension; never animate every element at once"
   },
   "typography": {
@@ -91,21 +83,21 @@
     "captions": "small lower caption/status line when useful"
   },
   "audio": {
-    "speech": "Russian narration/host voice when requested",
-    "voicePriority": "voice must remain clearly intelligible",
+    "speech": "Russian narration by locked Piper Irina by default",
+    "voicePriority": "voice must remain clearly intelligible and acoustically unchanged between videos",
     "music": "optional subtle electronic/ambient bed only after speech is clear",
     "sfx": "soft interface ticks/whooshes only where they support a transition",
     "rule": "never let music or SFX cover speech"
   },
   "productionRecipe": [
-    "1. Write a concise Russian script and split it into 4-6 second chapters.",
-    "2. Build one reusable 16:9 master layout with fixed Liza presenter, brand bar and dark tech background.",
-    "3. Give each chapter one main visual idea only: card, diagram, waveform, metric, robot, app list, or photo.",
-    "4. Animate with restrained slide/fade/scale/line-draw motions and smooth cubic easing.",
-    "5. Keep Liza continuous; use blink/mouth/hand micro-animation rather than regenerating her every scene.",
-    "6. Add narration; align captions/graphic beats to spoken phrases.",
+    "1. Write the new Russian script/story from the current prompt; do not recycle narration from an older video.",
+    "2. Synthesize the entire current script fresh with Piper ru_RU-irina-medium, with no pitch/formant/timbre change.",
+    "3. Build one reusable 16:9 master layout with fixed Liza presenter, brand bar and dark tech background.",
+    "4. Give each chapter one main visual idea only and align visible text/graphics to what Irina actually says.",
+    "5. Animate with restrained slide/fade/scale/line-draw motions and smooth cubic easing.",
+    "6. Run audio-freshness diagnostics; reject reused or repeated fragments before accepting the video.",
     "7. Add subtle ambience/SFX only after voice timing is approved.",
-    "8. Export one clean 16:9 MP4 master; create 9:16 adaptation separately if requested."
+    "8. Export one clean MP4 and verify duration/codec; create another aspect ratio only when requested."
   ],
   "negativeRules": [
     "no random camera movement",
@@ -114,6 +106,9 @@
     "no dense paragraphs",
     "no fast unreadable transitions",
     "no changing Liza identity between scenes",
+    "no changing Irina voice identity, pitch, formants or timbre",
+    "no reuse of old Irina narration for new text",
+    "no looping narration fragments",
     "no watermarks",
     "no black screen-recording bars in the clean master",
     "no paid generation or automatic paid retry without explicit permission"
@@ -122,8 +117,8 @@
     "oneResult": true,
     "paidCreditsAllowed": false,
     "automaticPaidRetry": false,
-    "preferredTools": ["Remotion", "FFmpeg", "browser Canvas/SVG/CSS", "existing NOVA assets"],
-    "note": "Use deterministic motion graphics first because this reference is primarily a designed explainer, not a photorealistic text-to-video shot."
+    "preferredTools": ["Piper", "Remotion", "FFmpeg", "browser Canvas/SVG/CSS", "existing NOVA assets"],
+    "note": "Free deterministic NOVA Explainer is the default. GitHub Actions is only a fallback when exact Piper Irina cannot be run locally."
   },
-  "assistantCommandMeaning": "When Tumsoev says one of the trigger phrases, use this preset as the default look and workflow, then adapt only the script/topic/media while preserving the presenter, layout language, pacing, transitions and dark cyan technical branding."
+  "assistantCommandMeaning": "When Tumsoev asks for a NOVA lesson/story/explainer, create a new visual story from the current prompt and synthesize the current words fresh with the same locked Irina voice. Keep the process free by default and run audio freshness QA before delivery."
 }
