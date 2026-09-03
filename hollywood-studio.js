@@ -105,7 +105,7 @@
       await loadNOVAFeature('./nova-director-continuity-lock.js?v=32.0.0', 'nova-director-continuity-lock-loader');
       await loadNOVAFeature('./nova-video-pro.js?v=31.0.0', 'nova-video-pro-loader');
       await loadNOVAFeature('./nova-blender-skeleton-motion.js?v=32.3.0', 'nova-blender-skeleton-motion-loader');
-      await loadNOVAFeature('./nova-blender-skeleton-colab-v323.js?v=32.3.0', 'nova-blender-skeleton-colab-v323-loader');
+      await loadNOVAFeature('./nova-blender-skeleton-colab-v323.js?v=32.4.0', 'nova-blender-skeleton-colab-v323-loader');
       await loadNOVAFeature('./nova-walk-laugh-local.js?v=32.1.0', 'nova-walk-laugh-local-loader');
     } catch (error) {
       console.warn('[NOVA Video Studio] optional module load failed:', error);
