@@ -1,5 +1,5 @@
 {
-  "id": "nova-lessons-irina-voice-lock-v2",
+  "id": "nova-lessons-irina-voice-lock-v3",
   "scope": "all future NOVA lesson narration, stories and Russian speech",
   "enabled": true,
   "defaultVoice": "irina",
@@ -28,6 +28,16 @@
     "allowDemoPhraseReuse": false,
     "allowPhraseLooping": false,
     "allowTextParaphraseDuringTts": false
+  },
+  "audioFreshnessDiagnostics": {
+    "required": true,
+    "checkRenderedAudio": true,
+    "rejectSelfRepeatedFragments": true,
+    "rejectPreviousRenderAudioReuse": true,
+    "minimumRepeatedFragmentSeconds": 1.0,
+    "historyRenders": 24,
+    "historyMaxAgeDays": 90,
+    "mustPassBeforeRenderIsAccepted": true
   },
   "delivery": {
     "pace": "natural, calm, clear Russian",
@@ -62,6 +72,9 @@
     "For every new text, synthesize a fresh TTS track from that exact text using Irina.",
     "Never reuse an old demo phrase or old lesson audio as the narration for new text.",
     "Never loop or repeat a previous Irina phrase to fill video duration.",
+    "Before accepting a new render, run audio freshness diagnostics on the final rendered audio.",
+    "Reject a render when it contains a repeated audio fragment of about one second or longer inside itself.",
+    "Reject a render when its audio reuses a matching fragment of about one second or longer from recent previous renders.",
     "Never change Irina pitch, formants, timbre or voice identity.",
     "Never apply Liza-style or any voice-style transfer to Irina.",
     "Never substitute eSpeak, iPhone/macOS system voices or another TTS and call it Irina.",
