@@ -1,5 +1,5 @@
 {
-  "id": "nova-lesson-04-irina-tts-v1",
+  "id": "nova-lesson-04-irina-tts-v2",
   "lesson": 4,
   "title": "Как ответить на первый заказ",
   "language": "ru-RU",
@@ -7,39 +7,48 @@
     "provider": "Piper / vits-web",
     "voiceId": "ru_RU-irina-medium",
     "displayName": "Ирина",
+    "styleProfile": "nova-irina-liza-style-v2",
     "mustBeExactVoice": true,
     "allowSystemFallback": false,
     "allowAutomaticVoiceSubstitution": false
   },
   "script": "Урок четыре. Нашёл заказ? Покажи клиенту, что понял задачу, как её выполнишь и какой результат он получит.",
   "delivery": {
-    "targetDurationSeconds": 5,
-    "pace": "calm, clear, natural",
-    "speedFactorPost": 0.86,
-    "preferredSentencePauseSeconds": 0.20,
-    "preferredQuestionPauseSeconds": 0.24,
-    "maxInsertedPauseSeconds": 0.30
+    "voiceStartInVideoSeconds": 0.25,
+    "targetVoiceDurationSeconds": 4.8,
+    "pace": "connected, warm, calm explainer",
+    "minorPauseSeconds": 0.12,
+    "sentencePauseSeconds": 0.14,
+    "majorPauseSeconds": 0.16,
+    "maxPauseSeconds": 0.22,
+    "phraseEndingFadeMs": "35-70",
+    "phraseAttackFadeMs": "18-25"
   },
   "mastering": {
     "sampleRateHz": 48000,
     "channels": 1,
-    "highpassHz": 70,
-    "lowpassHz": 12000,
-    "warmthEq": "+1.1 dB around 180 Hz",
-    "clarityEq": "+0.7 dB around 3.2 kHz",
-    "deEssEq": "-1.2 dB around 6.5 kHz",
-    "compression": "gentle 2:1",
-    "integratedLufsTarget": -16,
-    "truePeakDbtp": -1.5,
-    "microFadeMs": 8
+    "pitchFactorFormantPreserved": 1.055,
+    "warmthEq": "+2.0 dB around 175 Hz; +0.7 dB around 520 Hz",
+    "clarityEq": "+0.25 dB around 3.0 kHz",
+    "deEssEq": "-1.35 dB around 6.2 kHz plus gentle de-esser",
+    "compression": "gentle 1.35:1, 32 ms attack, 230 ms release",
+    "integratedLufsTarget": -16.7,
+    "truePeakDbtp": -3.3,
+    "roomToneDbFSApprox": -58
+  },
+  "video": {
+    "durationSeconds": 10,
+    "resolution": "1280x720",
+    "fps": 30,
+    "visualPreset": "NOVA / ChatGPT Studio Explainer",
+    "ambience": "very subtle continuous technology room tone under speech and after narration"
   },
   "rules": [
-    "Use the real Piper ru_RU-irina-medium model only.",
-    "Never call espeak, an iPhone system voice, or any other fallback 'Irina'.",
-    "Do not leave long synthetic pauses between phrases.",
-    "Keep natural punctuation pauses approximately 0.20-0.30 seconds.",
-    "Use microfades at edit boundaries to prevent clicks.",
-    "Voice must stay clear and warmer than the old Liza reference mix.",
+    "Use real Piper ru_RU-irina-medium only.",
+    "Never call espeak, an iPhone system voice, or another fallback Irina.",
+    "Match the Liza reference by using short connected micro-pauses rather than hard silence.",
+    "Soften phrase endings; no clicks or abrupt waveform cuts.",
+    "Preserve Irina identity while matching Liza-style warmth, pitch range, tempo and pause feel.",
     "No paid TTS credits are required for this preset."
   ]
 }
