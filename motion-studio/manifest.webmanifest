@@ -1,7 +1,7 @@
 {
-  "name": "TUMSOEV Motion Studio",
-  "short_name": "Motion Studio",
-  "description": "Бесплатная браузерная студия анимации TUMSOEV",
+  "name": "TUMSOEV Motion + VFX Studio",
+  "short_name": "Motion + VFX",
+  "description": "Бесплатная браузерная Motion + VFX студия TUMSOEV: камера, дождь, дым, туман, искры, молния, огонь, обломки и взрыв",
   "start_url": "/motion-studio/",
   "scope": "/motion-studio/",
   "display": "standalone",
