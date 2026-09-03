@@ -1,0 +1,39 @@
+NOVA — АКТУАЛЬНАЯ ДИАГНОСТИКА TTS / ИРИНА
+Дата: 2026-09-03
+Репозиторий: magomedt149/nova-robot, ветка main
+
+1. ИРИНА — ЗАФИКСИРОВАНА
+[OK] Provider: Piper / vits-web.
+[OK] Voice ID: ru_RU-irina-medium.
+[OK] Locale: ru-RU.
+[OK] Pitch factor: 1.0 — изменение высоты запрещено.
+[OK] Formant factor: 1.0 — изменение тембра/формантов запрещено.
+[OK] Per-video voice variation: OFF.
+[OK] System fallback: OFF для Piper Irina.
+[OK] Automatic voice substitution: OFF.
+[OK] Demo/sample reuse: OFF — тестовые фразы не должны подставляться вместо текста нового видео.
+
+2. РУССКОЕ ПРОИЗНОШЕНИЕ
+[OK] Добавлен nova-russian-pronunciation.js.
+[OK] Все неизвестные русские слова передаются в русские G2P-правила Piper/espeak-ng; поэтому не нужен статический файл со всеми словоформами русского языка.
+[OK] Сверху добавлен NOVA-слой нормализации: кириллица, ё, числа, проценты, валюты, распространённые сокращения и названия NOVA/TUMSOEV/ChatGPT/TTS и др.
+[OK] Словарь исключений можно расширять без изменения модели и голоса Ирины.
+[OK] Нормализация изменяет только текст на входе; pitch, formants и voiceId не меняются.
+
+3. ДИАГНОСТИКА
+[OK] Добавлен nova-tts-diagnostics.js.
+[OK] Проверяются: provider, voiceId, locale, pitch=1, formants=1, запрет per-video variation, запрет fallback/substitution и наличие русского pronunciation layer.
+[OK] NovaRussianTTS сам лениво загружает pronunciation и diagnostics; отдельная ручная загрузка не требуется.
+[OK] Доступна неизменяемая voice signature: piper:ru_RU-irina-medium:ru-RU:pitch=1:formant=1.
+
+4. ЧТО БЫЛО НЕВЕРНО В ДИАГНОСТИКЕ 2026-09-02
+[STALE] Фраза «Piper Irina с системным fallback» больше не актуальна.
+[STALE] Утверждение, что русский speechSynthesis всегда принудительно отправляется в Piper Irina, больше не описывает текущую логику: явный системный голос уважается, а выбранный Piper не подменяется другим.
+[STALE] Старый тестовый аудиосэмпл не является озвучкой уроков и не должен использоваться как источник новых реплик.
+
+5. ПРАВИЛО ДЛЯ УРОКОВ NOVA
+Каждый новый урок/видео: новый точный текст -> русский pronunciation layer -> свежий Piper synthesis с ru_RU-irina-medium -> видео.
+Нельзя менять pitch/formants, нельзя повторно использовать старый demo WAV вместо новой реплики, нельзя выдавать другой голос за Ирину.
+
+6. РАСХОДЫ
+0 платных TTS credits. Piper работает бесплатно на устройстве; при первом запуске модель может один раз скачаться по интернету.
