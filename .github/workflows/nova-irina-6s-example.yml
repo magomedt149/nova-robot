@@ -12,6 +12,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
+      - name: Install render tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ffmpeg fonts-dejavu-core
       - name: Download Piper and Irina
         run: |
           set -euo pipefail
@@ -38,7 +42,6 @@ jobs:
           set -euo pipefail
           test -s NOVA_IRINA_FRESH_6S.mp4
           test -s NOVA_IRINA_FRESH_6S.wav
-          D=$(ffprobe -v error -show_entries format=duration -of default=nw=1:nk=1 NOVA_IRINA_FRESH_6S.mp4)
           python3 - <<'PY'
           import subprocess
           d=float(subprocess.check_output(['ffprobe','-v','error','-show_entries','format=duration','-of','default=nw=1:nk=1','NOVA_IRINA_FRESH_6S.mp4']).decode())
