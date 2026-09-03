@@ -89,6 +89,24 @@
         </select>
       </label>
 
+      <section class="preset-panel" aria-label="Готовые VFX пресеты">
+        <div class="preset-head">
+          <b>Готовые VFX пресеты</b>
+          <span>Нажми — настройки применятся и сразу появятся в предпросмотре.</span>
+        </div>
+        <div class="preset-grid-buttons">
+          <button class="preset-chip" type="button" data-preset="fire">🔥 <b>Огонь</b><small>5с • средняя</small></button>
+          <button class="preset-chip" type="button" data-preset="smoke">💨 <b>Дым</b><small>8с • средняя</small></button>
+          <button class="preset-chip" type="button" data-preset="sparks">✨ <b>Искры</b><small>5с • сильная</small></button>
+          <button class="preset-chip" type="button" data-preset="lightning">⚡ <b>Молния</b><small>5с • сильная</small></button>
+          <button class="preset-chip" type="button" data-preset="debris">🪨 <b>Обломки</b><small>8с • средняя</small></button>
+          <button class="preset-chip" type="button" data-preset="explosion">💥 <b>Взрыв</b><small>5с • сильная</small></button>
+          <button class="preset-chip" type="button" data-preset="fog">🌫️ <b>Туман</b><small>10с • лёгкая</small></button>
+          <button class="preset-chip" type="button" data-preset="rain">🌧️ <b>Дождь</b><small>10с • средняя</small></button>
+        </div>
+        <div id="presetInfo" class="preset-info">Выбери пресет. После этого силу, длительность, камеру и эффект можно изменить вручную.</div>
+      </section>
+
       <div class="actions">
         <button id="preview" class="secondary">▶ Предпросмотр</button>
         <button id="render">Сгенерировать видео</button>
