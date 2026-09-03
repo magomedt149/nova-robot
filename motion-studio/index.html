@@ -7,7 +7,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="apple-mobile-web-app-title" content="Motion Studio" />
-  <title>TUMSOEV Motion Studio — FREE</title>
+  <title>TUMSOEV Motion + VFX Studio — FREE</title>
   <link rel="manifest" href="./manifest.webmanifest" />
   <link rel="apple-touch-icon" href="/icon-192.png" />
   <link rel="stylesheet" href="./styles.css" />
@@ -16,11 +16,11 @@
   <main class="app">
     <section class="panel">
       <div class="eyebrow">TUMSOEV / FREE MOTION</div>
-      <h1>Motion Studio</h1>
-      <p class="lead">Анимация из текста прямо в браузере. Без кредитов.</p>
+      <h1>Motion + VFX Studio</h1>
+      <p class="lead">Motion, камера и локальные VFX прямо в браузере. Без кредитов.</p>
 
       <label>Опиши анимацию
-        <textarea id="prompt" rows="3" placeholder="Например: TUMSOEV, неон, 5 секунд, вертикально, приближение"></textarea>
+        <textarea id="prompt" rows="3" placeholder="Например: TUMSOEV, кино, 5 секунд, камера orbit, дождь и искры"></textarea>
       </label>
       <button id="applyPrompt" class="secondary">Применить описание</button>
 
@@ -57,6 +57,38 @@
         </label>
       </div>
 
+      <div class="grid2 vfx-grid">
+        <label>Камера
+          <select id="camera">
+            <option value="static" selected>Статичная</option>
+            <option value="push">Push-in</option>
+            <option value="orbit">Orbit</option>
+            <option value="handheld">Handheld</option>
+          </select>
+        </label>
+        <label>VFX
+          <select id="vfx">
+            <option value="none" selected>Без эффекта</option>
+            <option value="sparks">Искры</option>
+            <option value="smoke">Дым</option>
+            <option value="fog">Туман</option>
+            <option value="rain">Дождь</option>
+            <option value="lightning">Молния</option>
+            <option value="debris">Обломки</option>
+            <option value="fire">Огонь</option>
+            <option value="explosion">Взрыв</option>
+          </select>
+        </label>
+      </div>
+
+      <label>Сила VFX
+        <select id="intensity">
+          <option value="0.35">Лёгкая</option>
+          <option value="0.65" selected>Средняя</option>
+          <option value="1">Сильная</option>
+        </select>
+      </label>
+
       <div class="actions">
         <button id="preview" class="secondary">▶ Предпросмотр</button>
         <button id="render">Сгенерировать видео</button>
@@ -69,7 +101,7 @@
       <div class="canvasShell">
         <canvas id="canvas" width="1280" height="720"></canvas>
       </div>
-      <div class="badges"><span>NO API KEY</span><span>NO CREDITS</span><span>30 FPS</span></div>
+      <div class="badges"><span>NO API KEY</span><span>NO CREDITS</span><span>LOCAL VFX</span><span>30 FPS</span></div>
       <video id="video" controls playsinline class="video hidden"></video>
     </section>
   </main>
