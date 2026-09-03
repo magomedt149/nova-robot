@@ -4,6 +4,7 @@ const ASSETS = [
   '/motion-studio/index.html',
   '/motion-studio/styles.css',
   '/motion-studio/app.js',
+  '/motion-studio/director.js',
   '/motion-studio/manifest.webmanifest',
   '/icon-192.png',
   '/icon-512.png'
