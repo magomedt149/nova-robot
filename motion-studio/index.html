@@ -17,12 +17,25 @@
     <section class="panel">
       <div class="eyebrow">TUMSOEV / FREE MOTION</div>
       <h1>Motion + VFX Studio</h1>
-      <p class="lead">Motion, камера и локальные VFX прямо в браузере. Без кредитов.</p>
+      <p class="lead">Motion, камера, VFX и Auto Director прямо в браузере. Без кредитов.</p>
 
-      <label>Опиши анимацию
-        <textarea id="prompt" rows="3" placeholder="Например: TUMSOEV, кино, 5 секунд, камера orbit, дождь и искры"></textarea>
+      <label>Опиши сцену или анимацию
+        <textarea id="prompt" rows="3" placeholder="Например: двое в комнате, кино, 5 секунд, камера orbit, дождь"></textarea>
       </label>
       <button id="applyPrompt" class="secondary">Применить описание</button>
+
+      <div class="directorBox">
+        <div class="directorHead"><strong>NOVA Auto Director</strong><span>ZERO CREDIT</span></div>
+        <p>Автоматически собирает shot plan, blocking, объектив и continuity до платной генерации.</p>
+        <button id="autoDirector" class="directorBtn">🎬 Собрать сцену автоматически</button>
+        <div id="directorSummary" class="directorSummary">Ожидает описание сцены.</div>
+        <pre id="shotPlan" class="shotPlan hidden"></pre>
+        <div class="directorActions">
+          <button id="downloadScenePack" class="secondary" disabled>Scene Pack</button>
+          <button id="downloadBlender" class="secondary" disabled>Blender</button>
+          <button id="copyFinalPrompt" class="secondary" disabled>AI Prompt</button>
+        </div>
+      </div>
 
       <label>Главный текст<input id="title" value="TUMSOEV" maxlength="80"></label>
       <label>Подзаголовок<input id="subtitle" value="FREE MOTION STUDIO" maxlength="100"></label>
@@ -119,11 +132,12 @@
       <div class="canvasShell">
         <canvas id="canvas" width="1280" height="720"></canvas>
       </div>
-      <div class="badges"><span>NO API KEY</span><span>NO CREDITS</span><span>LOCAL VFX</span><span>30 FPS</span></div>
+      <div class="badges"><span>NO API KEY</span><span>NO CREDITS</span><span>AUTO DIRECTOR</span><span>LOCAL VFX</span><span>30 FPS</span></div>
       <video id="video" controls playsinline class="video hidden"></video>
     </section>
   </main>
   <script src="./app.js"></script>
+  <script src="./director.js"></script>
   <script>
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => navigator.serviceWorker.register('./service-worker.js').catch(() => {}));
