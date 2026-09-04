@@ -3,7 +3,7 @@
 
   if (window.NovaRussianPronunciation) return;
 
-  const VERSION = '1.0.0';
+  const VERSION = '1.2.0';
 
   // Piper/espeak-ng already supplies the general Russian grapheme-to-phoneme rules.
   // This layer handles text normalization and pronunciation exceptions before Piper.
@@ -25,19 +25,34 @@
   ]);
 
   const BRANDS = Object.freeze([
+    [/\bVideo\s+Studio\b/gi, 'видеостудия'],
+    [/\bMotion\s*\+?\s*VFX\s+Studio\b/gi, 'Моушн и визуальные эффекты студия'],
+    [/\bMotion\s+Studio\b/gi, 'Моушн Студио'],
+    [/\bAuto\s+Director\b/gi, 'Авто Директор'],
+    [/\bRun\s+all\b/gi, 'Ран ол'],
     [/\bNOVA\b/gi, 'НОВА'],
     [/\bTUMSOEV\b/gi, 'Тумсоев'],
     [/\bChatGPT\b/gi, 'чат джи-пи-ти'],
-    [/\bOpenAI\b/gi, 'оупен эй-ай'],
-    [/\bTTS\b/gi, 'ти-ти-эс'],
-    [/\bAI\b/gi, 'эй-ай'],
+    [/\bOpenAI\b/gi, 'Оупен Эй-Ай'],
+    [/\bTTS\b/gi, 'тэ-тэ-эс'],
+    [/\bAI\b/gi, 'искусственный интеллект'],
+    [/\bGPU\b/gi, 'джи-пи-ю'],
+    [/\bVFX\b/gi, 'ви-эф-икс'],
+    [/\bWanGP\b/gi, 'Ван Джи-Пи'],
+    [/\bFFmpeg\b/gi, 'эф-эф-эм-пэг'],
+    [/\bBlender\b/gi, 'Блендер'],
+    [/\bTailscale\b/gi, 'Тэйлскейл'],
+    [/\bColab\b/gi, 'Колаб'],
+    [/\bNetlify\b/gi, 'Нетлифай'],
+    [/\bGitHub\b/gi, 'Гитхаб'],
+    [/\bYouTube\b/gi, 'Ютуб'],
+    [/\biPhone\b/gi, 'айфон'],
+    [/\bPiper\b/gi, 'Пайпер'],
+    [/\bHTTPS\b/gi, 'эйч-ти-ти-пи-эс'],
+    [/\bAPI\b/gi, 'эй-пи-ай'],
     [/\bMP3\b/gi, 'эм-пэ-три'],
     [/\bWAV\b/gi, 'вэйв'],
-    [/\bMP4\b/gi, 'эм-пэ-фор'],
-    [/\bGitHub\b/gi, 'гитхаб'],
-    [/\bYouTube\b/gi, 'ютуб'],
-    [/\biPhone\b/gi, 'айфон'],
-    [/\bPiper\b/gi, 'пайпер']
+    [/\bMP4\b/gi, 'эм-пэ-четыре']
   ]);
 
   // Stable spelling exceptions. We prefer safe orthography (especially ё) rather than
@@ -140,6 +155,38 @@
     return integerToWords(Number(match));
   }
 
+  function normalizeTechnicalNumbers(text) {
+    return String(text || '')
+      .replace(/\b(\d+)\s*FPS\b/gi, (_, n) => `${integerToWords(Number(n))} кадров в секунду`)
+      .replace(/\b(\d+)\s*(?:GB|ГБ)\b/gi, (_, n) => `${integerToWords(Number(n))} гигабайт`)
+      .replace(/\b(\d+)\s*(?:MB|МБ)\b/gi, (_, n) => `${integerToWords(Number(n))} мегабайт`)
+      .replace(/\b(\d+)\s*(?:KB|КБ)\b/gi, (_, n) => `${integerToWords(Number(n))} килобайт`)
+      .replace(/\b(\d+)\s*(?:sec|secs|second|seconds|s)\b/gi, (_, n) => {
+        const value = Number(n);
+        return `${integerToWords(value)} ${pluralForm(value, 'секунда', 'секунды', 'секунд')}`;
+      })
+      .replace(/\b(\d+)\s*[:x×]\s*(\d+)\b/gi, (_, a, b) => `${integerToWords(Number(a))} на ${integerToWords(Number(b))}`)
+      .replace(/\b1080p\b/gi, 'фул эйч-ди')
+      .replace(/\b720p\b/gi, 'эйч-ди')
+      .replace(/\b4K\b/gi, 'четыре ка')
+      .replace(/\b2K\b/gi, 'два ка')
+      .replace(/\bv(\d+)\.(\d+)(?:\.(\d+))?\b/gi, (_, a, b, d) => {
+        const parts = [integerToWords(Number(a)), integerToWords(Number(b))];
+        if (d != null) parts.push(integerToWords(Number(d)));
+        return `версия ${parts.join(' точка ')}`;
+      });
+  }
+
+  function normalizeNarrationPunctuation(text) {
+    return String(text || '')
+      .replace(/\s*;\s*/g, '. ')
+      .replace(/\s*:\s+/g, ': ')
+      .replace(/\s*—\s*/g, ', ')
+      .replace(/\(([^()]{1,90})\)/g, ', $1, ')
+      .replace(/\s*,\s*,+/g, ', ')
+      .replace(/\s*\.\.\.\s*/g, '. ');
+  }
+
   function normalizeNumbers(text) {
     return String(text || '')
       .replace(/№\s*(\d+)/g, (_, n) => `номер ${replaceIntegerToken(n)}`)
@@ -175,7 +222,9 @@
     for (const [pattern, replacement] of BRANDS) text = text.replace(pattern, replacement);
     for (const [pattern, replacement] of PHRASES) text = text.replace(pattern, replacement);
 
+    text = normalizeTechnicalNumbers(text);
     text = normalizeNumbers(text);
+    text = normalizeNarrationPunctuation(text);
     text = applyWordDictionary(text);
 
     return text
@@ -191,7 +240,9 @@
     const samples = [
       'NOVA: урок 4. Клиент получит 10 секунд видео.',
       'TTS Ирины — 100% бесплатно. Ещё один тест.',
-      '№25, 2026 год, 3 проекта и 2 видео.'
+      '№25, 2026 год, 3 проекта и 2 видео.',
+      'GPU Render: WanGP + Blender + FFmpeg, 5 sec, 30 FPS, MP4, 9:16.',
+      'Video Studio без Colab и Run all.'
     ];
     const results = samples.map((input) => ({ input, output: normalize(input) }));
     return {
