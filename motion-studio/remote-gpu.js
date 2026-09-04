@@ -13,6 +13,7 @@ const DB_NAME='nova-remote-gpu-recovery-v1';
 const DB_STORE='state';
 const DB_KEY='current';
 const MAX_SOURCE_CACHE=1536*1024*1024;
+const FREE_LOCK=true;
 
 let pollTimer=0,recoveryTimer=0,lastJobId='',wakeLock=null,lastHealth=null,sendBusy=false,localRenderBusy=false;
 let pollFailures=0,recoveryAttempt=0,currentSourceFile=null;
@@ -111,22 +112,34 @@ async function releaseWakeLock(){
   try{if(wakeLock){await wakeLock.release();wakeLock=null}}catch(_){wakeLock=null}
 }
 async function sleep(ms){return new Promise(r=>setTimeout(r,ms))}
-function fullAutoEnabled(){return Boolean($('remoteAutoFinal')?.checked||localStorage.getItem(LS_FULLAUTO)==='1')}
+function fullAutoEnabled(){
+  if(FREE_LOCK)return false;
+  return Boolean($('remoteAutoFinal')?.checked||localStorage.getItem(LS_FULLAUTO)==='1');
+}
 function setFullAuto(enabled){
-  const on=Boolean(enabled);
+  const on=FREE_LOCK?false:Boolean(enabled);
   if($('remoteAutoFinal'))$('remoteAutoFinal').checked=on;
   localStorage.setItem(LS_FULLAUTO,on?'1':'0');
 }
 function autoRecoverEnabled(){
+  if(FREE_LOCK)return false;
   const stored=localStorage.getItem(LS_AUTORECOVER);
   return $('remoteAutoRecover')?.checked ?? (stored!=='0');
 }
 function setAutoRecover(enabled){
-  const on=Boolean(enabled);
+  const on=FREE_LOCK?false:Boolean(enabled);
   if($('remoteAutoRecover'))$('remoteAutoRecover').checked=on;
   localStorage.setItem(LS_AUTORECOVER,on?'1':'0');
-  setRecoveryStatus(on?'Auto Recovery: включён.':'Auto Recovery: выключен.',on?'ok':'');
+  setRecoveryStatus(on?'Auto Recovery: включён.':'FREE LOCK: автоматическое Remote GPU восстановление выключено.',on?'ok':'');
   if(on)requestRecoveryPersistence().catch(()=>{});
+}
+function confirmRemoteCompute(action='Remote GPU'){
+  if(!FREE_LOCK)return true;
+  const ok=window.confirm(
+    'NOVA FREE LOCK\n\n'+action+' использует удалённый GPU/worker. NOVA не может гарантировать, что внешний сервис бесплатный.\n\nПродолжай только если это твой бесплатный или личный GPU Worker. Платные API NOVA автоматически не запускает.\n\nПродолжить?'
+  );
+  if(!ok)setStatus('FREE LOCK: удалённый запуск отменён. Локальные функции остаются бесплатными.','ok');
+  return ok;
 }
 function recoveryMeta(){
   try{return JSON.parse(localStorage.getItem(LS_RECOVERY)||'null')}catch(_){return null}
@@ -606,17 +619,14 @@ async function runLocalEasy(){
   }
 }
 async function maybeAutoSend(){
-  if(!fullAutoEnabled()||localStorage.getItem(LS_JOB)||!endpoint()||!token()||!hasRenderableIntent())return false;
-  const meta=recoveryMeta();
-  if(meta&&['submitting','uploading','running','final','recovering','promoting'].includes(meta.phase))return false;
-  await send();return true;
+  // FREE LOCK: text changes, saved tokens and page restores never start remote compute.
+  return false;
 }
 async function easyAction(){
   const active=lastJobId||localStorage.getItem(LS_JOB);
   const meta=recoveryMeta();
   if(active||meta&&['recovering','uploading','running','final','promoting','submitting'].includes(meta.phase)){
     if(endpoint()&&token()){
-      setFullAuto(true);setAutoRecover(true);
       if(active){lastJobId=active;await holdWakeLock();poll(active);return}
       await recoverNow();return;
     }
@@ -624,11 +634,11 @@ async function easyAction(){
 
   if(isHeavyAiRequest()){
     if(endpoint()&&token()){
-      setFullAuto(true);setAutoRecover(true);
+      if(!confirmRemoteCompute('Тяжёлое AI‑видео'))return;
       const health=await connect({resume:false});
       if(health){
-        setEasyState('ПОСТОЯННЫЙ GPU','Тяжёлая AI‑задача отправляется на уже подключённый GPU Worker. Colab не нужен.','busy');
-        await send();return;
+        setEasyState('РУЧНОЙ GPU','Разрешение получено. Отправляю задачу только на указанный тобой Worker.','busy');
+        await send(true);return;
       }
     }
     document.getElementById('remoteAdvanced')?.setAttribute('open','');
@@ -650,17 +660,22 @@ function openColab(){
   location.assign(url);
   return true;
 }
-async function autoStart(){return easyAction()}
+async function autoStart(){
+  setStatus('FREE LOCK: FULL AUTO GPU отключён. Используй локальный рендер или ручную отправку с подтверждением.','ok');
+  return false;
+}
 async function testRender(){
+  if(!confirmRemoteCompute('Тест Remote GPU 1 секунда'))return;
   const health=await connect({resume:false});if(!health)return;
   if(!health.blender){setStatus('Для теста нужен Blender. Перезапусти Colab notebook.','error');return}
   const job={schema:'nova.remote-job.v1',source_prompt:'NOVA Remote GPU self test, clean blocking scene',engine:'blender',quality:'preview',duration:1,ratio:'9:16',fps:24,mirror_drive:false};
   await beginRecovery(job,null,'');
   await submitPreparedJob(job,null,'',{recovery:false});
 }
-async function send(){
+async function send(approved=false){
   if(sendBusy)return;
-  if(!endpoint()||!token()){setStatus('Сначала подключи Colab worker.','error');return}
+  if(!endpoint()||!token()){setStatus('Сначала подключи GPU worker.','error');return}
+  if(!approved&&!confirmRemoteCompute('Отправка задачи на Remote GPU'))return;
   saveConnection();
   const job=buildJob();
   const source=$('remoteSource')?.files?.[0]||currentSourceFile||null;
@@ -677,7 +692,7 @@ async function cancel(){
   localStorage.removeItem(LS_JOB);lastJobId='';await releaseWakeLock();await clearRecovery();setProgress(0);setStatus('Задание остановлено.','ok');
 }
 async function recoverNow(){
-  setAutoRecover(true);
+  if(!confirmRemoteCompute('Восстановление Remote GPU job'))return;
   if(!endpoint()||!token()){
     document.getElementById('remoteAdvanced')?.setAttribute('open','');
     setRecoveryStatus('Для старого Remote GPU job нужен сохранённый постоянный Worker URL + Token. Colab автоматически не открывается.','error');
@@ -693,18 +708,17 @@ async function restore(){
   if($('remoteToken'))$('remoteToken').value=localStorage.getItem(LS_TOKEN)||'';
   if($('remoteConnectCode'))$('remoteConnectCode').value='';
   const params=new URLSearchParams(location.search);
-  const autoParam=params.get('auto')==='1';
   const videoParam=params.get('video')==='1';
-  setFullAuto(autoParam||localStorage.getItem(LS_FULLAUTO)!=='0');
-  setAutoRecover(localStorage.getItem(LS_AUTORECOVER)!=='0');
+  setFullAuto(false);
+  setAutoRecover(false);
   const pending=localStorage.getItem(LS_PENDING)||'';
   if(pending&&$('prompt')){$('prompt').value=pending;localStorage.removeItem(LS_PENDING);$('applyPrompt')?.click()}
   const saved=localStorage.getItem(LS_JOB);
   const meta=recoveryMeta();
-  if(meta)setRecoveryStatus('Auto Recovery: найден незавершённый '+String(meta.job?.quality||'')+' job.','busy');
-  if(saved&&endpoint()&&token()){lastJobId=saved;await holdWakeLock();poll(saved)}
-  else if(meta&&endpoint()&&token()&&autoRecoverEnabled()){setTimeout(()=>recoverNow(),220)}
-  else if(autoParam||videoParam){setTimeout(()=>easyAction(),220)}
+  if(saved||meta){
+    setRecoveryStatus('FREE LOCK: найден старый Remote GPU job. Он НЕ продолжен автоматически. Нажми «Восстановить сейчас», если хочешь продолжить вручную.','busy');
+  }
+  if(videoParam)setEasyState('FREE LOCK','Команда перенесена в Motion Studio. Нажми «Сделать видео»: локальный рендер бесплатный; Remote GPU потребует отдельного подтверждения.','ok');
   refreshEasyState();
 }
 
@@ -721,45 +735,30 @@ $('remoteSource')?.addEventListener('change',async e=>{
   const meta=recoveryMeta();
   if(meta&&meta.sourceSize&&currentSourceFile){
     await beginRecovery(meta.job||buildJob(),currentSourceFile,currentSourceFile.name);
-    if(autoRecoverEnabled()&&endpoint()&&token())await recoverNow();
-  }else{maybeAutoSend().catch(()=>{})}
+    setRecoveryStatus('FREE LOCK: исходник выбран. Remote GPU не продолжен автоматически; при необходимости нажми «Восстановить сейчас».','ok');
+  }
 });
-$('prompt')?.addEventListener('change',()=>{maybeAutoSend().catch(()=>{})});
 $('remoteConnect')?.addEventListener('click',()=>connect());
 $('remotePasteCode')?.addEventListener('click',async()=>{
   try{setStatus('Читаю NOVA CONNECT CODE из буфера…','busy');await readClipboardCode();await connect()}
   catch(error){setStatus(error.message,'error')}
 });
-$('remoteSend')?.addEventListener('click',send);
+$('remoteSend')?.addEventListener('click',()=>send(false));
 $('remoteCancel')?.addEventListener('click',cancel);
 $('remoteUrl')?.addEventListener('change',saveConnection);
 $('remoteToken')?.addEventListener('change',saveConnection);
-$('remoteConnectCode')?.addEventListener('change',async e=>{
-  if(parseConnectCode(e.target.value)){setStatus('Connect Code принят. Проверяю GPU…','busy');await connect()}
+$('remoteConnectCode')?.addEventListener('change',e=>{
+  if(parseConnectCode(e.target.value))setStatus('Connect Code принят. FREE LOCK: нажми «Проверить GPU» вручную.','ok');
   else if(e.target.value.trim())setStatus('Не удалось прочитать NOVA CONNECT CODE.','error');
 });
-$('remoteConnectCode')?.addEventListener('paste',()=>setTimeout(async()=>{
+$('remoteConnectCode')?.addEventListener('paste',()=>setTimeout(()=>{
   const el=$('remoteConnectCode');
-  if(el&&parseConnectCode(el.value)){setStatus('Connect Code принят. Проверяю GPU…','busy');await connect()}
+  if(el&&parseConnectCode(el.value))setStatus('Connect Code принят. FREE LOCK: соединение не запускается автоматически.','ok');
 },0));
-window.addEventListener('online',()=>{refreshEasyState();if(autoRecoverEnabled()&&recoveryMeta())recoverNow().catch(()=>{})});
-window.addEventListener('pageshow',()=>{
-  refreshEasyState();
-  if(localStorage.getItem(LS_WAITING)==='1'){
-    tryClipboardReconnect().then(found=>{
-      if(!found&&endpoint()&&token())connect().catch(()=>{});
-    }).catch(()=>{});
-  }
-});
+window.addEventListener('online',()=>refreshEasyState());
+window.addEventListener('pageshow',()=>refreshEasyState());
 document.addEventListener('visibilitychange',()=>{
-  if(document.visibilityState==='visible'){
-    if(lastJobId||localStorage.getItem(LS_JOB))holdWakeLock();
-    if(autoRecoverEnabled()&&(recoveryMeta()||fullAutoEnabled())){
-      tryClipboardReconnect().then(found=>{
-        if(!found&&recoveryMeta())recoverNow().catch(()=>{});
-      }).catch(()=>{if(recoveryMeta())recoverNow().catch(()=>{})});
-    }
-  }
+  if(document.visibilityState==='visible'&&(lastJobId||localStorage.getItem(LS_JOB)))holdWakeLock();
 });
 restore().catch(()=>{});
 })();
