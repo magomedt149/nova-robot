@@ -22,7 +22,7 @@
   const SCENE_DEFAULTS = [
     { style: 'cinema', prompt: 'cinematic slow push-in, stable face and clothing, natural camera' },
     { style: 'motion', prompt: 'smooth motion control pan left to right, gentle push-in' },
-    { style: 'threed', prompt: 'subtle 3D depth parallax, preserve subject exactly' },
+    { style: 'threed', prompt: 'subtle 2.5D depth parallax, preserve subject exactly; not a true camera orbit' },
     { style: 'hologram', prompt: 'clean hologram light effect, preserve identity and composition' },
     { style: 'action', prompt: 'dynamic action camera, controlled energy, no identity change' }
   ];
@@ -421,6 +421,20 @@
     };
   }
 
+
+  function requestsTrue3D(prompt, style = '') {
+    const q = clean(prompt).toLowerCase();
+    const orbit = /360|full orbit|full circle|orbit|fly.?around|camera.*around|обл[её]т|вокруг|полный круг/.test(q);
+    const spatialMove = /crane|top.?down|arc left|arc right|кран|сверху|дуг/.test(q);
+    return orbit || spatialMove || (style === 'threed' && /camera path|3d camera|true 3d/.test(q));
+  }
+
+  function hasTrue3DControlVideo(source) {
+    if (source?.kind !== 'video') return false;
+    const name = String(source.file?.name || '').toLowerCase();
+    return /blender|true[_ -]?orbit|previs|camera[_ -]?path|blocking[_ -]?preview|reference[_ -]?control/.test(name);
+  }
+
   function drawCover(ctx, source, width, height, progress, motion, style, exactMode) {
     const sw = source.videoWidth || source.naturalWidth || width;
     const sh = source.videoHeight || source.naturalHeight || height;
@@ -529,6 +543,9 @@
       const style = options.style || 'motion';
       const prompt = clean(options.prompt || state.prompt || 'smooth cinematic motion');
       const negative = clean(options.negative || state.negative || '');
+      if (requestsTrue3D(prompt, style) && !hasTrue3DControlVideo(source)) {
+        throw new Error('TRUE 3D Orbit/360 нельзя создавать локальным pan/zoom или из отдельных картинок. Открой вкладку 3D → Blender Camera Bridge, создай Blender control MP4 и затем используй его как Video reference.');
+      }
       const exactMode = (options.refMode || state.refMode) === 'exact';
       const extend = Boolean(options.extend);
       const media = await loadMedia(source, options.start || 0, extend);
@@ -824,7 +841,7 @@
         <div class="nova-pro-panel"><b>3. Prompt / Render</b>
           <div class="nova-media-field"><label>Prompt</label><textarea id="novaProPrompt" placeholder="Keep the same person, same face, same clothes and background. Smooth cinematic dolly in…"></textarea></div>
           <div class="nova-media-field"><label>Negative prompt</label><textarea id="novaProNegative" placeholder="no face change, no extra people, no flicker, no warped hands, no text"></textarea></div>
-          <div class="nova-media-grid"><div class="nova-media-field"><label>Style</label><select id="novaProStyle"><option value="motion">Motion Control</option><option value="cinema">Cinema</option><option value="threed">3D look</option><option value="hologram">Hologram</option><option value="action">Action</option></select></div><div class="nova-media-field"><label>Ratio</label><select id="novaProRatio"><option value="9:16">9:16 Shorts</option><option value="16:9">16:9 Cinema</option></select></div></div>
+          <div class="nova-media-grid"><div class="nova-media-field"><label>Style</label><select id="novaProStyle"><option value="motion">Motion Control</option><option value="cinema">Cinema</option><option value="threed">2.5D look · не Orbit</option><option value="hologram">Hologram</option><option value="action">Action</option></select></div><div class="nova-media-field"><label>Ratio</label><select id="novaProRatio"><option value="9:16">9:16 Shorts</option><option value="16:9">16:9 Cinema</option></select></div></div>
           <div class="nova-media-field"><label>Duration</label><select id="novaProDuration"><option>3</option><option selected>5</option><option>8</option><option>10</option><option>15</option></select></div>
           <div class="nova-media-actions"><button class="nova-media-btn primary" id="novaProMotion" type="button">🎬 Motion</button><button class="nova-media-btn" id="novaProExtend" type="button">➕ Extend</button><button class="nova-media-btn warn" id="novaProStopRender" type="button">⏹ Stop render</button></div>
         </div>
@@ -918,7 +935,7 @@
   }
 
   window.NovaVideoPro = Object.freeze({
-    version: '31.1.1',
+    version: '31.2.0',
     renderLocalClip,
     renderTimeline,
     renderFive: () => renderFiveLegacy(),
@@ -926,6 +943,7 @@
     loadLibraryReference,
     clearTemporary,
     stop() { state.abort = true; },
+    requestsTrue3D,
     getState() { return { prompt: state.prompt, negative: state.negative, refMode: state.refMode, hasImage: Boolean(state.imageRef), hasVideo: Boolean(state.videoRef), rendering: state.rendering }; }
   });
 
