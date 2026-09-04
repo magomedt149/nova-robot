@@ -1445,8 +1445,11 @@
     resetPerformance();
     markAction('remoteGpu');
     const prompt = String(pendingPrompt || '').trim();
-    if (prompt && !/^(remote gpu|gpu render|google colab|colab|колаб|gpu рендер)$/i.test(prompt)) {
+    const bareGpuCommand = /^(?:запусти|открой|включи|покажи)?\s*(?:remote\s*gpu|gpu\s*(?:render|рендер)|google\s*colab|colab|колаб|рендер\s*(?:через\s*)?gpu|gpu)\s*[.!]?$/i.test(prompt);
+    if (prompt && !bareGpuCommand) {
       localStorage.setItem('nova.remoteGpu.pendingPrompt', prompt);
+    } else {
+      localStorage.removeItem('nova.remoteGpu.pendingPrompt');
     }
     localStorage.setItem('nova.remoteGpu.fullAuto', '1');
     window.location.assign('./motion-studio/?auto=1#remoteGpu');
