@@ -33,7 +33,7 @@
       credentials: 'same-origin'
     });
     const info = await response.json();
-    if (response.ok && /^\\d+\\.\\d+\\.\\d+$/.test(String(info?.pwa || info?.version || ''))) {
+    if (response.ok && /^\d+\.\d+\.\d+$/.test(String(info?.pwa || info?.version || ''))) {
       TARGET = String(info.pwa || info.version);
     }
   } catch (_) {}
