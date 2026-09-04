@@ -1,7 +1,7 @@
 (() => {
   'use strict';
 
-  const VERSION = '26.8.0';
+  const VERSION = '26.9.0';
   const $ = (selector) => document.querySelector(selector);
   const $$ = (selector) => [...document.querySelectorAll(selector)];
 
@@ -823,8 +823,16 @@
     if (!('speechSynthesis' in window)) return null;
     const desired = lang === 'en' ? 'en' : 'ru';
     const voices = window.speechSynthesis.getVoices();
-    return voices.find((voice) => voice.lang.toLowerCase().startsWith(desired) && /premium|enhanced|siri|google/i.test(voice.name))
-      || voices.find((voice) => voice.lang.toLowerCase().startsWith(desired))
+    const languageVoices = voices.filter((voice) => String(voice.lang || '').toLowerCase().startsWith(desired));
+
+    if (desired === 'ru') {
+      const irina = languageVoices.find((voice) => /(^|[^a-zа-яё])(irina|ирина)([^a-zа-яё]|$)/i.test(String(voice.name || '')))
+        || languageVoices.find((voice) => /irina|ирина/i.test(String(voice.name || '')));
+      if (irina) return irina;
+    }
+
+    return languageVoices.find((voice) => /premium|enhanced|siri|google/i.test(String(voice.name || '')))
+      || languageVoices[0]
       || null;
   }
 
@@ -2244,7 +2252,7 @@
 
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
-      navigator.serviceWorker.register('./service-worker.js?v=26.8.0')
+      navigator.serviceWorker.register('./service-worker.js?v=26.9.0')
         .then((registration) => registration.update())
         .catch(() => {});
     });
