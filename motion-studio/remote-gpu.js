@@ -79,7 +79,7 @@ function fullAutoEnabled(){return Boolean($('remoteAutoFinal')?.checked||localSt
 function setFullAuto(enabled){
   const on=Boolean(enabled);
   if($('remoteAutoFinal'))$('remoteAutoFinal').checked=on;
-  if(on)localStorage.setItem(LS_FULLAUTO,'1');else localStorage.removeItem(LS_FULLAUTO);
+  localStorage.setItem(LS_FULLAUTO,on?'1':'0');
 }
 function autoRecoverEnabled(){
   const stored=localStorage.getItem(LS_AUTORECOVER);
@@ -566,6 +566,11 @@ async function easyAction(){
     return;
   }
 
+  if(hasRenderableIntent()){
+    const source=$('remoteSource')?.files?.[0]||currentSourceFile||null;
+    currentSourceFile=source;
+    await beginRecovery(buildJob(),source,source?.name||'source.mp4');
+  }
   setEasyState('НУЖЕН COLAB','Открою Google Colab. Там только Run all → Copy NOVA CONNECT CODE. После возврата NOVA продолжит сама.','busy');
   openColab();
 }
@@ -616,7 +621,7 @@ async function restore(){
   if($('remoteToken'))$('remoteToken').value=localStorage.getItem(LS_TOKEN)||'';
   if($('remoteConnectCode'))$('remoteConnectCode').value='';
   const autoParam=new URLSearchParams(location.search).get('auto')==='1';
-  setFullAuto(autoParam||localStorage.getItem(LS_FULLAUTO)==='1');
+  setFullAuto(autoParam||localStorage.getItem(LS_FULLAUTO)!=='0');
   setAutoRecover(localStorage.getItem(LS_AUTORECOVER)!=='0');
   const pending=localStorage.getItem(LS_PENDING)||'';
   if(pending&&$('prompt')){$('prompt').value=pending;localStorage.removeItem(LS_PENDING);$('applyPrompt')?.click()}
@@ -666,8 +671,10 @@ window.addEventListener('online',()=>{refreshEasyState();if(autoRecoverEnabled()
 document.addEventListener('visibilitychange',()=>{
   if(document.visibilityState==='visible'){
     if(lastJobId||localStorage.getItem(LS_JOB))holdWakeLock();
-    if(autoRecoverEnabled()&&recoveryMeta()){
-      tryClipboardReconnect().then(found=>{if(!found)recoverNow().catch(()=>{})}).catch(()=>recoverNow().catch(()=>{}));
+    if(autoRecoverEnabled()&&(recoveryMeta()||fullAutoEnabled())){
+      tryClipboardReconnect().then(found=>{
+        if(!found&&recoveryMeta())recoverNow().catch(()=>{});
+      }).catch(()=>{if(recoveryMeta())recoverNow().catch(()=>{})});
     }
   }
 });
