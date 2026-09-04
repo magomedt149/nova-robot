@@ -18,7 +18,7 @@ NOVA — бесплатный браузерный ИИ-агент Тумсое�
 - компас, анимации NOVA, Тумсоева и лунной кошки;
 - Motion + VFX Studio: бесплатные локальные camera moves и эффекты дождя, дыма, тумана, искр, молнии, огня, обломков и взрыва;
 - NOVA Auto Director: из описания сцены автоматически создаёт shot plan, 3D blocking, объектив, camera path, continuity lock и финальный AI prompt; платные вызовы по умолчанию отключены;
-- Remote GPU / Google Colab: Motion + VFX Studio может отправить исходное видео и Scene Pack на временный Colab GPU, следить за прогрессом и вернуть готовый MP4 на телефон; большие видео грузятся по частям;
+- Remote GPU / Google Colab: умная кнопка **GPU Render** в NOVA открывает/возобновляет удалённый рендер, Motion Studio делает preflight, умеет выполнить 1-секундный Blender self-test, отправляет исходник по частям и возвращает готовый MP4 на телефон;
 - установка на главный экран как PWA.
 
 ## Remote GPU / Google Colab
@@ -45,6 +45,9 @@ NOVA on iPhone → chunked HTTPS upload → Colab GPU → Blender / FFmpeg / Wan
 - WanGP model/settings для каждого задания сохраняются в `WANGP_SETTINGS.json`, а прогресс и отмена передаются обратно в Motion Studio.
 - Готовый MP4 открывается по временной download-ticket ссылке: секретный worker Token не попадает в URL, а iPhone не обязан сначала держать весь MP4 в памяти как Blob.
 - Пока идёт upload/render, Motion Studio по возможности удерживает экран iPhone активным через Screen Wake Lock.
+- Протокол worker имеет версию и capability flags: Motion Studio определяет устаревшую Colab-сессию до отправки большого видео.
+- Кнопка **«Запустить Remote GPU»** возобновляет активный job, проверяет сохранённое подключение либо открывает актуальный Colab notebook. Кнопка **«Тест рендера 1 сек»** проверяет весь путь NOVA → worker → Blender → MP4 без тяжёлой WanGP-генерации.
+- Auto engine учитывает задачу и наличие исходного видео: WanGP для новой AI-генерации, Blender для VFX/3D/tracking, FFmpeg для encode/upscale. Перед запуском выполняется preflight и безопасный fallback, когда это возможно.
 - URL и Token действуют только пока живёт Colab runtime. После перезапуска Colab подключение нужно вставить заново.
 
 ## NOVA Auto Director / Blender
