@@ -1,8 +1,8 @@
 {
-  "name": "NOVA 26 — Free AI Agent",
-  "short_name": "NOVA 26",
-  "description": "Бесплатный локальный ИИ-агент NOVA с голосовым чатом, памятью, компасом и ежедневными уроками английского.",
-  "start_url": "./",
+  "name": "NOVA 27.1 — Free AI Agent",
+  "short_name": "NOVA 27.1",
+  "description": "NOVA — локальный AI-агент с Video Studio, Motion + VFX, голосом Ирина, памятью, компасом и уроками.",
+  "start_url": "./?pwa=27.1.0",
   "display": "standalone",
   "background_color": "#02030a",
   "theme_color": "#07132f",
