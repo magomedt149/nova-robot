@@ -7,7 +7,7 @@
   const $ = (selector, root = document) => root.querySelector(selector);
   const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
   const ACTIVE_KEY = 'nova.videoStudio.activeTab.v1';
-  const VALID_TABS = new Set(['create', 'editor', 'motion', 'audio', 'subtitles', 'library']);
+  const VALID_TABS = new Set(['create', '3d', 'editor', 'motion', 'audio', 'subtitles', 'library']);
   let activeTab = 'create';
   let editorView = 'timeline';
 
@@ -45,7 +45,7 @@
       #novaMediaModal .nova-media-card{width:min(1180px,100%);max-height:94vh}
       #novaMediaModal .nova-media-head h2{font-size:20px}
       #novaMediaModal .nova-media-tabs{display:none!important}
-      .nova-unified-tabs{display:grid;grid-template-columns:repeat(6,minmax(130px,1fr));gap:7px;margin:12px 0 14px;overflow-x:auto;padding-bottom:2px;scrollbar-width:none}
+      .nova-unified-tabs{display:grid;grid-template-columns:repeat(7,minmax(124px,1fr));gap:7px;margin:12px 0 14px;overflow-x:auto;padding-bottom:2px;scrollbar-width:none}
       .nova-unified-tabs::-webkit-scrollbar{display:none}
       .nova-unified-tab{min-height:46px;border:1px solid rgba(255,255,255,.12);border-radius:13px;padding:9px 10px;background:rgba(255,255,255,.055);color:#dce8ff;font-weight:850;white-space:nowrap}
       .nova-unified-tab.active{background:linear-gradient(135deg,#176fff,#7447ff);border-color:transparent;color:#fff;box-shadow:0 8px 28px rgba(55,92,255,.22)}
@@ -290,6 +290,11 @@
     $$('.nova-unified-tab').forEach((button) => button.classList.toggle('active', button.dataset.unifiedTab === next));
 
     if (next === 'create') selectUnderlying('pro');
+    else if (next === '3d') {
+      try { window.Nova3DDirector?.ensurePane?.(modal); } catch (_) {}
+      selectUnderlying('3d');
+      try { window.Nova3DDirector?.refresh?.(); } catch (_) {}
+    }
     else if (next === 'editor') setEditorView(editorView);
     else if (next === 'motion') {
       selectUnderlying('unified-motion');
@@ -315,6 +320,7 @@
     tabs.className = 'nova-unified-tabs';
     tabs.innerHTML = `
       <button class="nova-unified-tab" data-unified-tab="create" type="button">🎬 Создать видео</button>
+      <button class="nova-unified-tab" data-unified-tab="3d" type="button">🧊 3D Director</button>
       <button class="nova-unified-tab" data-unified-tab="editor" type="button">✂️ Редактор</button>
       <button class="nova-unified-tab" data-unified-tab="motion" type="button">✨ Motion+VFX</button>
       <button class="nova-unified-tab" data-unified-tab="audio" type="button">🎙️ Ирина и звук</button>
@@ -328,7 +334,7 @@
     tabs.insertAdjacentElement('afterend', free);
 
     $$('.nova-unified-tab', tabs).forEach((button) => button.addEventListener('click', () => setActive(button.dataset.unifiedTab)));
-    if (note?.classList?.contains('nova-media-note')) note.textContent = 'Единая видеостудия NOVA: создание, монтаж, Motion/VFX, Ирина, субтитры и локальная медиатека в одном окне.';
+    if (note?.classList?.contains('nova-media-note')) note.textContent = 'Единая видеостудия NOVA: создание, 3D Block/Camera Path, монтаж, Motion/VFX, Ирина, субтитры и локальная медиатека в одном окне.';
   }
 
   function wireLaunchers(modal) {
@@ -348,6 +354,7 @@
     const modal = $('#novaMediaModal');
     if (!modal) return false;
     ensureStyles();
+    try { window.Nova3DDirector?.ensurePane?.(modal); } catch (_) {}
     const title = $('.nova-media-head h2', modal);
     if (title) title.textContent = '🎬 NOVA VIDEO STUDIO';
     buildTabs(modal);
