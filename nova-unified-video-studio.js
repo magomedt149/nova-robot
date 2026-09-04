@@ -166,7 +166,7 @@
       }
       if (profile) {
         profile.textContent = voice === 'denis'
-          ? 'Денис: мужской ru-RU · iPhone male voice → Piper ru_RU-denis-medium fallback'
+          ? 'Денис: мужской ru-RU · Piper ru_RU-denis-medium основной · системный iPhone резерв'
           : 'Ирина: женский ru-RU · Piper ru_RU-irina-medium → female iPhone fallback';
       }
       status(`Выбран голос: ${voice === 'denis' ? 'Денис' : 'Ирина'}.`);
