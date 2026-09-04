@@ -1,1 +1,119 @@
-name: Daily YouTube Short - FREE\n\non:\n  schedule:\n    # 19:00 UTC = 12:00 Sacramento during PDT, 11:00 during PST.\n    - cron: '0 19 * * *'\n  workflow_dispatch:\n    inputs:\n      force:\n        description: 'Build even if queue date is not today'\n        required: false\n        default: 'false'\n  push:\n    branches:\n      - main\n      - youtube-daily-free-pipeline\n    paths:\n      - '.github/workflows/youtube-daily-short.yml'\n      - 'youtube/**'\n      - 'youtube_queue/**'\n\npermissions:\n  contents: write\n\nconcurrency:\n  group: youtube-daily-short\n  cancel-in-progress: false\n\njobs:\n  build-and-upload:\n    runs-on: ubuntu-latest\n    timeout-minutes: 15\n    steps:\n      - name: Checkout\n        uses: actions/checkout@v4\n\n      - name: Set up Python\n        uses: actions/setup-python@v5\n        with:\n          python-version: '3.11'\n\n      - name: Install free dependencies\n        run: |\n          sudo apt-get update\n          sudo apt-get install -y ffmpeg fonts-dejavu-core\n          python -m pip install --upgrade pip\n          python -m pip install pillow piper-tts google-api-python-client google-auth google-auth-httplib2\n\n      - name: Check queue date\n        id: queue\n        env:\n          FORCE: ${{ github.event.inputs.force || 'false' }}\n        run: |\n          python - <<'PY'\n          import json, os\n          from datetime import datetime\n          from zoneinfo import ZoneInfo\n          data=json.load(open('youtube_queue/today.json', encoding='utf-8'))\n          today=datetime.now(ZoneInfo('America/Los_Angeles')).date().isoformat()\n          force=os.environ.get('FORCE','false').lower()=='true'\n          ok=(data.get('date')==today) or force or os.environ.get('GITHUB_REF_NAME')=='youtube-daily-free-pipeline'\n          with open(os.environ['GITHUB_OUTPUT'],'a') as f:\n              f.write(f'ready={str(ok).lower()}\n')\n              f.write(f'queue_date={data.get("date","")}\n')\n          print('California today:', today, 'queue:', data.get('date'), 'ready:', ok)\n          PY\n\n      - name: Download locked Irina voice\n        if: steps.queue.outputs.ready == 'true'\n        run: python -m piper.download_voices ru_RU-irina-medium\n\n      - name: Render 9x16 Short with exact Irina\n        if: steps.queue.outputs.ready == 'true'\n        run: python youtube/render_short.py\n\n      - name: Check YouTube OAuth secrets\n        if: steps.queue.outputs.ready == 'true'\n        id: auth\n        env:\n          YOUTUBE_CLIENT_ID: ${{ secrets.YOUTUBE_CLIENT_ID }}\n          YOUTUBE_CLIENT_SECRET: ${{ secrets.YOUTUBE_CLIENT_SECRET }}\n          YOUTUBE_REFRESH_TOKEN: ${{ secrets.YOUTUBE_REFRESH_TOKEN }}\n        run: |\n          if [ -n "$YOUTUBE_CLIENT_ID" ] && [ -n "$YOUTUBE_CLIENT_SECRET" ] && [ -n "$YOUTUBE_REFRESH_TOKEN" ]; then\n            echo 'ready=true' >> "$GITHUB_OUTPUT"\n          else\n            echo 'ready=false' >> "$GITHUB_OUTPUT"\n            echo 'YouTube OAuth is not configured yet. Build artifact only; no upload.'\n          fi\n\n      - name: Upload to YouTube via official API\n        if: steps.queue.outputs.ready == 'true' && steps.auth.outputs.ready == 'true'\n        env:\n          YOUTUBE_CLIENT_ID: ${{ secrets.YOUTUBE_CLIENT_ID }}\n          YOUTUBE_CLIENT_SECRET: ${{ secrets.YOUTUBE_CLIENT_SECRET }}\n          YOUTUBE_REFRESH_TOKEN: ${{ secrets.YOUTUBE_REFRESH_TOKEN }}\n        run: python youtube/upload_youtube.py\n\n      - name: Save last uploaded marker\n        if: steps.queue.outputs.ready == 'true' && steps.auth.outputs.ready == 'true'\n        run: |\n          cp youtube_output/youtube_upload_result.json youtube_queue/last_uploaded.json\n          git config user.name 'nova-youtube-bot'\n          git config user.email 'actions@users.noreply.github.com'\n          git add youtube_queue/last_uploaded.json\n          git diff --cached --quiet || git commit -m 'Record daily YouTube upload'\n          git push\n\n      - name: Upload ready video package\n        if: steps.queue.outputs.ready == 'true'\n        uses: actions/upload-artifact@v4\n        with:\n          name: daily-youtube-short\n          path: |\n            youtube_output/short.mp4\n            youtube_output/thumbnail.jpg\n            youtube_output/metadata.json\n            youtube_output/youtube_upload_result.json\n          if-no-files-found: warn\n          retention-days: 2
+name: Daily YouTube Short - FREE
+
+on:
+  schedule:
+    - cron: '0 19 * * *'
+  workflow_dispatch:
+    inputs:
+      force:
+        description: 'Build even if queue date is not today'
+        required: false
+        default: false
+        type: boolean
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/youtube-daily-short.yml'
+      - 'youtube/**'
+      - 'youtube_queue/**'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: youtube-daily-short
+  cancel-in-progress: false
+
+jobs:
+  build-and-upload:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install free dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg fonts-dejavu-core
+          python -m pip install --upgrade pip
+          python -m pip install pillow piper-tts google-api-python-client google-auth google-auth-httplib2
+
+      - name: Check queue date
+        id: queue
+        env:
+          FORCE: ${{ inputs.force }}
+        run: |
+          python - <<'PY'
+          import json, os
+          from datetime import datetime
+          from zoneinfo import ZoneInfo
+          data = json.load(open('youtube_queue/today.json', encoding='utf-8'))
+          today = datetime.now(ZoneInfo('America/Los_Angeles')).date().isoformat()
+          force = os.environ.get('FORCE', 'false').lower() == 'true'
+          ok = (data.get('date') == today) or force
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
+              f.write('ready=' + str(ok).lower() + '\n')
+              f.write('queue_date=' + str(data.get('date', '')) + '\n')
+          print('California today:', today, 'queue:', data.get('date'), 'ready:', ok)
+          PY
+
+      - name: Download locked Irina voice
+        if: ${{ steps.queue.outputs.ready == 'true' }}
+        run: python -m piper.download_voices ru_RU-irina-medium
+
+      - name: Render 9x16 Short with exact Irina
+        if: ${{ steps.queue.outputs.ready == 'true' }}
+        run: python youtube/render_short.py
+
+      - name: Check YouTube OAuth secrets
+        if: ${{ steps.queue.outputs.ready == 'true' }}
+        id: auth
+        env:
+          YOUTUBE_CLIENT_ID: ${{ secrets.YOUTUBE_CLIENT_ID }}
+          YOUTUBE_CLIENT_SECRET: ${{ secrets.YOUTUBE_CLIENT_SECRET }}
+          YOUTUBE_REFRESH_TOKEN: ${{ secrets.YOUTUBE_REFRESH_TOKEN }}
+        run: |
+          if [ -n "$YOUTUBE_CLIENT_ID" ] && [ -n "$YOUTUBE_CLIENT_SECRET" ] && [ -n "$YOUTUBE_REFRESH_TOKEN" ]; then
+            echo 'ready=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'ready=false' >> "$GITHUB_OUTPUT"
+            echo 'YouTube OAuth is not configured yet. Build artifact only; no upload.'
+          fi
+
+      - name: Upload to YouTube via official API
+        if: ${{ steps.queue.outputs.ready == 'true' && steps.auth.outputs.ready == 'true' }}
+        env:
+          YOUTUBE_CLIENT_ID: ${{ secrets.YOUTUBE_CLIENT_ID }}
+          YOUTUBE_CLIENT_SECRET: ${{ secrets.YOUTUBE_CLIENT_SECRET }}
+          YOUTUBE_REFRESH_TOKEN: ${{ secrets.YOUTUBE_REFRESH_TOKEN }}
+        run: python youtube/upload_youtube.py
+
+      - name: Save last uploaded marker
+        if: ${{ steps.queue.outputs.ready == 'true' && steps.auth.outputs.ready == 'true' }}
+        run: |
+          cp youtube_output/youtube_upload_result.json youtube_queue/last_uploaded.json
+          git config user.name 'nova-youtube-bot'
+          git config user.email 'actions@users.noreply.github.com'
+          git add youtube_queue/last_uploaded.json
+          git diff --cached --quiet || git commit -m 'Record daily YouTube upload'
+          git push origin HEAD:main
+
+      - name: Upload ready video package
+        if: ${{ steps.queue.outputs.ready == 'true' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: daily-youtube-short
+          path: |
+            youtube_output/short.mp4
+            youtube_output/thumbnail.jpg
+            youtube_output/metadata.json
+            youtube_output/youtube_upload_result.json
+          if-no-files-found: warn
+          retention-days: 2
