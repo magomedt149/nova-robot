@@ -327,7 +327,7 @@
         return await translator.translate(clean);
       }
     } catch (_) {}
-    const response = await fetch('/.netlify/functions/translate', {
+    const response = await fetch('./__nova_free__/translate', {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: clean, from, to })
     });
     const data = await response.json().catch(() => ({}));
@@ -459,7 +459,7 @@
     if (!videoId) throw new Error('Неверная ссылка YouTube.');
     let timed = await youtubeTimedSegments(videoId);
     if (timed?.segments?.length) return timed;
-    const response = await fetch('/.netlify/functions/youtube-transcript', {
+    const response = await fetch('./__nova_free__/youtube-transcript', {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url })
     });
     const data = await response.json().catch(() => ({}));
