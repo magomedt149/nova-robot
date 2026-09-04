@@ -1,8 +1,8 @@
 {
-  "name": "NOVA 27.2 — FREE LOCK AI Agent",
-  "short_name": "NOVA 27.2",
-  "description": "NOVA — локальный AI-агент с Video Studio, Motion + VFX, голосом Ирина, памятью, компасом и уроками.",
-  "start_url": "./?pwa=27.2.1",
+  "name": "NOVA 27.5 — FREE LOCK AI Agent",
+  "short_name": "NOVA 27.5",
+  "description": "NOVA — локальный AI-агент с Video Studio, True Blender Camera, Motion + VFX, голосами, памятью, компасом и уроками.",
+  "start_url": "./?pwa=27.5.0",
   "display": "standalone",
   "background_color": "#02030a",
   "theme_color": "#07132f",
