@@ -1,6 +1,6 @@
 (()=>{
 const $=id=>document.getElementById(id);
-const LS_URL='nova.remoteGpu.url',LS_TOKEN='nova.remoteGpu.token',LS_JOB='nova.remoteGpu.job';
+const LS_URL='nova.remoteGpu.url',LS_TOKEN='nova.remoteGpu.token',LS_JOB='nova.remoteGpu.job',LS_FULLAUTO='nova.remoteGpu.fullAuto',LS_PENDING='nova.remoteGpu.pendingPrompt';
 let pollTimer=0,lastJobId='',wakeLock=null,lastHealth=null;
 
 function endpoint(){
@@ -58,6 +58,22 @@ function setProgress(value){
   const n=Math.max(0,Math.min(100,Number(value)||0));
   const bar=$('remoteProgressBar');if(bar)bar.style.width=n+'%';
   const label=$('remoteProgressText');if(label)label.textContent=Math.round(n)+'%';
+}
+function fullAutoEnabled(){
+  return Boolean($('remoteAutoFinal')?.checked||localStorage.getItem(LS_FULLAUTO)==='1');
+}
+function setFullAuto(enabled){
+  const on=Boolean(enabled);
+  if($('remoteAutoFinal'))$('remoteAutoFinal').checked=on;
+  if(on)localStorage.setItem(LS_FULLAUTO,'1');else localStorage.removeItem(LS_FULLAUTO);
+}
+function hasRenderableIntent(){
+  return Boolean(($('remoteSource')?.files?.[0])||(($('prompt')?.value||'').trim()));
+}
+async function maybeAutoSend(){
+  if(!fullAutoEnabled()||localStorage.getItem(LS_JOB)||!endpoint()||!token()||!hasRenderableIntent())return false;
+  await send();
+  return true;
 }
 function chosenEngine(){
   const raw=$('remoteEngine')?.value||'auto';
@@ -126,6 +142,7 @@ async function connect(){
       setStatus('Worker устарел. Перезапусти актуальный Colab notebook.','error');
       return null;
     }
+    setTimeout(()=>{maybeAutoSend().catch(()=>{})},0);
     return data;
   }catch(error){lastHealth=null;setStatus('Не подключено: '+error.message,'error');return null}
 }
@@ -146,7 +163,20 @@ async function poll(jobId){
     setProgress(data.progress||0);
     const state=data.status||'running';
     setStatus((data.message||state)+(data.engine?' • '+data.engine:''),state==='error'?'error':state==='completed'?'ok':'busy');
-    if(state==='completed'){localStorage.removeItem(LS_JOB);await releaseWakeLock();await downloadResult(jobId);return}
+    if(state==='completed'){
+      localStorage.removeItem(LS_JOB);
+      const quality=String(data.quality||'preview').toLowerCase();
+      if(fullAutoEnabled()&&quality==='preview'&&lastHealth?.capabilities?.preview_promote){
+        setStatus('Preview готов. FULL AUTO запускает Final без повторной загрузки…','busy');
+        try{
+          const promoted=await jsonFetch(endpoint()+'/jobs/'+encodeURIComponent(jobId)+'/promote',{method:'POST',headers:authHeaders()});
+          lastJobId=promoted.job_id;localStorage.setItem(LS_JOB,lastJobId);setProgress(0);poll(lastJobId);return;
+        }catch(error){
+          setStatus('Preview готов, но Final не запустился автоматически: '+error.message,'error');
+        }
+      }
+      await releaseWakeLock();await downloadResult(jobId);return
+    }
     if(state==='error'||state==='cancelled'){localStorage.removeItem(LS_JOB);await releaseWakeLock();return}
     if(state==='waiting_wangp'){
       const note=$('remoteHint');if(note)note.textContent='Подключена старая версия worker. Перезапусти актуальный Colab notebook: WanGP теперь работает через Python API автоматически.';
@@ -188,22 +218,25 @@ function openColab(){
   return Boolean(win);
 }
 async function autoStart(){
+  setFullAuto(true);
   const active=lastJobId||localStorage.getItem(LS_JOB);
   if(active&&endpoint()&&token()){
     lastJobId=active;
     await holdWakeLock();
-    setStatus('Возобновляю активный GPU-рендер…','busy');
+    setStatus('FULL AUTO: возобновляю активный GPU-рендер…','busy');
     poll(active);
     return;
   }
   if(endpoint()&&token()){
     const health=await connect();
     if(health){
-      setStatus('Remote GPU уже готов. Выбери видео и нажми «Отправить в Colab», либо запусти тест 1 сек.','ok');
+      if(await maybeAutoSend())return;
+      setStatus('FULL AUTO готов. Добавь описание или выбери видео — после этого отправка начнётся автоматически.','ok');
       return;
     }
   }
-  openColab();
+  const opened=openColab();
+  if(!opened)setStatus('Нужен один тап: нажми «Открыть NOVA Colab Worker», затем Run all. Остальное сделает FULL AUTO.','error');
 }
 async function preflight(engine,hasSource){
   const health=lastHealth||await connect();
@@ -288,12 +321,24 @@ function restore(){
   if($('remoteUrl'))$('remoteUrl').value=localStorage.getItem(LS_URL)||'';
   if($('remoteToken'))$('remoteToken').value=localStorage.getItem(LS_TOKEN)||'';
   if($('remoteConnectCode'))$('remoteConnectCode').value='';
+  const autoParam=new URLSearchParams(location.search).get('auto')==='1';
+  if(autoParam)setFullAuto(true);else setFullAuto(localStorage.getItem(LS_FULLAUTO)==='1');
+  const pending=localStorage.getItem(LS_PENDING)||'';
+  if(pending&&$('prompt')){
+    $('prompt').value=pending;
+    localStorage.removeItem(LS_PENDING);
+    $('applyPrompt')?.click();
+  }
   const saved=localStorage.getItem(LS_JOB);
-  if(saved&&endpoint()&&token()){lastJobId=saved;poll(saved)}
+  if(saved&&endpoint()&&token()){lastJobId=saved;holdWakeLock();poll(saved)}
+  else if(autoParam&&endpoint()&&token()){setTimeout(()=>autoStart(),180)}
 }
 
 $('remoteAutoStart')?.addEventListener('click',autoStart);
+$('remoteAutoFinal')?.addEventListener('change',e=>setFullAuto(e.target.checked));
 $('remoteTest')?.addEventListener('click',testRender);
+$('remoteSource')?.addEventListener('change',()=>{maybeAutoSend().catch(()=>{})});
+$('prompt')?.addEventListener('change',()=>{maybeAutoSend().catch(()=>{})});
 $('remoteConnect')?.addEventListener('click',connect);
 $('remotePasteCode')?.addEventListener('click',async()=>{
   try{
