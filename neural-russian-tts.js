@@ -6,7 +6,7 @@
 
   const PIPER_IMPORT = 'https://cdn.jsdelivr.net/npm/@diffusionstudio/vits-web@1.0.3/+esm';
   const PRESET_KEY = 'novaRussianVoicePreset:v1';
-  const MAX_CHUNK_CHARS = 260;
+  const MAX_CHUNK_CHARS = 190;
 
   const IRINA_LOCK = Object.freeze({
     provider: 'piper',
@@ -84,7 +84,7 @@
   async function ensurePronunciation() {
     if (window.NovaRussianPronunciation?.normalize) return window.NovaRussianPronunciation;
     if (!pronunciationLoading) {
-      pronunciationLoading = loadLocalScript('./nova-russian-pronunciation.js?v=28.2.0', 'novaPronunciation')
+      pronunciationLoading = loadLocalScript('./nova-russian-pronunciation.js?v=28.3.0', 'novaPronunciation')
         .then(() => window.NovaRussianPronunciation || null)
         .finally(() => { pronunciationLoading = null; });
     }
@@ -94,7 +94,7 @@
   async function ensureDiagnostics() {
     if (window.NovaTtsDiagnostics?.run) return window.NovaTtsDiagnostics;
     if (!diagnosticsLoading) {
-      diagnosticsLoading = loadLocalScript('./nova-tts-diagnostics.js?v=28.2.0', 'novaTtsDiagnostics')
+      diagnosticsLoading = loadLocalScript('./nova-tts-diagnostics.js?v=28.3.0', 'novaTtsDiagnostics')
         .then(() => window.NovaTtsDiagnostics || null)
         .finally(() => { diagnosticsLoading = null; });
     }
