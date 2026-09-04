@@ -1,10 +1,11 @@
-const CACHE = 'tumsoev-motion-vfx-studio-v3';
+const CACHE = 'tumsoev-motion-vfx-studio-v4';
 const ASSETS = [
   '/motion-studio/',
   '/motion-studio/index.html',
   '/motion-studio/styles.css',
   '/motion-studio/app.js',
   '/motion-studio/director.js',
+  '/motion-studio/remote-gpu.js',
   '/motion-studio/manifest.webmanifest',
   '/icon-192.png',
   '/icon-512.png'
