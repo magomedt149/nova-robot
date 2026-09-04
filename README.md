@@ -27,7 +27,7 @@ NOVA — бесплатный браузерный ИИ-агент Тумсое�
 
 `blender-colab/NOVA_Remote_GPU_Worker.ipynb`
 
-Ноутбук устанавливает Blender/FFmpeg/WanGP, запускает защищённый токеном NOVA worker и бесплатный Cloudflare Quick Tunnel. В конце он печатает **NOVA CONNECT CODE**: его можно вставить в одно поле Motion Studio, после чего URL и Token заполняются и проверяются автоматически.
+Ноутбук устанавливает Blender/FFmpeg/WanGP, запускает защищённый токеном NOVA worker и бесплатный Cloudflare Quick Tunnel. В конце он показывает кнопку **Copy NOVA CONNECT CODE**. В Motion Studio есть кнопка **«Вставить код из буфера и подключить»**, поэтому подключение на iPhone занимает два нажатия без ручного копирования URL/Token.
 
 Поток работы:
 
@@ -40,9 +40,11 @@ NOVA on iPhone → chunked HTTPS upload → Colab GPU → Blender / FFmpeg / Wan
 - На бесплатной T4 NOVA отдаёт приоритет облегчённым video-моделям (FastWan), генерирует экономно и только затем делает iPhone-совместимый H.264.
 - Если у модели нет video-input, NOVA автоматически извлекает первый кадр и использует image-to-video вместо падения с ошибкой.
 - Preview по умолчанию облегчённый; Final — 1080p H.264 после проверки preview.
-- Большие исходники передаются частями по 8 MB, чтобы не зависеть от лимита одного HTTP-запроса.
+- Большие исходники передаются частями по 8 MB с автоматическими повторами при кратком обрыве сети.
 - При включённом Drive mirror completed job копируется в `MyDrive/NOVA_RENDER_QUEUE/completed/`.
 - WanGP model/settings для каждого задания сохраняются в `WANGP_SETTINGS.json`, а прогресс и отмена передаются обратно в Motion Studio.
+- Готовый MP4 открывается по временной download-ticket ссылке: секретный worker Token не попадает в URL, а iPhone не обязан сначала держать весь MP4 в памяти как Blob.
+- Пока идёт upload/render, Motion Studio по возможности удерживает экран iPhone активным через Screen Wake Lock.
 - URL и Token действуют только пока живёт Colab runtime. После перезапуска Colab подключение нужно вставить заново.
 
 ## NOVA Auto Director / Blender
