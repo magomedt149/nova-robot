@@ -1,4 +1,4 @@
-const CACHE = 'nova-v40-free-runtime-20260904';
+const CACHE = 'nova-v41-unified-video-studio-20260904';
 const API_CACHE = 'nova-api-economy-v2';
 const METERED_NETLIFY_HOST = /(^|\\.)netlify\\.app$/i.test(self.location.hostname);
 const YOUTUBE_TTL_MS = 24 * 60 * 60 * 1000;
@@ -20,6 +20,23 @@ const CORE = [
   './neural-russian-tts.js',
   './nova-russian-pronunciation.js',
   './nova-tts-diagnostics.js',
+  './nova-ios-photo-save.js',
+  './nova-media-studio.js',
+  './nova-video-upgrade.js',
+  './nova-whisper.js',
+  './nova-whisper-worker.js',
+  './nova-voice-editor.js',
+  './nova-transcript-editor-sync.js',
+  './nova-multi-shorts.js',
+  './nova-media-library.js',
+  './nova-ios-output-actions.js',
+  './nova-video-pro.js',
+  './nova-unified-video-studio.js',
+  './motion-studio/index.html',
+  './motion-studio/styles.css',
+  './motion-studio/app.js',
+  './motion-studio/director.js',
+  './motion-studio/remote-gpu.js',
   './notebook-tools.js',
   './local-ai-worker.js',
   './nova-free-runtime.js',
