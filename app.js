@@ -882,15 +882,6 @@
       || null;
   }
 
-  function chooseClassicRobotVoice(lang) {
-    if (!('speechSynthesis' in window)) return null;
-    const desired = lang === 'en' ? 'en' : 'ru';
-    const voices = window.speechSynthesis.getVoices();
-    return voices.find((voice) => String(voice.lang || '').toLowerCase().startsWith(desired) && /premium|enhanced|siri|google/i.test(String(voice.name || '')))
-      || voices.find((voice) => String(voice.lang || '').toLowerCase().startsWith(desired))
-      || null;
-  }
-
   function cleanSpeechText(text) {
     return String(text ?? '')
       .replace(/\\(?:n|r|t)/gi, ' ')
@@ -909,10 +900,7 @@
     const speakerCharacter = options.character === 'owner' ? owner : robot;
     const cleanText = cleanSpeechText(text);
     const russian = String(lang).toLowerCase().startsWith('ru');
-    const classicCharacterVoice = (speakerCharacter === robot || speakerCharacter === owner)
-      && !options.voiceProfile
-      && options.forceNeuralVoice !== true;
-    const neuralRussian = russian && !classicCharacterVoice && options.forceSystemVoice !== true && window.NovaRussianTTS?.speak;
+    const neuralRussian = russian && options.forceSystemVoice !== true && window.NovaRussianTTS?.speak;
 
     const finish = () => {
       if (token !== speechToken) return;
@@ -950,9 +938,6 @@
       return;
     }
 
-    if (classicCharacterVoice) {
-      try { window.NovaRussianTTS?.stop?.(); } catch (_) {}
-    }
     window.speechSynthesis.cancel();
     speaking = true;
     pauseRecognitionForOutput();
@@ -966,9 +951,8 @@
     utterance.rate = options.rate || 0.94;
     utterance.pitch = options.pitch || 1.04;
     utterance.volume = 1;
-    const voice = classicCharacterVoice ? chooseClassicRobotVoice(lang) : chooseVoice(lang);
+    const voice = chooseVoice(lang);
     if (voice) utterance.voice = voice;
-    if (classicCharacterVoice || options.forceSystemVoice === true) utterance.__novaForceSystemVoice = true;
 
     utterance.onend = finish;
     utterance.onerror = finish;
@@ -2311,9 +2295,6 @@
     handleOwnerTap();
   });
 
-  // iPhone/PWA safety fallback: some Safari builds can swallow pointerup
-  // after a tiny finger movement. The following click path restores the T tap
-  // without firing twice when pointerup already succeeded.
   owner.addEventListener('click', (event) => {
     if (Date.now() - ownerPointerTapAt < 650) return;
     event.preventDefault();
