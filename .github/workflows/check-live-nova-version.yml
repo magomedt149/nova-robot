@@ -3,12 +3,8 @@ name: Check Live NOVA Version
 on:
   push:
     branches: [main]
-    paths-ignore:
-      - ".github/**"
-      - "README.md"
-      - "README.txt"
-      - "NOVA_DIAGNOSTICS_RU_2026-09-03.txt"
-      - "NOVA_IPHONE_UPDATE_METHOD.md"
+    paths:
+      - ".netlify-release"
   workflow_dispatch:
 
 permissions:
@@ -19,30 +15,35 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 6
     steps:
-      - name: Wait for exact Netlify production commit
+      - uses: actions/checkout@v4
+
+      - name: Wait for exact Netlify production release
         shell: bash
         env:
           BASE: https://dashing-otter-990b47.netlify.app
           SITE_ID: ae7fa0fb-e73d-413a-b122-7b9ff9419244
-          EXPECTED_VERSION: "27.1.0"
           EXPECTED_SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
+          EXPECTED_VERSION="$(python3 -c 'import json; print(json.load(open("version.json"))["version"])')"
+          DISPLAY_VERSION="${EXPECTED_VERSION%.*}"
+
           for i in $(seq 1 50); do
             meta="$(curl -fsSL --max-time 12 "https://api.netlify.com/api/v1/sites/$SITE_ID" 2>/dev/null || true)"
             live_sha="$(printf '%s' "$meta" | python3 -c 'import json,sys; d=json.load(sys.stdin); print((d.get("published_deploy") or {}).get("commit_ref") or "")' 2>/dev/null || true)"
             live_version="$(curl -fsSL --max-time 12 -H 'Cache-Control: no-cache' "$BASE/version.json?t=$(date +%s)" 2>/dev/null || true)"
-            echo "attempt=$i live_sha=$live_sha expected_sha=$EXPECTED_SHA"
+
+            echo "attempt=$i live_sha=$live_sha expected_sha=$EXPECTED_SHA version=$EXPECTED_VERSION"
+
             if [ "$live_sha" = "$EXPECTED_SHA" ] && echo "$live_version" | grep -q "\"version\"[[:space:]]*:[[:space:]]*\"$EXPECTED_VERSION\""; then
               html="$(curl -fsSL --max-time 12 -H 'Cache-Control: no-cache' "$BASE/?t=$(date +%s)")"
-              echo "$html" | grep -q "v27.1"
-              echo "$html" | grep -q "Motion + VFX"
+              echo "$html" | grep -q "v$DISPLAY_VERSION"
               echo "LIVE_NOVA_VERSION=$EXPECTED_VERSION"
               echo "LIVE_GIT_SHA=$live_sha"
-              echo "LIVE_MOTION_VFX=present"
               exit 0
             fi
             sleep 6
           done
-          echo "Netlify production did not reach exact GitHub SHA $EXPECTED_SHA." >&2
+
+          echo "Netlify production did not reach exact release SHA $EXPECTED_SHA." >&2
           exit 1
