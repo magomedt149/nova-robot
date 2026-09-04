@@ -458,7 +458,7 @@
   function loadMediaStudio() {
     if (document.querySelector('script[data-nova-media-studio]')) return;
     const script = document.createElement('script');
-    script.src = './nova-media-studio.js?v=28.0.0';
+    script.src = './nova-media-studio.js?v=28.0.1';
     script.defer = true;
     script.dataset.novaMediaStudio = '1';
     document.head.appendChild(script);
