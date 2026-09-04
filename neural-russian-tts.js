@@ -65,6 +65,7 @@
   let queue = Promise.resolve();
   let queuedCount = 0;
   let userUnlockedAudio = false;
+  let activeSystemSpeechCancel = null;
 
   function setStatus(message) {
     const studio = document.querySelector('#novaMediaStatus');
@@ -276,46 +277,65 @@
     });
   }
 
-  async function speakDenisSystem(text) {
-    if (!hasNativeSpeech || !nativeSpeak) throw new Error('Системный TTS недоступен.');
-    const voice = await waitForMaleRussianVoice();
-    if (!voice) throw new Error('Мужской русский системный голос на устройстве не найден.');
+  function cancelActiveSystemSpeech() {
+    const cancel = activeSystemSpeechCancel;
+    activeSystemSpeechCancel = null;
+    if (typeof cancel === 'function') {
+      try { cancel(); } catch (_) {}
+    }
+  }
+
+  function speakWithSystemVoice(text, voice, profile, label) {
+    if (!hasNativeSpeech || !nativeSpeak) return Promise.reject(new Error('Системный TTS недоступен.'));
     const clean = cleanRussianText(text);
-    if (!clean) return;
+    if (!clean) return Promise.resolve();
+
+    cancelActiveSystemSpeech();
+    nativeCancel?.();
+
     return new Promise((resolve, reject) => {
+      let settled = false;
       const utterance = new SpeechSynthesisUtterance(clean);
-      utterance.lang = String(voice.lang || DENIS_PROFILE.locale);
+      const finish = (error) => {
+        if (settled) return;
+        settled = true;
+        if (activeSystemSpeechCancel === cancelCurrent) activeSystemSpeechCancel = null;
+        utterance.onend = null;
+        utterance.onerror = null;
+        if (error) reject(error);
+        else resolve();
+      };
+      const cancelCurrent = () => finish();
+
+      utterance.lang = String(voice.lang || profile.locale);
       utterance.voice = voice;
-      utterance.rate = DENIS_PROFILE.rate;
-      utterance.pitch = DENIS_PROFILE.pitchFactor;
+      utterance.rate = profile.rate;
+      utterance.pitch = profile.pitchFactor;
       utterance.volume = 1;
-      utterance.onend = () => resolve();
-      utterance.onerror = (event) => reject(event?.error || new Error('Ошибка системного голоса Денис.'));
-      nativeCancel?.();
-      setStatus(`🔊 Денис · ${voice.name || 'мужской ru-RU'} · ${utterance.lang}`);
+      utterance.onend = () => finish();
+      utterance.onerror = (event) => {
+        const code = String(event?.error || '').toLowerCase();
+        if (code === 'canceled' || code === 'interrupted') return finish();
+        finish(event?.error instanceof Error ? event.error : new Error(`Ошибка системного голоса ${label}.`));
+      };
+
+      activeSystemSpeechCancel = cancelCurrent;
+      try { synth.resume?.(); } catch (_) {}
+      setStatus(`🔊 ${label} · ${voice.name || profile.locale} · ${utterance.lang}`);
       nativeSpeak(utterance);
     });
   }
 
+  async function speakDenisSystem(text) {
+    const voice = await waitForMaleRussianVoice();
+    if (!voice) throw new Error('Мужской русский системный голос на устройстве не найден.');
+    return speakWithSystemVoice(text, voice, DENIS_PROFILE, 'Денис');
+  }
+
   async function speakIrinaSystem(text) {
-    if (!hasNativeSpeech || !nativeSpeak) throw new Error('Системный TTS недоступен.');
     const voice = await waitForFemaleRussianVoice();
     if (!voice) throw new Error('Женский русский системный голос на устройстве не найден.');
-    const clean = cleanRussianText(text);
-    if (!clean) return;
-    return new Promise((resolve, reject) => {
-      const utterance = new SpeechSynthesisUtterance(clean);
-      utterance.lang = String(voice.lang || IRINA_RUNTIME_PROFILE.locale);
-      utterance.voice = voice;
-      utterance.rate = IRINA_RUNTIME_PROFILE.rate;
-      utterance.pitch = IRINA_RUNTIME_PROFILE.pitchFactor;
-      utterance.volume = 1;
-      utterance.onend = () => resolve();
-      utterance.onerror = (event) => reject(event?.error || new Error('Ошибка системного голоса Ирина.'));
-      nativeCancel?.();
-      setStatus(`🔊 Ирина · ${voice.name || 'женский ru-RU'} · ${utterance.lang}`);
-      nativeSpeak(utterance);
-    });
+    return speakWithSystemVoice(text, voice, IRINA_RUNTIME_PROFILE, 'Ирина');
   }
 
   function isRussianUtterance(utterance) {
@@ -594,6 +614,7 @@
 
   function patchedCancel() {
     stopNeuralAudio();
+    cancelActiveSystemSpeech();
     nativeCancel?.();
     setStatus('Русский TTS остановлен.');
   }
