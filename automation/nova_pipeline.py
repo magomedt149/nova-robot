@@ -304,7 +304,27 @@ def main():
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
     if args.scene_pack:
-        pack = json.loads(Path(args.scene_pack).read_text(encoding="utf-8"))
+        supplied = json.loads(Path(args.scene_pack).read_text(encoding="utf-8"))
+        prompt = str(supplied.get("source_prompt") or args.prompt)
+        duration = int(round(float(supplied.get("duration") or args.duration)))
+        ratio = str(supplied.get("format") or supplied.get("ratio") or args.ratio)
+        # Remote/UI scene packs may be intentionally lightweight. Rebuild the
+        # geometry/camera section from the prompt, then overlay safe UI choices.
+        pack = parse_prompt(prompt, duration, ratio)
+        for key in ("style", "motion", "vfx", "vfx_intensity", "lighting", "location"):
+            if key in supplied:
+                pack[key] = supplied[key]
+        supplied_camera = str(supplied.get("camera") or "").lower()
+        if supplied_camera and supplied_camera not in {"orbit", "orbit360"}:
+            pack["camera"] = supplied_camera
+        # Never downgrade an explicit 360/full-circle prompt to a generic orbit.
+        if re.search(r"360|полный круг|full circle|full orbit", prompt, re.I):
+            pack["camera"] = "orbit360"
+            pack["blocking"]["camera_path"] = {
+                "type": "circle", "degrees": 360.0, "radius": 6.0,
+                "height": 2.2, "target": [0, 0, 1.0]
+            }
+        pack["source_ui_pack"] = supplied
     else:
         pack = parse_prompt(args.prompt, args.duration, args.ratio)
     if args.asset:
