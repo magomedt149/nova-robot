@@ -249,10 +249,11 @@ async function connect({resume=true}={}){
     const protocol=data.protocol_version!=null?'P'+data.protocol_version:'old';
     const bits=[gpu,data.blender?'Blender ✓':'Blender —',data.ffmpeg?'FFmpeg ✓':'FFmpeg —',data.wangp_api_ready?'WanGP API ✓':'WanGP —',protocol,data.free_disk_gb!=null?data.free_disk_gb+' GB free':''];
     setStatus('Подключено: '+bits.filter(Boolean).join(' • '),'ok');
+    if(data.drive_mounted&&autoRecoverEnabled()&&$('remoteMirrorDrive'))$('remoteMirrorDrive').checked=true;
     if(Number(data.protocol_version||0)<3){
       setRecoveryStatus('Auto Recovery: worker старой версии. Для полного восстановления перезапусти актуальный notebook.','error');
     }else if(autoRecoverEnabled()){
-      setRecoveryStatus('Auto Recovery: worker '+(data.session_id||'')+' на связи.','ok');
+      setRecoveryStatus('Auto Recovery: worker '+(data.session_id||'')+' на связи.'+(data.drive_mounted?' Drive checkpoint включён.':''),'ok');
     }
     if(resume&&autoRecoverEnabled()&&recoveryMeta())setTimeout(()=>resumeOrRecover().catch(()=>{}),0);
     else setTimeout(()=>{maybeAutoSend().catch(()=>{})},0);
