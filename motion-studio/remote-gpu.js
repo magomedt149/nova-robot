@@ -10,7 +10,7 @@ const LS_RECOVERY='nova.remoteGpu.recovery';
 const DB_NAME='nova-remote-gpu-recovery-v1';
 const DB_STORE='state';
 const DB_KEY='current';
-const MAX_SOURCE_CACHE=600*1024*1024;
+const MAX_SOURCE_CACHE=1536*1024*1024;
 
 let pollTimer=0,recoveryTimer=0,lastJobId='',wakeLock=null,lastHealth=null,sendBusy=false;
 let pollFailures=0,recoveryAttempt=0,currentSourceFile=null;
@@ -23,12 +23,45 @@ function saveConnection(){
   localStorage.setItem(LS_TOKEN,token());
 }
 function setStatus(text,kind=''){
-  const el=$('remoteStatus');if(!el)return;
-  el.textContent=text;el.dataset.kind=kind;
+  const el=$('remoteStatus');if(el){el.textContent=text;el.dataset.kind=kind}
+  refreshEasyState();
 }
 function setRecoveryStatus(text,kind=''){
-  const el=$('remoteRecoveryStatus');if(!el)return;
-  el.textContent=text;el.dataset.kind=kind;
+  const el=$('remoteRecoveryStatus');if(el){el.textContent=text;el.dataset.kind=kind}
+  refreshEasyState();
+}
+function setEasyState(label,text,kind=''){
+  const state=$('remoteEasyState');if(state){state.textContent=label;state.dataset.kind=kind}
+  const body=$('remoteEasyText');if(body)body.textContent=text;
+}
+function refreshEasyState(){
+  const active=lastJobId||localStorage.getItem(LS_JOB);
+  const meta=recoveryMeta();
+  if(active){
+    setEasyState('РЕНДЕР ИДЁТ','Ничего нажимать не нужно. NOVA следит за GPU и вернёт готовый файл.','busy');
+    return;
+  }
+  if(meta&&['recovering','uploading','running','final','promoting','submitting'].includes(meta.phase)){
+    setEasyState('ВОССТАНОВЛЕНИЕ','NOVA хранит состояние работы и пытается продолжить её автоматически.','busy');
+    return;
+  }
+  if(lastHealth){
+    setEasyState('GPU ПОДКЛЮЧЁН','Добавь описание сцены или выбери видео. FULL AUTO запустит рендер сам.','ok');
+    return;
+  }
+  if(endpoint()&&token()){
+    setEasyState('ПРОВЕРКА GPU','Сохранённое подключение найдено. NOVA проверит его автоматически.','busy');
+    return;
+  }
+  setEasyState('1 НАЖАТИЕ','Нажми «ДЕЛАЙ ВСЁ САМ». NOVA попробует буфер обмена, сохранённое подключение и только потом откроет Colab.','');
+}
+async function requestRecoveryPersistence(){
+  try{
+    if(!navigator.storage?.persist)return false;
+    const granted=await navigator.storage.persist();
+    if(granted)setRecoveryStatus('Auto Recovery: iPhone разрешил постоянное локальное хранение recovery-cache.','ok');
+    return granted;
+  }catch(_){return false}
 }
 function setProgress(value){
   const n=Math.max(0,Math.min(100,Number(value)||0));
@@ -57,6 +90,7 @@ function setAutoRecover(enabled){
   if($('remoteAutoRecover'))$('remoteAutoRecover').checked=on;
   localStorage.setItem(LS_AUTORECOVER,on?'1':'0');
   setRecoveryStatus(on?'Auto Recovery: включён.':'Auto Recovery: выключен.',on?'ok':'');
+  if(on)requestRecoveryPersistence().catch(()=>{});
 }
 function recoveryMeta(){
   try{return JSON.parse(localStorage.getItem(LS_RECOVERY)||'null')}catch(_){return null}
@@ -111,7 +145,7 @@ async function canCacheSource(source){
   try{
     const estimate=await navigator.storage?.estimate?.();
     const free=(estimate?.quota||0)-(estimate?.usage||0);
-    if(free>0&&source.size>free*.65)return false;
+    if(free>0&&source.size>free*.55)return false;
   }catch(_){}
   return true;
 }
@@ -506,6 +540,36 @@ async function maybeAutoSend(){
   if(meta&&['submitting','uploading','running','final','recovering','promoting'].includes(meta.phase))return false;
   await send();return true;
 }
+async function easyAction(){
+  setFullAuto(true);setAutoRecover(true);
+  refreshEasyState();
+
+  const active=lastJobId||localStorage.getItem(LS_JOB);
+  if(active){
+    lastJobId=active;await holdWakeLock();poll(active);return;
+  }
+
+  if(endpoint()&&token()){
+    const health=await connect();
+    if(health){
+      if(recoveryMeta()){await resumeOrRecover();return}
+      if(hasRenderableIntent()){await maybeAutoSend();return}
+      setEasyState('GPU ГОТОВ','Опиши сцену сверху или выбери видео — дальше NOVA сделает всё сама.','ok');
+      return;
+    }
+  }
+
+  const clipboardConnected=await tryClipboardReconnect().catch(()=>false);
+  if(clipboardConnected){
+    if(recoveryMeta()){await resumeOrRecover();return}
+    if(hasRenderableIntent())await maybeAutoSend();
+    return;
+  }
+
+  setEasyState('НУЖЕН COLAB','Открою Google Colab. Там только Run all → Copy NOVA CONNECT CODE. После возврата NOVA продолжит сама.','busy');
+  openColab();
+}
+
 function openColab(){
   const link=$('remoteColabLink');
   const url=link?.href||'https://colab.research.google.com/github/magomedt149/nova-robot/blob/main/blender-colab/NOVA_Remote_GPU_Worker.ipynb';
@@ -514,20 +578,7 @@ function openColab(){
   setRecoveryStatus('Auto Recovery продолжит job автоматически после нового Connect Code.','busy');
   return Boolean(win);
 }
-async function autoStart(){
-  setFullAuto(true);setAutoRecover(true);
-  const active=lastJobId||localStorage.getItem(LS_JOB);
-  if(active&&endpoint()&&token()){lastJobId=active;await holdWakeLock();poll(active);return}
-  if(endpoint()&&token()){
-    const health=await connect();
-    if(health){
-      if(recoveryMeta()){await resumeOrRecover();return}
-      if(await maybeAutoSend())return;
-      setStatus('FULL AUTO готов. Добавь описание или выбери видео — отправка начнётся автоматически.','ok');return;
-    }
-  }
-  openColab();
-}
+async function autoStart(){return easyAction()}
 async function testRender(){
   const health=await connect({resume:false});if(!health)return;
   if(!health.blender){setStatus('Для теста нужен Blender. Перезапусти Colab notebook.','error');return}
@@ -575,8 +626,10 @@ async function restore(){
   if(saved&&endpoint()&&token()){lastJobId=saved;await holdWakeLock();poll(saved)}
   else if(meta&&endpoint()&&token()&&autoRecoverEnabled()){setTimeout(()=>recoverNow(),220)}
   else if(autoParam&&endpoint()&&token()){setTimeout(()=>autoStart(),220)}
+  refreshEasyState();
 }
 
+$('remoteEasyAction')?.addEventListener('click',easyAction);
 $('remoteAutoStart')?.addEventListener('click',autoStart);
 $('remoteAutoFinal')?.addEventListener('change',e=>setFullAuto(e.target.checked));
 $('remoteAutoRecover')?.addEventListener('change',e=>setAutoRecover(e.target.checked));
@@ -584,6 +637,7 @@ $('remoteRecoverNow')?.addEventListener('click',recoverNow);
 $('remoteTest')?.addEventListener('click',testRender);
 $('remoteSource')?.addEventListener('change',async e=>{
   currentSourceFile=e.target.files?.[0]||null;
+  refreshEasyState();
   const meta=recoveryMeta();
   if(meta&&meta.sourceSize&&currentSourceFile){
     await beginRecovery(meta.job||buildJob(),currentSourceFile,currentSourceFile.name);
@@ -608,7 +662,7 @@ $('remoteConnectCode')?.addEventListener('paste',()=>setTimeout(async()=>{
   const el=$('remoteConnectCode');
   if(el&&parseConnectCode(el.value)){setStatus('Connect Code принят. Проверяю GPU…','busy');await connect()}
 },0));
-window.addEventListener('online',()=>{if(autoRecoverEnabled()&&recoveryMeta())recoverNow().catch(()=>{})});
+window.addEventListener('online',()=>{refreshEasyState();if(autoRecoverEnabled()&&recoveryMeta())recoverNow().catch(()=>{})});
 document.addEventListener('visibilitychange',()=>{
   if(document.visibilityState==='visible'){
     if(lastJobId||localStorage.getItem(LS_JOB))holdWakeLock();
