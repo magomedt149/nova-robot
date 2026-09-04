@@ -1,7 +1,7 @@
 (() => {
   'use strict';
 
-  const VERSION = '26.7.0';
+  const VERSION = '26.8.0';
   const $ = (selector) => document.querySelector(selector);
   const $$ = (selector) => [...document.querySelectorAll(selector)];
 
@@ -1455,8 +1455,7 @@
     } else {
       localStorage.removeItem('nova.remoteGpu.pendingPrompt');
     }
-    localStorage.setItem('nova.remoteGpu.fullAuto', '1');
-    window.location.assign('./motion-studio/?auto=1#remoteGpu');
+    window.location.assign('./motion-studio/?video=1#remoteGpu');
   }
 
   function performCatScene() {
@@ -2245,7 +2244,7 @@
 
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
-      navigator.serviceWorker.register('./service-worker.js?v=26.7.0')
+      navigator.serviceWorker.register('./service-worker.js?v=26.8.0')
         .then((registration) => registration.update())
         .catch(() => {});
     });
