@@ -1,7 +1,7 @@
 (() => {
   'use strict';
 
-  const VERSION = '27.3.1';
+  const VERSION = '27.5.0';
   const $ = (selector) => document.querySelector(selector);
   const $$ = (selector) => [...document.querySelectorAll(selector)];
 
