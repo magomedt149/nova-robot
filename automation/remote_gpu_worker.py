@@ -49,7 +49,7 @@ WANGP_SESSION_LOCK = threading.Lock()
 WANGP_JOBS: dict[str, Any] = {}
 DOWNLOAD_TICKETS: dict[str, dict[str, Any]] = {}
 DOWNLOAD_TICKET_TTL = int(os.environ.get("NOVA_REMOTE_DOWNLOAD_TTL", "600"))
-WORKER_VERSION = "1.2.0"
+WORKER_VERSION = "1.3.0"
 PROTOCOL_VERSION = 2
 
 app = FastAPI(title="NOVA Remote GPU Worker", version="1.0")
@@ -727,6 +727,7 @@ async def health(request: Request):
             "chunked_upload": True,
             "download_ticket": True,
             "preview_promote": True,
+            "full_auto": True,
             "blender": command_exists("blender"),
             "ffmpeg": command_exists("ffmpeg"),
             "wangp": (WANGP_ROOT / "shared" / "api.py").is_file(),
