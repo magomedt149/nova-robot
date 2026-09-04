@@ -23,8 +23,20 @@
 </main>
 <script>
 (async () => {
-  const TARGET = '27.1.0';
+  const FALLBACK_TARGET = '27.1.0';
   const state = document.getElementById('state');
+  let TARGET = FALLBACK_TARGET;
+
+  try {
+    const response = await fetch('./version.json?nova_version=' + Date.now(), {
+      cache: 'no-store',
+      credentials: 'same-origin'
+    });
+    const info = await response.json();
+    if (response.ok && /^\\d+\\.\\d+\\.\\d+$/.test(String(info?.pwa || info?.version || ''))) {
+      TARGET = String(info.pwa || info.version);
+    }
+  } catch (_) {}
   const set = (text) => { state.textContent = text; };
 
   try {
