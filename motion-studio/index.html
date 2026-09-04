@@ -121,8 +121,8 @@
       </section>
 
       <section id="remoteGpu" class="remote-gpu-panel" aria-label="Удалённый GPU Google Colab">
-        <div class="remote-gpu-head"><strong>✨ NOVA VIDEO AUTO</strong><span>FREE GPU</span></div>
-        <p>Опиши видео сверху, при необходимости выбери исходник и нажми одну кнопку. NOVA сама решит, нужен ли WanGP, Blender или FFmpeg.</p>
+        <div class="remote-gpu-head"><strong>✨ NOVA VIDEO AUTO</strong><span>NO COLAB</span></div>
+        <p>Обычный режим делает видео прямо на iPhone: без Colab, без Run all и без подключения GPU. Тяжёлый AI‑рендер вынесен в дополнительные настройки.</p>
 
         <div class="remote-easy-card">
           <div class="remote-easy-top"><b>Простой режим</b><span id="remoteEasyState">ГОТОВ К ЗАПУСКУ</span></div>
@@ -130,9 +130,8 @@
           <div id="remoteEasyText" class="remote-easy-text">Нажми один раз. NOVA проверит сохранённый GPU, попробует восстановить незавершённую работу или откроет Colab, если новой сессии ещё нет.</div>
           <div id="remoteSteps" class="remote-steps" aria-label="Этапы рендера">
             <span data-step="input" class="active">1 · Задача</span>
-            <span data-step="gpu">2 · GPU</span>
-            <span data-step="preview">3 · Preview</span>
-            <span data-step="final">4 · Final</span>
+            <span data-step="render">2 · Рендер</span>
+            <span data-step="final">3 · Готово</span>
           </div>
           <label class="remote-source-easy">Видео, если оно нужно для задачи
             <input id="remoteSource" type="file" accept="video/mp4,video/quicktime,video/webm,video/x-matroska,video/*">
@@ -145,10 +144,10 @@
         <a id="remoteResult" class="download hidden">Открыть готовый MP4</a>
 
         <details id="remoteAdvanced" class="remote-advanced">
-          <summary>Дополнительные настройки</summary>
+          <summary>Тяжёлое AI‑видео / постоянный GPU — необязательно</summary>
           <button id="remoteStudioToggle" class="secondary remote-studio-toggle" type="button">🎛️ Показать все настройки студии</button>
           <div class="remote-advanced-body">
-            <a id="remoteColabLink" class="remote-colab-link" href="https://colab.research.google.com/github/magomedt149/nova-robot/blob/main/blender-colab/NOVA_Remote_GPU_Worker.ipynb" target="_blank" rel="noopener">🚀 Открыть NOVA Colab Worker</a>
+            <p class="remote-advanced-note">Для обычного Motion/VFX этот блок не нужен. Для генеративного AI‑видео можно один раз подключить постоянный NOVA GPU Worker — он работает без Run all при автозапуске.</p>
             <div class="remote-smart-actions">
               <button id="remoteAutoStart" type="button">🤖 FULL AUTO GPU</button>
               <button id="remoteTest" class="secondary" type="button">🧪 Тест рендера 1 сек</button>
@@ -196,6 +195,11 @@
             </div>
             <div id="remoteHint" class="remote-hint">Обычно эти настройки трогать не нужно — простой режим делает всё сам.</div>
             <button id="remoteRecoverNow" class="secondary remote-recover-now" type="button">♻️ Восстановить сейчас</button>
+            <details class="remote-colab-fallback">
+              <summary>Резервный Colab — только если нужен</summary>
+              <a id="remoteColabLink" class="remote-colab-link" href="https://colab.research.google.com/github/magomedt149/nova-robot/blob/main/blender-colab/NOVA_Remote_GPU_Worker.ipynb" target="_blank" rel="noopener">Открыть старый Colab fallback</a>
+              <small>Это резервный ручной вариант. В обычном сценарии NOVA его не открывает.</small>
+            </details>
           </div>
         </details>
       </section>
