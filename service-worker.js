@@ -1,4 +1,4 @@
-const CACHE = 'nova-v61-true-blender-orbit-20260904';
+const CACHE = 'nova-v62-blender-camera-bridge-20260904';
 const API_CACHE = 'nova-api-economy-v2';
 const METERED_NETLIFY_HOST = /(^|\\.)netlify\\.app$/i.test(self.location.hostname);
 const YOUTUBE_TTL_MS = 24 * 60 * 60 * 1000;
@@ -32,6 +32,7 @@ const CORE = [
   './nova-ios-output-actions.js',
   './nova-video-pro.js',
   './nova-3d-director.js',
+  './nova-blender-camera.js',
   './nova-unified-video-studio.js',
   './motion-studio/index.html',
   './motion-studio/styles.css',
