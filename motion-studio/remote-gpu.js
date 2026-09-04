@@ -631,11 +631,13 @@ async function easyAction(){
 function openColab(){
   const link=$('remoteColabLink');
   const url=link?.href||'https://colab.research.google.com/github/magomedt149/nova-robot/blob/main/blender-colab/NOVA_Remote_GPU_Worker.ipynb';
-  const win=window.open(url,'_blank','noopener');
   setWaitingColab(true);
-  setStatus('Colab открыт. Нажми Runtime → Run all, затем кнопку Copy & Return. После возврата NOVA продолжит сама.','busy');
-  setRecoveryStatus('Auto Recovery продолжит job автоматически после нового Connect Code.','busy');
-  return Boolean(win);
+  setStatus('Открываю Google Colab. Там только Run all → COPY & RETURN TO NOVA.','busy');
+  setRecoveryStatus('После возврата NOVA сама попробует подключиться и продолжить job.','busy');
+  const win=window.open(url,'_blank');
+  if(win)return true;
+  location.assign(url);
+  return true;
 }
 async function autoStart(){return easyAction()}
 async function testRender(){
@@ -685,7 +687,7 @@ async function restore(){
   if(meta)setRecoveryStatus('Auto Recovery: найден незавершённый '+String(meta.job?.quality||'')+' job.','busy');
   if(saved&&endpoint()&&token()){lastJobId=saved;await holdWakeLock();poll(saved)}
   else if(meta&&endpoint()&&token()&&autoRecoverEnabled()){setTimeout(()=>recoverNow(),220)}
-  else if(autoParam&&endpoint()&&token()){setTimeout(()=>autoStart(),220)}
+  else if(autoParam){setTimeout(()=>autoStart(),220)}
   refreshEasyState();
 }
 
@@ -724,6 +726,14 @@ $('remoteConnectCode')?.addEventListener('paste',()=>setTimeout(async()=>{
   if(el&&parseConnectCode(el.value)){setStatus('Connect Code принят. Проверяю GPU…','busy');await connect()}
 },0));
 window.addEventListener('online',()=>{refreshEasyState();if(autoRecoverEnabled()&&recoveryMeta())recoverNow().catch(()=>{})});
+window.addEventListener('pageshow',()=>{
+  refreshEasyState();
+  if(localStorage.getItem(LS_WAITING)==='1'){
+    tryClipboardReconnect().then(found=>{
+      if(!found&&endpoint()&&token())connect().catch(()=>{});
+    }).catch(()=>{});
+  }
+});
 document.addEventListener('visibilitychange',()=>{
   if(document.visibilityState==='visible'){
     if(lastJobId||localStorage.getItem(LS_JOB))holdWakeLock();
