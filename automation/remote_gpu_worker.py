@@ -668,7 +668,7 @@ def execute_job(job_id: str) -> None:
     try:
         job = json.loads((job_dir / "job.json").read_text(encoding="utf-8"))
         if bool(job.get("mirror_drive")):
-            checkpoint_job(job_id, job_dir)
+            asyncio.create_task(asyncio.to_thread(checkpoint_job, job_id, job_dir))
         engine = str(job.get("engine") or "auto").lower()
         if engine == "auto":
             engine = "blender" if command_exists("blender") else "ffmpeg"
@@ -818,7 +818,7 @@ async def create_job(request: Request, job_json: str = Form(...), source: Upload
         created_at=time.time(),
     )
     if bool(job.get("mirror_drive")) and source_file(job_dir) is not None:
-        checkpoint_job(job_id, job_dir)
+        asyncio.create_task(asyncio.to_thread(checkpoint_job, job_id, job_dir))
     if not deferred:
         asyncio.create_task(asyncio.to_thread(execute_job, job_id))
     return {"ok": True, "job_id": job_id, "status": "uploading" if deferred else "queued"}
