@@ -519,16 +519,95 @@ async def create_job(request: Request, job_json: str = Form(...), source: Upload
             raise HTTPException(status_code=400, detail="Unsupported video type")
         upload_bytes = await save_upload(source, job_dir / f"source{suffix}")
 
+    deferred = bool(job.get("defer_start"))
     update_status(
         job_id,
         job_id=job_id,
-        status="queued",
+        status="uploading" if deferred else "queued",
         progress=0,
-        stage="queued",
-        message="Задание принято Colab worker.",
+        stage="uploading" if deferred else "queued",
+        message="Задание создано. Жду видео по частям." if deferred else "Задание принято Colab worker.",
         upload_bytes=upload_bytes,
         created_at=time.time(),
     )
+    if not deferred:
+        asyncio.create_task(asyncio.to_thread(execute_job, job_id))
+    return {"ok": True, "job_id": job_id, "status": "uploading" if deferred else "queued"}
+
+
+@app.post("/jobs/{job_id}/upload-chunk")
+async def upload_chunk(
+    job_id: str,
+    request: Request,
+    index: int = Form(...),
+    total: int = Form(...),
+    filename: str = Form(...),
+    chunk: UploadFile = File(...),
+):
+    require_token(request)
+    job_dir = JOB_ROOT / job_id
+    if not job_dir.is_dir():
+        raise HTTPException(status_code=404, detail="Job not found")
+    if total < 1 or index < 0 or index >= total or total > 10000:
+        raise HTTPException(status_code=400, detail="Invalid chunk coordinates")
+    safe_name = Path(filename).name
+    suffix = Path(safe_name).suffix.lower()
+    if suffix not in {".mp4", ".mov", ".mkv", ".webm", ".avi", ".m4v"}:
+        raise HTTPException(status_code=400, detail="Unsupported video type")
+    chunks_dir = job_dir / "chunks"
+    chunks_dir.mkdir(exist_ok=True)
+    part = chunks_dir / f"{index:06d}.part"
+    size = await save_upload(chunk, part)
+    received = len(list(chunks_dir.glob("*.part")))
+    update_status(
+        job_id,
+        status="uploading",
+        stage="uploading",
+        progress=min(12, round(received / total * 12, 2)),
+        message=f"Получено {received}/{total} частей видео.",
+    )
+    if received == total:
+        target = job_dir / f"source{suffix}"
+        total_bytes = 0
+        with target.open("wb") as out:
+            for part_index in range(total):
+                p = chunks_dir / f"{part_index:06d}.part"
+                if not p.is_file():
+                    raise HTTPException(status_code=409, detail=f"Missing chunk {part_index}")
+                total_bytes += p.stat().st_size
+                if total_bytes > MAX_UPLOAD_BYTES:
+                    target.unlink(missing_ok=True)
+                    raise HTTPException(status_code=413, detail="Video exceeds worker upload limit")
+                with p.open("rb") as src:
+                    shutil.copyfileobj(src, out, length=1024 * 1024)
+        shutil.rmtree(chunks_dir, ignore_errors=True)
+        update_status(
+            job_id,
+            status="uploaded",
+            stage="uploaded",
+            progress=12,
+            upload_bytes=total_bytes,
+            message="Видео полностью загружено. Можно запускать GPU render.",
+        )
+    return {"ok": True, "job_id": job_id, "received": received, "total": total, "bytes": size}
+
+
+@app.post("/jobs/{job_id}/start")
+async def start_job(job_id: str, request: Request):
+    require_token(request)
+    job_dir = JOB_ROOT / job_id
+    if not job_dir.is_dir():
+        raise HTTPException(status_code=404, detail="Job not found")
+    current = read_status(job_id)
+    if current.get("status") in {"running", "completed"}:
+        return {"ok": True, "job_id": job_id, "status": current.get("status")}
+    job = json.loads((job_dir / "job.json").read_text(encoding="utf-8"))
+    engine = str(job.get("engine") or "auto").lower()
+    if engine == "ffmpeg" and source_file(job_dir) is None:
+        raise HTTPException(status_code=400, detail="FFmpeg job needs a source video")
+    job["defer_start"] = False
+    (job_dir / "job.json").write_text(json.dumps(job, ensure_ascii=False, indent=2), encoding="utf-8")
+    update_status(job_id, status="queued", stage="queued", progress=max(12, current.get("progress") or 0), message="Видео принято. Запускаю GPU.")
     asyncio.create_task(asyncio.to_thread(execute_job, job_id))
     return {"ok": True, "job_id": job_id, "status": "queued"}
 
