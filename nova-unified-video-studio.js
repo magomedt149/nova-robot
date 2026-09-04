@@ -64,6 +64,10 @@
       .nova-motion-embed{display:grid;gap:10px}.nova-motion-embed-head{display:flex;gap:8px;align-items:center;justify-content:space-between;flex-wrap:wrap}.nova-motion-embed-head b{font-size:15px}.nova-motion-embed-head span{font-size:11px;color:#83a9d7}
       .nova-motion-iframe-wrap{position:relative;min-height:660px;border:1px solid rgba(92,165,255,.2);border-radius:18px;overflow:hidden;background:#050914}.nova-motion-iframe{width:100%;height:72vh;min-height:660px;border:0;background:#050914}
       .nova-motion-placeholder{display:grid;place-items:center;min-height:420px;text-align:center;padding:24px;color:#a7bde0}.nova-motion-placeholder button{margin-top:12px;border:0;border-radius:12px;padding:10px 14px;background:linear-gradient(135deg,#157bff,#7346ff);color:#fff;font-weight:850}
+      .nova-text-video-quick{margin:0 0 12px;padding:12px;border:1px solid rgba(104,173,255,.24);border-radius:16px;background:linear-gradient(135deg,rgba(19,85,190,.16),rgba(111,52,190,.10))}
+      .nova-text-video-quick h3{margin:0 0 6px;font-size:16px}.nova-text-video-quick p{margin:0 0 9px;color:#9fb9dd;font-size:12px;line-height:1.45}
+      .nova-text-video-quick textarea{width:100%;min-height:96px;box-sizing:border-box;border:1px solid rgba(255,255,255,.14);border-radius:13px;background:#061027;color:#fff;padding:11px;font:inherit;resize:vertical}
+      .nova-text-video-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px}.nova-text-video-actions button{border:0;border-radius:12px;padding:10px 13px;background:linear-gradient(135deg,#157bff,#7346ff);color:#fff;font-weight:900}.nova-text-video-actions span{font-size:11px;color:#8faad0}
       .nova-hidden-legacy-launch{display:none!important}
       @media(max-width:760px){
         #novaMediaModal{padding:5px}.nova-media-card{padding:12px!important;border-radius:18px!important}
@@ -147,6 +151,41 @@
       try { window.NovaRussianTTS?.stop?.(); } catch (_) {}
       try { window.speechSynthesis?.cancel?.(); } catch (_) {}
       status('Озвучка остановлена.');
+    });
+  }
+
+  function ensureTextVideoQuick() {
+    const pane = $('#novaProPane');
+    if (!pane || $('#novaTextVideoQuick')) return;
+    const box = document.createElement('section');
+    box.id = 'novaTextVideoQuick';
+    box.className = 'nova-text-video-quick';
+    box.innerHTML = `
+      <h3>✍️ Просто напиши, какое видео хочешь</h3>
+      <p>Фото и видео загружать необязательно. Без reference NOVA бесплатно создаст локальный motion-клип с твоим текстом на экране. Если reference загружен — этот текст станет prompt для движения и стиля.</p>
+      <textarea id="novaSimpleVideoPrompt" placeholder="Например: Ночной город, дождь, неон, плавное приближение камеры, кинематографический стиль"></textarea>
+      <div class="nova-text-video-actions"><button id="novaSimpleVideoCreate" type="button">🎬 Создать 5 сек</button><span>FREE · LOCAL · без платных API</span></div>`;
+    const note = $('.nova-media-note', pane);
+    (note || pane.firstElementChild)?.insertAdjacentElement('afterend', box);
+
+    const simple = $('#novaSimpleVideoPrompt', box);
+    const pro = $('#novaProPrompt');
+    simple?.addEventListener('input', () => { if (pro) pro.value = simple.value; });
+    pro?.addEventListener('input', () => { if (simple && document.activeElement !== simple) simple.value = pro.value; });
+    if (simple && pro?.value) simple.value = pro.value;
+
+    $('#novaSimpleVideoCreate', box)?.addEventListener('click', () => {
+      const text = simple?.value?.trim() || '';
+      if (!text) return status('Напиши текст: что должно быть в видео.');
+      if (pro) {
+        pro.value = text;
+        pro.dispatchEvent(new Event('input', { bubbles: true }));
+      }
+      const duration = $('#novaProDuration');
+      if (duration) duration.value = '5';
+      const render = $('#novaProMotion');
+      if (!render) return status('Video PRO ещё загружается.');
+      render.click();
     });
   }
 
@@ -248,6 +287,7 @@
     buildTabs(modal);
     ensureMotionPane(modal);
     ensureIrinaPanel();
+    ensureTextVideoQuick();
     ensureEditorTools();
     wireLaunchers(modal);
     setActive(restore(), { loadMotion: false });
