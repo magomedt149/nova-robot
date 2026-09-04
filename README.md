@@ -27,7 +27,7 @@ NOVA — бесплатный браузерный ИИ-агент Тумсое�
 
 `blender-colab/NOVA_Remote_GPU_Worker.ipynb`
 
-Ноутбук устанавливает Blender/FFmpeg, запускает защищённый токеном NOVA worker и бесплатный Cloudflare Quick Tunnel. В Motion Studio вставляются только два временных значения: **Worker URL** и **Token**.
+Ноутбук устанавливает Blender/FFmpeg/WanGP, запускает защищённый токеном NOVA worker и бесплатный Cloudflare Quick Tunnel. В конце он печатает **NOVA CONNECT CODE**: его можно вставить в одно поле Motion Studio, после чего URL и Token заполняются и проверяются автоматически.
 
 Поток работы:
 
