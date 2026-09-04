@@ -1,0 +1,65 @@
+name: Netlify Free Diagnostics
+
+on:
+  push:
+    branches: [netlify-free-diagnostics]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Inspect Netlify public deploy state
+        shell: bash
+        run: |
+          set -u
+          SITE_ID="ae7fa0fb-e73d-413a-b122-7b9ff9419244"
+          BASE="https://api.netlify.com/api/v1"
+          echo "=== SITE ==="
+          curl -sS --max-time 20 "$BASE/sites/$SITE_ID" | python3 -m json.tool || true
+          echo
+          echo "=== RECENT DEPLOYS ==="
+          curl -sS --max-time 20 "$BASE/sites/$SITE_ID/deploys?per_page=8" > /tmp/deploys.json
+          python3 - <<'PY'
+import json
+d=json.load(open('/tmp/deploys.json'))
+for x in d:
+    print({
+      'id':x.get('id'),
+      'build_id':x.get('build_id'),
+      'state':x.get('state'),
+      'skipped':x.get('skipped'),
+      'error_message':x.get('error_message'),
+      'branch':x.get('branch'),
+      'context':x.get('context'),
+      'commit_ref':x.get('commit_ref'),
+      'title':x.get('title'),
+      'created_at':x.get('created_at'),
+      'published_at':x.get('published_at'),
+    })
+PY
+          echo
+          echo "=== LATEST DEPLOY DETAIL ==="
+          DEPLOY_ID="$(python3 - <<'PY'
+import json
+d=json.load(open('/tmp/deploys.json'))
+print(d[0]['id'] if d else '')
+PY
+)"
+          BUILD_ID="$(python3 - <<'PY'
+import json
+d=json.load(open('/tmp/deploys.json'))
+print((d[0].get('build_id') or '') if d else '')
+PY
+)"
+          [ -n "$DEPLOY_ID" ] && curl -sS --max-time 20 "$BASE/deploys/$DEPLOY_ID" | python3 -m json.tool || true
+          echo
+          echo "=== LATEST BUILD DETAIL ==="
+          [ -n "$BUILD_ID" ] && curl -sS --max-time 20 "$BASE/builds/$BUILD_ID" | python3 -m json.tool || true
+          echo
+          echo "=== LIVE VERSION ==="
+          curl -sS -w "\nHTTP=%{http_code}\n" --max-time 20 "https://dashing-otter-990b47.netlify.app/version.json?t=$(date +%s)" | head -80
