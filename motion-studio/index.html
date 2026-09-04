@@ -121,13 +121,19 @@
       </section>
 
       <section id="remoteGpu" class="remote-gpu-panel" aria-label="Удалённый GPU Google Colab">
-        <div class="remote-gpu-head"><strong>☁️ Remote GPU / Google Colab</strong><span>FREE</span></div>
-        <p>Тяжёлый рендер делает удалённый GPU Google. NOVA сама выбирает Blender, FFmpeg или WanGP, следит за работой и возвращает MP4 на iPhone.</p>
+        <div class="remote-gpu-head"><strong>✨ NOVA VIDEO AUTO</strong><span>FREE GPU</span></div>
+        <p>Опиши видео сверху, при необходимости выбери исходник и нажми одну кнопку. NOVA сама решит, нужен ли WanGP, Blender или FFmpeg.</p>
 
         <div class="remote-easy-card">
           <div class="remote-easy-top"><b>Простой режим</b><span id="remoteEasyState">ГОТОВ К ЗАПУСКУ</span></div>
-          <button id="remoteEasyAction" class="remote-easy-action" type="button">🚀 ДЕЛАЙ ВСЁ САМ</button>
+          <button id="remoteEasyAction" class="remote-easy-action" type="button">✨ СДЕЛАТЬ ВИДЕО</button>
           <div id="remoteEasyText" class="remote-easy-text">Нажми один раз. NOVA проверит сохранённый GPU, попробует восстановить незавершённую работу или откроет Colab, если новой сессии ещё нет.</div>
+          <div id="remoteSteps" class="remote-steps" aria-label="Этапы рендера">
+            <span data-step="input" class="active">1 · Задача</span>
+            <span data-step="gpu">2 · GPU</span>
+            <span data-step="preview">3 · Preview</span>
+            <span data-step="final">4 · Final</span>
+          </div>
           <label class="remote-source-easy">Видео, если оно нужно для задачи
             <input id="remoteSource" type="file" accept="video/mp4,video/quicktime,video/webm,video/x-matroska,video/*">
           </label>
@@ -140,6 +146,7 @@
 
         <details id="remoteAdvanced" class="remote-advanced">
           <summary>Дополнительные настройки</summary>
+          <button id="remoteStudioToggle" class="secondary remote-studio-toggle" type="button">🎛️ Показать все настройки студии</button>
           <div class="remote-advanced-body">
             <a id="remoteColabLink" class="remote-colab-link" href="https://colab.research.google.com/github/magomedt149/nova-robot/blob/main/blender-colab/NOVA_Remote_GPU_Worker.ipynb" target="_blank" rel="noopener">🚀 Открыть NOVA Colab Worker</a>
             <div class="remote-smart-actions">
