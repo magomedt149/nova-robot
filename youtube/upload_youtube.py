@@ -15,6 +15,10 @@ RESULT_PATH = ROOT / "youtube_output" / "youtube_upload_result.json"
 CLIENT_ID = os.environ["YOUTUBE_CLIENT_ID"]
 CLIENT_SECRET = os.environ["YOUTUBE_CLIENT_SECRET"]
 REFRESH_TOKEN = os.environ["YOUTUBE_REFRESH_TOKEN"]
+SCOPES = [
+    "https://www.googleapis.com/auth/youtube.upload",
+    "https://www.googleapis.com/auth/youtube.readonly",
+]
 
 meta = json.loads(META_PATH.read_text(encoding="utf-8"))
 description = meta.get("description", "").strip()
@@ -35,10 +39,23 @@ credentials = Credentials(
     token_uri="https://oauth2.googleapis.com/token",
     client_id=CLIENT_ID,
     client_secret=CLIENT_SECRET,
-    scopes=["https://www.googleapis.com/auth/youtube.upload"],
+    scopes=SCOPES,
 )
 
 youtube = build("youtube", "v3", credentials=credentials, cache_discovery=False)
+
+channel_response = youtube.channels().list(
+    part="id,snippet",
+    mine=True,
+).execute()
+channels = channel_response.get("items", [])
+if not channels:
+    raise SystemExit("OAuth подключён, но YouTube-канал для этого аккаунта не найден.")
+
+channel = channels[0]
+channel_id = channel["id"]
+channel_title = channel.get("snippet", {}).get("title", "")
+print(f"TARGET_CHANNEL={channel_title} ({channel_id})")
 
 body = {
     "snippet": {
@@ -79,6 +96,8 @@ result = {
     "title": meta.get("title"),
     "video_id": video_id,
     "privacy_status_requested": requested_privacy,
+    "channel_id": channel_id,
+    "channel_title": channel_title,
 }
 RESULT_PATH.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
 print(f"YOUTUBE_VIDEO_ID={video_id}")
