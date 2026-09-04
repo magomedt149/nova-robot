@@ -22,10 +22,21 @@
     allowDemoSampleReuse: false
   });
 
+  const DENIS_PROFILE = Object.freeze({
+    provider: 'piper+ios-system-fallback',
+    voiceId: 'ru_RU-denis-medium',
+    locale: 'ru-RU',
+    gender: 'male',
+    preferSystemVoiceOnIOS: true,
+    automaticMaleFallback: true,
+    pitchFactor: 1,
+    rate: 0.92
+  });
+
   const VOICES = Object.freeze({
     liza: Object.freeze({ id: '55f8c0f546884f9cbdefa113f5e7b682', label: 'Лиза — Elizabeth Friendly', provider: 'heygen', locale: 'ru-RU', exactReference: true }),
     irina: Object.freeze({ id: IRINA_LOCK.voiceId, label: 'Ирина', provider: IRINA_LOCK.provider, locale: IRINA_LOCK.locale, gender: 'female', locked: true }),
-    denis: Object.freeze({ id: 'ru_RU-denis-medium', label: 'Денис', provider: 'piper', locale: 'ru-RU', gender: 'male' })
+    denis: Object.freeze({ id: DENIS_PROFILE.voiceId, label: 'Денис — мужской RU', provider: DENIS_PROFILE.provider, locale: DENIS_PROFILE.locale, gender: DENIS_PROFILE.gender })
   });
 
   const synth = window.speechSynthesis;
@@ -137,19 +148,93 @@
 
   function getDefaultVoice() {
     try {
-      const stored = normalizeVoice(localStorage.getItem(PRESET_KEY) || 'irina');
-      return stored === 'denis' ? 'irina' : stored;
+      return normalizeVoice(localStorage.getItem(PRESET_KEY) || 'irina');
     } catch (_) {
       return 'irina';
     }
   }
 
   function setDefaultVoice(value) {
-    const key = normalizeVoice(value);
-    const selected = key === 'denis' ? 'irina' : key;
+    const selected = normalizeVoice(value);
     try { localStorage.setItem(PRESET_KEY, selected); } catch (_) {}
     injectVoicePresetOptions();
     return selected;
+  }
+
+  function isIOSDevice() {
+    const ua = String(navigator.userAgent || '');
+    return /iPhone|iPad|iPod/i.test(ua)
+      || (navigator.platform === 'MacIntel' && Number(navigator.maxTouchPoints || 0) > 1);
+  }
+
+  const MALE_VOICE_RE = /(yuri|yury|jurij|юрий|maxim|maksim|максим|alexander|aleksandr|александр|alexey|aleksey|алексей|nikolai|nikolay|николай|pavel|павел|ivan|иван|mikhail|михаил|dmitri|dmitry|дмитрий|sergey|sergei|сергей|male|man|мужск)/i;
+  const FEMALE_VOICE_RE = /(milena|милена|irina|ирина|alena|алена|tatyana|tatiana|татьяна|katya|katerina|катерина|female|woman|женск)/i;
+
+  function scoreMaleRussianVoice(voice) {
+    const name = String(voice?.name || '');
+    const lang = String(voice?.lang || '').toLowerCase();
+    if (!lang.startsWith('ru')) return -1000;
+    let score = lang === 'ru-ru' ? 80 : 60;
+    if (MALE_VOICE_RE.test(name)) score += 120;
+    if (FEMALE_VOICE_RE.test(name)) score -= 180;
+    if (/premium|enhanced|siri|apple/i.test(name)) score += 24;
+    if (voice?.localService) score += 12;
+    if (voice?.default) score += 4;
+    return score;
+  }
+
+  function findClosestMaleRussianVoice() {
+    if (!hasNativeSpeech) return null;
+    const voices = synth.getVoices?.() || [];
+    const russian = voices.filter((voice) => String(voice?.lang || '').toLowerCase().startsWith('ru'));
+    if (!russian.length) return null;
+    const ranked = russian
+      .map((voice) => ({ voice, score: scoreMaleRussianVoice(voice) }))
+      .sort((a, b) => b.score - a.score);
+    const explicitMale = ranked.find((item) => MALE_VOICE_RE.test(String(item.voice?.name || '')) && !FEMALE_VOICE_RE.test(String(item.voice?.name || '')));
+    if (explicitMale) return explicitMale.voice;
+    const nonFemale = ranked.find((item) => !FEMALE_VOICE_RE.test(String(item.voice?.name || '')));
+    return nonFemale?.voice || null;
+  }
+
+  function waitForMaleRussianVoice(timeoutMs = 900) {
+    const immediate = findClosestMaleRussianVoice();
+    if (immediate) return Promise.resolve(immediate);
+    if (!hasNativeSpeech || typeof synth.addEventListener !== 'function') return Promise.resolve(null);
+    return new Promise((resolve) => {
+      let settled = false;
+      const finish = () => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        synth.removeEventListener('voiceschanged', onVoices);
+        resolve(findClosestMaleRussianVoice());
+      };
+      const onVoices = () => finish();
+      const timer = setTimeout(finish, timeoutMs);
+      synth.addEventListener('voiceschanged', onVoices, { once: true });
+    });
+  }
+
+  async function speakDenisSystem(text) {
+    if (!hasNativeSpeech || !nativeSpeak) throw new Error('Системный TTS недоступен.');
+    const voice = await waitForMaleRussianVoice();
+    if (!voice) throw new Error('Мужской русский системный голос на устройстве не найден.');
+    const clean = cleanRussianText(text);
+    if (!clean) return;
+    return new Promise((resolve, reject) => {
+      const utterance = new SpeechSynthesisUtterance(clean);
+      utterance.lang = String(voice.lang || DENIS_PROFILE.locale);
+      utterance.voice = voice;
+      utterance.rate = DENIS_PROFILE.rate;
+      utterance.pitch = DENIS_PROFILE.pitchFactor;
+      utterance.volume = 1;
+      utterance.onend = () => resolve();
+      utterance.onerror = (event) => reject(event?.error || new Error('Ошибка системного голоса Денис.'));
+      nativeCancel?.();
+      setStatus(`🔊 Денис · ${voice.name || 'мужской ru-RU'} · ${utterance.lang}`);
+      nativeSpeak(utterance);
+    });
   }
 
   function isRussianUtterance(utterance) {
@@ -343,6 +428,14 @@
     if (key === 'liza') return speakExactLiza(clean);
     if (key === 'irina') assertIrinaLocked();
 
+    if (key === 'denis' && DENIS_PROFILE.preferSystemVoiceOnIOS && isIOSDevice()) {
+      try {
+        return await speakDenisSystem(clean);
+      } catch (systemError) {
+        console.info('[NOVA Russian TTS] iOS male ru-RU voice unavailable; trying Piper Denis:', systemError);
+      }
+    }
+
     const token = playbackToken;
     if (!userUnlockedAudio) getAudio();
     setStatus(`Первый запуск Piper ${VOICES[key].label} может скачать модель один раз. Платных кредитов нет.`);
@@ -361,6 +454,16 @@
     } catch (error) {
       if (token !== playbackToken) return;
       console.warn('[NOVA Russian TTS] selected voice failed:', error);
+      if (key === 'denis' && DENIS_PROFILE.automaticMaleFallback) {
+        try {
+          setStatus('Ищу ближайший мужской русский голос ru-RU на устройстве…');
+          return await speakDenisSystem(clean);
+        } catch (fallbackError) {
+          console.warn('[NOVA Russian TTS] Denis system fallback failed:', fallbackError);
+          setStatus('Денис: мужской ru-RU голос не найден. Проверь установленные голоса iPhone или интернет для Piper.');
+          throw fallbackError;
+        }
+      }
       setStatus(`Не удалось загрузить Piper ${VOICES[key].label}. Голос НЕ заменён другим — попробуй ещё раз.`);
       throw error;
     }
@@ -382,6 +485,7 @@
 
   function speak(text, voice = getDefaultVoice()) { return enqueueSpeak(text, voice); }
   function speakIrina(text) { assertIrinaLocked(); return enqueueSpeak(text, 'irina'); }
+  function speakDenis(text) { return enqueueSpeak(text, 'denis'); }
 
   async function speakDialogue(turns) {
     const normalized = (Array.isArray(turns) ? turns : []).map((turn, index) => ({
@@ -430,14 +534,24 @@
         const liza = select.querySelector('option[value="nova:liza"]');
         liza?.insertAdjacentElement('afterend', irina);
       }
+      if (!select.querySelector('option[value="nova:denis"]')) {
+        const denis = document.createElement('option');
+        denis.value = 'nova:denis';
+        denis.textContent = 'Денис — мужской ru-RU · авто iPhone';
+        const irina = select.querySelector('option[value="nova:irina"]');
+        irina?.insertAdjacentElement('afterend', denis);
+      }
       if (!select.dataset.novaVoicePresetBound) {
         select.dataset.novaVoicePresetBound = '1';
         select.addEventListener('change', () => {
           if (select.value === 'nova:liza') setDefaultVoice('liza');
           else if (select.value === 'nova:irina') setDefaultVoice('irina');
+          else if (select.value === 'nova:denis') setDefaultVoice('denis');
         });
       }
-      if (!select.value || select.value.startsWith('nova:')) select.value = selectedPreset === 'liza' ? 'nova:liza' : 'nova:irina';
+      if (!select.value || select.value.startsWith('nova:')) {
+        select.value = selectedPreset === 'liza' ? 'nova:liza' : selectedPreset === 'denis' ? 'nova:denis' : 'nova:irina';
+      }
     });
   }
 
@@ -451,7 +565,7 @@
     const note = document.createElement('div');
     note.id = 'novaNeuralTtsNote';
     note.className = 'nova-note-meta';
-    note.textContent = '🇷🇺 Ирина зафиксирована: Piper ru_RU-irina-medium, pitch 1.0, formants 1.0, без подмены и без изменения от видео. Русский текст проходит через NOVA pronunciation layer.';
+    note.textContent = '🇷🇺 Голоса NOVA: Ирина — зафиксированный Piper ru_RU-irina-medium. Денис — отдельный мужской профиль ru-RU; на iPhone автоматически выбирается ближайший мужской русский системный голос, а при его отсутствии используется Piper Denis.';
     anchor.insertAdjacentElement('afterend', note);
   }
 
@@ -483,6 +597,7 @@
   window.NovaRussianTTS = Object.freeze({
     voices: VOICES,
     irinaLock: IRINA_LOCK,
+    denisProfile: DENIS_PROFILE,
     exactLiza: VOICES.liza,
     defaultNarrator: getDefaultVoice(),
     defaultMale: 'denis',
@@ -496,7 +611,9 @@
     synthesizeIrina,
     speak,
     speakIrina,
+    speakDenis,
     speakDialogue,
+    findClosestMaleRussianVoice,
     stop: patchedCancel,
     preload: ensurePiper,
     preloadPronunciation: ensurePronunciation,
