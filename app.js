@@ -1,7 +1,7 @@
 (() => {
   'use strict';
 
-  const VERSION = '26.6.0';
+  const VERSION = '26.7.0';
   const $ = (selector) => document.querySelector(selector);
   const $$ = (selector) => [...document.querySelectorAll(selector)];
 
@@ -95,7 +95,7 @@
       'action.laugh': 'Смейся',
       'action.cat': 'Кошка',
       'action.english': 'Английский',
-      'action.remoteGpu': 'GPU Рендер',
+      'action.remoteGpu': 'Сделать видео',
       'lesson.title': 'Учим английский',
       'lesson.listen': 'Слушать',
       'lesson.quiz': 'Проверка',
@@ -216,7 +216,7 @@
       'action.laugh': 'Laugh',
       'action.cat': 'Cat',
       'action.english': 'English',
-      'action.remoteGpu': 'GPU Render',
+      'action.remoteGpu': 'Make Video',
       'lesson.title': 'Learn English',
       'lesson.listen': 'Listen',
       'lesson.quiz': 'Quiz',
@@ -1983,9 +1983,9 @@
       setLanguage('en');
       return;
     }
-    if (/motion\s*\+?\s*vfx|motion studio|remote gpu|gpu render|google colab|colab|колаб|удал[её]нн.*gpu|рендер.*gpu|gpu.*рендер|запусти.*gpu|gpu.*запусти/.test(lower)) {
-      const remote = /remote gpu|gpu render|google colab|colab|колаб|удал[её]нн.*gpu|рендер.*gpu|gpu.*рендер|запусти.*gpu|gpu.*запусти/.test(lower);
-      if (remote) performRemoteGpu(text);
+    if (/motion\s*\+?\s*vfx|motion studio|remote gpu|gpu render|google colab|colab|колаб|удал[её]нн.*gpu|рендер.*gpu|gpu.*рендер|запусти.*gpu|gpu.*запусти|сделай.*видео|создай.*видео|сгенерируй.*видео|сделать.*видео|создать.*видео|make.*video|create.*video|generate.*video|render.*video/.test(lower)) {
+      const videoAuto = /remote gpu|gpu render|google colab|colab|колаб|удал[её]нн.*gpu|рендер.*gpu|gpu.*рендер|запусти.*gpu|gpu.*запусти|сделай.*видео|создай.*видео|сгенерируй.*видео|сделать.*видео|создать.*видео|make.*video|create.*video|generate.*video|render.*video/.test(lower);
+      if (videoAuto) performRemoteGpu(text);
       else respond(language === 'en' ? 'Opening Motion and VFX Studio.' : 'Открываю Motion + VFX Studio.', { onEnd: () => window.location.assign('./motion-studio/') });
       return;
     }
@@ -2241,7 +2241,7 @@
 
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
-      navigator.serviceWorker.register('./service-worker.js?v=26.6.0')
+      navigator.serviceWorker.register('./service-worker.js?v=26.7.0')
         .then((registration) => registration.update())
         .catch(() => {});
     });
