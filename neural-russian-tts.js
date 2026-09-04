@@ -33,6 +33,17 @@
     rate: 0.92
   });
 
+  const IRINA_RUNTIME_PROFILE = Object.freeze({
+    provider: 'piper+ios-female-fallback',
+    voiceId: IRINA_LOCK.voiceId,
+    locale: IRINA_LOCK.locale,
+    gender: 'female',
+    preferExactPiper: true,
+    automaticFemaleFallback: true,
+    pitchFactor: 1,
+    rate: 0.94
+  });
+
   const VOICES = Object.freeze({
     liza: Object.freeze({ id: '55f8c0f546884f9cbdefa113f5e7b682', label: 'Лиза — Elizabeth Friendly', provider: 'heygen', locale: 'ru-RU', exactReference: true }),
     irina: Object.freeze({ id: IRINA_LOCK.voiceId, label: 'Ирина', provider: IRINA_LOCK.provider, locale: IRINA_LOCK.locale, gender: 'female', locked: true }),
@@ -183,6 +194,20 @@
     return score;
   }
 
+  function scoreFemaleRussianVoice(voice) {
+    const name = String(voice?.name || '');
+    const lang = String(voice?.lang || '').toLowerCase();
+    if (!lang.startsWith('ru')) return -1000;
+    let score = lang === 'ru-ru' ? 80 : 60;
+    if (/irina|ирина/i.test(name)) score += 180;
+    else if (FEMALE_VOICE_RE.test(name)) score += 120;
+    if (MALE_VOICE_RE.test(name)) score -= 180;
+    if (/premium|enhanced|siri|apple/i.test(name)) score += 24;
+    if (voice?.localService) score += 12;
+    if (voice?.default) score += 4;
+    return score;
+  }
+
   function findClosestMaleRussianVoice() {
     if (!hasNativeSpeech) return null;
     const voices = synth.getVoices?.() || [];
@@ -216,6 +241,41 @@
     });
   }
 
+  function findClosestFemaleRussianVoice() {
+    if (!hasNativeSpeech) return null;
+    const voices = synth.getVoices?.() || [];
+    const russian = voices.filter((voice) => String(voice?.lang || '').toLowerCase().startsWith('ru'));
+    if (!russian.length) return null;
+    const ranked = russian
+      .map((voice) => ({ voice, score: scoreFemaleRussianVoice(voice) }))
+      .sort((a, b) => b.score - a.score);
+    const explicitIrina = ranked.find((item) => /irina|ирина/i.test(String(item.voice?.name || '')));
+    if (explicitIrina) return explicitIrina.voice;
+    const explicitFemale = ranked.find((item) => FEMALE_VOICE_RE.test(String(item.voice?.name || '')) && !MALE_VOICE_RE.test(String(item.voice?.name || '')));
+    if (explicitFemale) return explicitFemale.voice;
+    const nonMale = ranked.find((item) => !MALE_VOICE_RE.test(String(item.voice?.name || '')));
+    return nonMale?.voice || null;
+  }
+
+  function waitForFemaleRussianVoice(timeoutMs = 900) {
+    const immediate = findClosestFemaleRussianVoice();
+    if (immediate) return Promise.resolve(immediate);
+    if (!hasNativeSpeech || typeof synth.addEventListener !== 'function') return Promise.resolve(null);
+    return new Promise((resolve) => {
+      let settled = false;
+      const finish = () => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        synth.removeEventListener('voiceschanged', onVoices);
+        resolve(findClosestFemaleRussianVoice());
+      };
+      const onVoices = () => finish();
+      const timer = setTimeout(finish, timeoutMs);
+      synth.addEventListener('voiceschanged', onVoices, { once: true });
+    });
+  }
+
   async function speakDenisSystem(text) {
     if (!hasNativeSpeech || !nativeSpeak) throw new Error('Системный TTS недоступен.');
     const voice = await waitForMaleRussianVoice();
@@ -233,6 +293,27 @@
       utterance.onerror = (event) => reject(event?.error || new Error('Ошибка системного голоса Денис.'));
       nativeCancel?.();
       setStatus(`🔊 Денис · ${voice.name || 'мужской ru-RU'} · ${utterance.lang}`);
+      nativeSpeak(utterance);
+    });
+  }
+
+  async function speakIrinaSystem(text) {
+    if (!hasNativeSpeech || !nativeSpeak) throw new Error('Системный TTS недоступен.');
+    const voice = await waitForFemaleRussianVoice();
+    if (!voice) throw new Error('Женский русский системный голос на устройстве не найден.');
+    const clean = cleanRussianText(text);
+    if (!clean) return;
+    return new Promise((resolve, reject) => {
+      const utterance = new SpeechSynthesisUtterance(clean);
+      utterance.lang = String(voice.lang || IRINA_RUNTIME_PROFILE.locale);
+      utterance.voice = voice;
+      utterance.rate = IRINA_RUNTIME_PROFILE.rate;
+      utterance.pitch = IRINA_RUNTIME_PROFILE.pitchFactor;
+      utterance.volume = 1;
+      utterance.onend = () => resolve();
+      utterance.onerror = (event) => reject(event?.error || new Error('Ошибка системного голоса Ирина.'));
+      nativeCancel?.();
+      setStatus(`🔊 Ирина · ${voice.name || 'женский ru-RU'} · ${utterance.lang}`);
       nativeSpeak(utterance);
     });
   }
@@ -454,6 +535,16 @@
     } catch (error) {
       if (token !== playbackToken) return;
       console.warn('[NOVA Russian TTS] selected voice failed:', error);
+      if (key === 'irina' && IRINA_RUNTIME_PROFILE.automaticFemaleFallback) {
+        try {
+          setStatus('Ирина: Piper недоступен, включаю женский русский голос ru-RU на iPhone…');
+          return await speakIrinaSystem(clean);
+        } catch (fallbackError) {
+          console.warn('[NOVA Russian TTS] Irina system fallback failed:', fallbackError);
+          setStatus('Ирина: женский ru-RU голос не найден. Проверь установленные голоса iPhone или интернет для Piper.');
+          throw fallbackError;
+        }
+      }
       if (key === 'denis' && DENIS_PROFILE.automaticMaleFallback) {
         try {
           setStatus('Ищу ближайший мужской русский голос ru-RU на устройстве…');
@@ -464,7 +555,7 @@
           throw fallbackError;
         }
       }
-      setStatus(`Не удалось загрузить Piper ${VOICES[key].label}. Голос НЕ заменён другим — попробуй ещё раз.`);
+      setStatus(`Не удалось загрузить Piper ${VOICES[key].label}. Попробуй ещё раз.`);
       throw error;
     }
   }
@@ -597,6 +688,7 @@
   window.NovaRussianTTS = Object.freeze({
     voices: VOICES,
     irinaLock: IRINA_LOCK,
+    irinaRuntimeProfile: IRINA_RUNTIME_PROFILE,
     denisProfile: DENIS_PROFILE,
     exactLiza: VOICES.liza,
     defaultNarrator: getDefaultVoice(),
@@ -614,6 +706,7 @@
     speakDenis,
     speakDialogue,
     findClosestMaleRussianVoice,
+    findClosestFemaleRussianVoice,
     stop: patchedCancel,
     preload: ensurePiper,
     preloadPronunciation: ensurePronunciation,
