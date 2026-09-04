@@ -1966,6 +1966,17 @@
       setLanguage('en');
       return;
     }
+    if (/motion\s*\+?\s*vfx|motion studio|remote gpu|gpu render|google colab|colab|колаб|удал[её]нн.*gpu|рендер.*gpu|gpu.*рендер/.test(lower)) {
+      const remote = /remote gpu|gpu render|google colab|colab|колаб|удал[её]нн.*gpu|рендер.*gpu|gpu.*рендер/.test(lower);
+      const target = remote ? './motion-studio/#remoteGpu' : './motion-studio/';
+      respond(
+        language === 'en'
+          ? (remote ? 'Opening NOVA Remote GPU in Motion Studio.' : 'Opening Motion and VFX Studio.')
+          : (remote ? 'Открываю Remote GPU в Motion Studio.' : 'Открываю Motion + VFX Studio.'),
+        { onEnd: () => window.location.assign(target) }
+      );
+      return;
+    }
     if (/шут|анекдот|рассмеши|ещ[её]\s+(?:шутк|анекдот)|другую\s+(?:шутк|анекдот)|another joke|tell.*joke|make me laugh|funny/.test(lower)) {
       performJoke();
       return;
