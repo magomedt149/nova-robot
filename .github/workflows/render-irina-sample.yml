@@ -64,6 +64,6 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: nova-irina-clear-12s
-          path: irina_clear_master.wav
+          path: irina_clear.wav
           if-no-files-found: error
           retention-days: 1
