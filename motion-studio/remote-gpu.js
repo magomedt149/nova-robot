@@ -1,7 +1,7 @@
 (()=>{
 const $=id=>document.getElementById(id);
 const LS_URL='nova.remoteGpu.url',LS_TOKEN='nova.remoteGpu.token',LS_JOB='nova.remoteGpu.job',LS_FULLAUTO='nova.remoteGpu.fullAuto',LS_PENDING='nova.remoteGpu.pendingPrompt';
-let pollTimer=0,lastJobId='',wakeLock=null,lastHealth=null;
+let pollTimer=0,lastJobId='',wakeLock=null,lastHealth=null,sendBusy=false;
 
 function endpoint(){
   return ($('remoteUrl')?.value||'').trim().replace(/\/+$/,'');
@@ -284,8 +284,10 @@ async function testRender(){
   }
 }
 async function send(){
+  if(sendBusy)return;
   const url=endpoint(),tok=token();
   if(!url||!tok){setStatus('Сначала подключи Colab worker.','error');return}
+  sendBusy=true;
   saveConnection();await holdWakeLock();
   const job=buildJob();
   const source=$('remoteSource')?.files?.[0]||null;
@@ -307,7 +309,7 @@ async function send(){
     setStatus('Colab принял '+lastJobId+'. Запускаю preview/render…','busy');
     poll(lastJobId);
   }catch(error){await releaseWakeLock();setStatus('Не удалось отправить: '+error.message,'error')}
-  finally{if(btn)btn.disabled=false}
+  finally{sendBusy=false;if(btn)btn.disabled=false}
 }
 async function cancel(){
   const jobId=lastJobId||localStorage.getItem(LS_JOB);
