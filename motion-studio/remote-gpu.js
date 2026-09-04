@@ -14,7 +14,7 @@ const DB_STORE='state';
 const DB_KEY='current';
 const MAX_SOURCE_CACHE=1536*1024*1024;
 
-let pollTimer=0,recoveryTimer=0,lastJobId='',wakeLock=null,lastHealth=null,sendBusy=false;
+let pollTimer=0,recoveryTimer=0,lastJobId='',wakeLock=null,lastHealth=null,sendBusy=false,localRenderBusy=false;
 let pollFailures=0,recoveryAttempt=0,currentSourceFile=null;
 
 function endpoint(){return ($('remoteUrl')?.value||'').trim().replace(/\/+$/,'')}
@@ -37,7 +37,7 @@ function setEasyState(label,text,kind=''){
   const body=$('remoteEasyText');if(body)body.textContent=text;
 }
 function setEasyStep(step){
-  const order=['input','gpu','preview','final'];
+  const order=['input','render','final'];
   const index=Math.max(0,order.indexOf(step));
   document.querySelectorAll('#remoteSteps [data-step]').forEach((el,i)=>{
     el.classList.toggle('active',i===index);
@@ -75,41 +75,21 @@ function toggleSimpleStudioMode(){
 function refreshEasyState(){
   const active=lastJobId||localStorage.getItem(LS_JOB);
   const meta=recoveryMeta();
-  const waiting=localStorage.getItem(LS_WAITING)==='1';
-  if(active){
-    const phase=meta?.phase||'running';
-    setEasyStep(phase==='final'||phase==='promoting'?'final':phase==='preview'?'preview':'gpu');
-    setEasyButton('⏳ РЕНДЕР ИДЁТ');
-    setEasyState('РАБОТАЮ','Ничего нажимать не нужно. NOVA следит за GPU и вернёт готовый файл.','busy');
+  if(localRenderBusy){
+    setEasyStep('render');
+    setEasyButton('⏳ СОЗДАЮ ВИДЕО');
+    setEasyState('РЕНДЕР НА IPHONE','Оставь страницу открытой. Colab и Run all не нужны.','busy');
     return;
   }
-  if(meta&&['recovering','uploading','running','final','promoting','submitting'].includes(meta.phase)){
-    setEasyStep(meta.phase==='final'||meta.phase==='promoting'?'final':'gpu');
-    setEasyButton('♻️ ВОССТАНОВИТЬ И ПРОДОЛЖИТЬ');
-    setEasyState('ВОССТАНОВЛЕНИЕ','NOVA сохранила работу и пытается продолжить её автоматически.','busy');
-    return;
-  }
-  if(lastHealth){
-    setEasyStep('gpu');
-    setEasyButton('✨ СДЕЛАТЬ ВИДЕО');
-    setEasyState('GPU ГОТОВ','Опиши сцену сверху или выбери видео. Одного нажатия достаточно.','ok');
-    return;
-  }
-  if(waiting){
-    setEasyStep('gpu');
-    setEasyButton('📋 ПРОДОЛЖИТЬ ПОСЛЕ COLAB');
-    setEasyState('ЖДУ COLAB','Вернулся из Colab? Нажми эту же кнопку. NOVA попробует взять Connect Code из буфера и продолжить сама.','busy');
-    return;
-  }
-  if(endpoint()&&token()){
-    setEasyStep('gpu');
-    setEasyButton('🔄 ПРОВЕРИТЬ И СДЕЛАТЬ');
-    setEasyState('ПРОВЕРКА GPU','Сохранённое подключение найдено. NOVA проверит его сама.','busy');
+  if(active||meta&&['recovering','uploading','running','final','promoting','submitting'].includes(meta.phase)){
+    setEasyStep('render');
+    setEasyButton('♻️ ПРОДОЛЖИТЬ РЕНДЕР');
+    setEasyState('УДАЛЁННЫЙ JOB','Найден старый Remote GPU job. NOVA может продолжить его, но обычные новые видео теперь запускаются локально.','busy');
     return;
   }
   setEasyStep('input');
   setEasyButton('✨ СДЕЛАТЬ ВИДЕО');
-  setEasyState('1 КНОПКА','Опиши видео сверху, при необходимости выбери файл и нажми кнопку.','');
+  setEasyState('БЕЗ COLAB','Обычный рендер запускается прямо на iPhone. Никакого Run all.','ok');
 }
 async function requestRecoveryPersistence(){
   try{
@@ -591,6 +571,40 @@ async function resumeOrRecover(){
   if(await tryDriveRestore(meta))return true;
   return resubmitRecovery();
 }
+function isHeavyAiRequest(){
+  const q=($('prompt')?.value||'').toLowerCase();
+  return /text[- ]?to[- ]?video|image[- ]?to[- ]?video|video[- ]?to[- ]?video|wan\b|wangp|seedance|kling|higgsfield|генер.*(?:человек|персонаж|сцену с нуля)|созд.*(?:человек|персонаж|сцену с нуля)|замен.*(?:лиц|персонаж)|фотореал|photoreal|реалистичн.*(?:человек|персонаж)/.test(q);
+}
+async function runLocalEasy(){
+  if(localRenderBusy)return false;
+  const renderer=window.NOVA_LOCAL_RENDER;
+  if(typeof renderer!=='function'){
+    setEasyState('ЛОКАЛЬНЫЙ РЕНДЕР НЕДОСТУПЕН','Открой NOVA в свежем Safari/Chrome.','error');
+    return false;
+  }
+  $('applyPrompt')?.click();
+  const source=$('remoteSource')?.files?.[0]||currentSourceFile||null;
+  currentSourceFile=source;
+  localRenderBusy=true;setEasyStep('render');refreshEasyState();
+  try{
+    const result=await renderer(source);
+    const link=$('remoteResult');
+    if(link){
+      link.href=result.url;link.download='NOVA_Video.'+result.ext;
+      link.textContent='Открыть / сохранить готовое видео';
+      link.classList.remove('hidden');
+    }
+    setEasyStep('final');
+    setEasyButton('✅ ГОТОВО — СДЕЛАТЬ ЕЩЁ');
+    setEasyState('ГОТОВО','Видео создано прямо на iPhone. Colab не использовался.','ok');
+    return true;
+  }catch(error){
+    setEasyState('ОШИБКА РЕНДЕРА','Не удалось создать видео локально: '+error.message,'error');
+    return false;
+  }finally{
+    localRenderBusy=false;
+  }
+}
 async function maybeAutoSend(){
   if(!fullAutoEnabled()||localStorage.getItem(LS_JOB)||!endpoint()||!token()||!hasRenderableIntent())return false;
   const meta=recoveryMeta();
@@ -598,35 +612,32 @@ async function maybeAutoSend(){
   await send();return true;
 }
 async function easyAction(){
-  setFullAuto(true);setAutoRecover(true);await requestRecoveryPersistence();refreshEasyState();
-
   const active=lastJobId||localStorage.getItem(LS_JOB);
-  if(active){lastJobId=active;await holdWakeLock();poll(active);return}
-
-  if(endpoint()&&token()){
-    const health=await connect();
-    if(health){
-      if(recoveryMeta()){await resumeOrRecover();return}
-      if(hasRenderableIntent()){await maybeAutoSend();return}
-      setEasyState('GPU ГОТОВ','Опиши сцену сверху или выбери видео — дальше NOVA сделает всё сама.','ok');
-      return;
+  const meta=recoveryMeta();
+  if(active||meta&&['recovering','uploading','running','final','promoting','submitting'].includes(meta.phase)){
+    if(endpoint()&&token()){
+      setFullAuto(true);setAutoRecover(true);
+      if(active){lastJobId=active;await holdWakeLock();poll(active);return}
+      await recoverNow();return;
     }
   }
 
-  const clipboardConnected=await tryClipboardReconnect().catch(()=>false);
-  if(clipboardConnected){
-    if(recoveryMeta()){await resumeOrRecover();return}
-    if(hasRenderableIntent())await maybeAutoSend();
+  if(isHeavyAiRequest()){
+    if(endpoint()&&token()){
+      setFullAuto(true);setAutoRecover(true);
+      const health=await connect({resume:false});
+      if(health){
+        setEasyState('ПОСТОЯННЫЙ GPU','Тяжёлая AI‑задача отправляется на уже подключённый GPU Worker. Colab не нужен.','busy');
+        await send();return;
+      }
+    }
+    document.getElementById('remoteAdvanced')?.setAttribute('open','');
+    setEasyState('НУЖЕН ПОСТОЯННЫЙ GPU','Эта команда просит генеративное AI‑видео. Чтобы обходиться без Run all, один раз подключи постоянный NOVA GPU Worker в дополнительных настройках.','error');
+    setStatus('Обычный режим Colab не открывает. Для тяжёлого AI нужен постоянно работающий GPU Worker.','error');
     return;
   }
 
-  if(hasRenderableIntent()){
-    const source=$('remoteSource')?.files?.[0]||currentSourceFile||null;
-    currentSourceFile=source;
-    await beginRecovery(buildJob(),source,source?.name||'source.mp4');
-  }
-  setEasyState('НУЖЕН COLAB','Открою Google Colab. Там только Run all → Copy & Return. После возврата NOVA продолжит сама.','busy');
-  openColab();
+  await runLocalEasy();
 }
 function openColab(){
   const link=$('remoteColabLink');
@@ -667,7 +678,11 @@ async function cancel(){
 }
 async function recoverNow(){
   setAutoRecover(true);
-  if(!endpoint()||!token()){openColab();return}
+  if(!endpoint()||!token()){
+    document.getElementById('remoteAdvanced')?.setAttribute('open','');
+    setRecoveryStatus('Для старого Remote GPU job нужен сохранённый постоянный Worker URL + Token. Colab автоматически не открывается.','error');
+    return;
+  }
   const health=await connect({resume:false});
   if(health)await resumeOrRecover();
   else scheduleRecoveryProbe(1000);
@@ -677,7 +692,9 @@ async function restore(){
   if($('remoteUrl'))$('remoteUrl').value=localStorage.getItem(LS_URL)||'';
   if($('remoteToken'))$('remoteToken').value=localStorage.getItem(LS_TOKEN)||'';
   if($('remoteConnectCode'))$('remoteConnectCode').value='';
-  const autoParam=new URLSearchParams(location.search).get('auto')==='1';
+  const params=new URLSearchParams(location.search);
+  const autoParam=params.get('auto')==='1';
+  const videoParam=params.get('video')==='1';
   setFullAuto(autoParam||localStorage.getItem(LS_FULLAUTO)!=='0');
   setAutoRecover(localStorage.getItem(LS_AUTORECOVER)!=='0');
   const pending=localStorage.getItem(LS_PENDING)||'';
@@ -687,7 +704,7 @@ async function restore(){
   if(meta)setRecoveryStatus('Auto Recovery: найден незавершённый '+String(meta.job?.quality||'')+' job.','busy');
   if(saved&&endpoint()&&token()){lastJobId=saved;await holdWakeLock();poll(saved)}
   else if(meta&&endpoint()&&token()&&autoRecoverEnabled()){setTimeout(()=>recoverNow(),220)}
-  else if(autoParam){setTimeout(()=>autoStart(),220)}
+  else if(autoParam||videoParam){setTimeout(()=>easyAction(),220)}
   refreshEasyState();
 }
 
