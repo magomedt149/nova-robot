@@ -47,19 +47,51 @@ def load_or_create_config(home: Path, port: int) -> dict:
     return cfg
 
 
+def find_tailscale() -> str | None:
+    found = shutil.which("tailscale")
+    if found:
+        return found
+    if os.name == "nt":
+        candidates = [
+            Path(os.environ.get("ProgramFiles", r"C:\Program Files")) / "Tailscale" / "tailscale.exe",
+            Path(os.environ.get("LOCALAPPDATA", "")) / "Microsoft" / "WinGet" / "Links" / "tailscale.exe",
+        ]
+        for candidate in candidates:
+            if candidate.is_file():
+                return str(candidate)
+    return None
+
+
+def extend_windows_path() -> None:
+    if os.name != "nt":
+        return
+    entries = [
+        Path(os.environ.get("LOCALAPPDATA", "")) / "Microsoft" / "WinGet" / "Links",
+        Path(os.environ.get("ProgramFiles", r"C:\Program Files")) / "Tailscale",
+    ]
+    blender_root = Path(os.environ.get("ProgramFiles", r"C:\Program Files")) / "Blender Foundation"
+    if blender_root.is_dir():
+        entries.extend(path for path in blender_root.glob("Blender *") if path.is_dir())
+    current = os.environ.get("PATH", "")
+    extra = [str(path) for path in entries if path and path.exists() and str(path) not in current]
+    if extra:
+        os.environ["PATH"] = current + os.pathsep + os.pathsep.join(extra)
+
+
 def tailscale_url(port: int) -> str | None:
-    if not shutil.which("tailscale"):
+    tailscale = find_tailscale()
+    if not tailscale:
         return None
     try:
         subprocess.run(
-            ["tailscale", "funnel", "--bg", str(port)],
+            [tailscale, "funnel", "--bg", "--yes", str(port)],
             check=False,
             capture_output=True,
             text=True,
             timeout=30,
         )
         status = subprocess.run(
-            ["tailscale", "funnel", "status"],
+            [tailscale, "funnel", "status"],
             check=False,
             capture_output=True,
             text=True,
@@ -99,6 +131,7 @@ def main() -> int:
         raise SystemExit(f"Missing worker: {WORKER}")
 
     home = args.home.expanduser().resolve()
+    extend_windows_path()
     cfg = load_or_create_config(home, args.port)
     port = int(cfg["port"])
     job_root = Path(cfg["job_root"])
