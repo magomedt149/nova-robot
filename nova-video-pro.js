@@ -606,6 +606,7 @@
     const download = document.createElement('a');
     download.className = 'nova-media-btn';
     download.href = url; download.download = name; download.textContent = '⬇ Скачать';
+    download.dataset.novaLibraryOwn = '1';
     actions.appendChild(download);
     if (window.NovaIOSSave?.makePhotoButton && blob.type.startsWith('video/')) {
       actions.appendChild(window.NovaIOSSave.makePhotoButton({ blob, name, label: '📲 В «Фото»', className: 'nova-media-btn primary' }));
@@ -917,7 +918,7 @@
   }
 
   window.NovaVideoPro = Object.freeze({
-    version: '31.1.0',
+    version: '31.1.1',
     renderLocalClip,
     renderTimeline,
     renderFive: () => renderFiveLegacy(),
