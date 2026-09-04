@@ -1,0 +1,8 @@
+{
+  "name": "NOVA",
+  "version": "27.1.0",
+  "pwa": "27.1.0",
+  "irina": "ru_RU-irina-medium",
+  "motionStudio": true,
+  "updateMethod": "/update.html"
+}
