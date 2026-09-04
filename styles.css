@@ -305,6 +305,7 @@ button:focus-visible,input:focus-visible,[role="button"]:focus-visible{
     radial-gradient(circle at 50% 38%,rgba(133,239,255,.3),transparent 33%),
     linear-gradient(145deg,#101d3d 0 42%,#071026 43% 100%);
   text-shadow:0 0 8px #fff,0 0 24px #39ddff,0 0 42px #526cff;
+  pointer-events:none;
   user-select:none
 }
 .owner-scan{position:absolute;z-index:2;left:3px;right:3px;top:-14px;height:14px;background:linear-gradient(180deg,transparent,rgba(110,239,255,.22),transparent);animation:ownerScan 4.5s linear infinite}
