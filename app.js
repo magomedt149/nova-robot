@@ -1,7 +1,7 @@
 (() => {
   'use strict';
 
-  const VERSION = '27.2.0';
+  const VERSION = '27.2.1';
   const $ = (selector) => document.querySelector(selector);
   const $$ = (selector) => [...document.querySelectorAll(selector)];
 
@@ -2275,6 +2275,7 @@
 
   if ('serviceWorker' in navigator) {
     let pwaReloading = false;
+    const isMeteredNetlifyHost = /(^|\\.)netlify\\.app$/i.test(location.hostname);
     navigator.serviceWorker.addEventListener('controllerchange', () => {
       if (pwaReloading) return;
       pwaReloading = true;
@@ -2286,15 +2287,22 @@
       window.location.reload();
     });
 
-    window.addEventListener('load', () => {
-      navigator.serviceWorker.register(`./service-worker.js?v=${encodeURIComponent(VERSION)}`, { updateViaCache: 'none' })
-        .then(async (registration) => {
-          try { await registration.update(); } catch (_) {}
-          if (registration.waiting) {
-            try { registration.waiting.postMessage({ type: 'NOVA_SKIP_WAITING' }); } catch (_) {}
-          }
-        })
-        .catch(() => {});
+    window.addEventListener('load', async () => {
+      try {
+        let registration = await navigator.serviceWorker.getRegistration('./');
+        if (!registration) {
+          registration = await navigator.serviceWorker.register(
+            `./service-worker.js?v=${encodeURIComponent(VERSION)}`,
+            { updateViaCache: 'none' }
+          );
+        } else if (!isMeteredNetlifyHost) {
+          await registration.update().catch(() => {});
+        }
+
+        if (registration?.waiting) {
+          try { registration.waiting.postMessage({ type: 'NOVA_SKIP_WAITING' }); } catch (_) {}
+        }
+      } catch (_) {}
     });
   }
 
