@@ -47,6 +47,8 @@ WANGP_OUTPUT_ROOT = Path(os.environ.get("NOVA_WANGP_OUTPUT_ROOT", str(JOB_ROOT /
 WANGP_SESSION = None
 WANGP_SESSION_LOCK = threading.Lock()
 WANGP_JOBS: dict[str, Any] = {}
+DOWNLOAD_TICKETS: dict[str, dict[str, Any]] = {}
+DOWNLOAD_TICKET_TTL = int(os.environ.get("NOVA_REMOTE_DOWNLOAD_TTL", "600"))
 
 app = FastAPI(title="NOVA Remote GPU Worker", version="1.0")
 app.add_middleware(
@@ -678,6 +680,20 @@ async def save_upload(upload: UploadFile, destination: Path) -> int:
     return total
 
 
+def new_download_ticket(job_id: str, filename: str) -> str:
+    now = time.time()
+    expired = [key for key, value in DOWNLOAD_TICKETS.items() if float(value.get("expires_at", 0)) <= now]
+    for key in expired:
+        DOWNLOAD_TICKETS.pop(key, None)
+    ticket = secrets.token_urlsafe(24)
+    DOWNLOAD_TICKETS[ticket] = {
+        "job_id": job_id,
+        "filename": filename,
+        "expires_at": now + max(60, DOWNLOAD_TICKET_TTL),
+    }
+    return ticket
+
+
 @app.get("/")
 async def root(request: Request):
     require_token(request)
@@ -832,6 +848,39 @@ async def get_job(job_id: str, request: Request):
         except Exception:
             pass
     return status
+
+
+@app.post("/jobs/{job_id}/download-ticket")
+async def create_download_ticket(job_id: str, request: Request):
+    require_token(request)
+    status = read_status(job_id)
+    if status.get("status") != "completed":
+        raise HTTPException(status_code=409, detail=f"Job is {status.get('status')}")
+    name = str(status.get("result_file") or "")
+    path = JOB_ROOT / job_id / name
+    if not path.is_file():
+        raise HTTPException(status_code=404, detail="Result file is missing")
+    ticket = new_download_ticket(job_id, path.name)
+    return {
+        "ok": True,
+        "path": f"/download/{ticket}",
+        "filename": path.name,
+        "expires_in": max(60, DOWNLOAD_TICKET_TTL),
+    }
+
+
+@app.get("/download/{ticket}")
+async def download_with_ticket(ticket: str):
+    data = DOWNLOAD_TICKETS.get(ticket)
+    if not data or float(data.get("expires_at", 0)) <= time.time():
+        DOWNLOAD_TICKETS.pop(ticket, None)
+        raise HTTPException(status_code=404, detail="Download link expired")
+    job_id = str(data.get("job_id") or "")
+    filename = str(data.get("filename") or "")
+    path = JOB_ROOT / job_id / filename
+    if not path.is_file():
+        raise HTTPException(status_code=404, detail="Result file is missing")
+    return FileResponse(path, media_type="video/mp4", filename=path.name)
 
 
 @app.get("/jobs/{job_id}/result")
