@@ -900,7 +900,7 @@
     const speakerCharacter = options.character === 'owner' ? owner : robot;
     const cleanText = cleanSpeechText(text);
     const russian = String(lang).toLowerCase().startsWith('ru');
-    const neuralIrina = russian && options.forceSystemVoice !== true && window.NovaRussianTTS?.speakIrina;
+    const neuralRussian = russian && options.forceSystemVoice !== true && window.NovaRussianTTS?.speak;
 
     const finish = () => {
       if (token !== speechToken) return;
@@ -912,7 +912,7 @@
       maybeRestartRecognition(450);
     };
 
-    if (neuralIrina) {
+    if (neuralRussian) {
       try { window.NovaRussianTTS.stop?.(); } catch (_) {}
       speaking = true;
       pauseRecognitionForOutput();
@@ -921,10 +921,13 @@
       speakerCharacter.classList.add('is-talking');
       setStatusKey(audioPerformance ? 'status.music' : 'status.speaking', audioPerformance ? 'music' : 'speaking');
 
-      Promise.resolve(window.NovaRussianTTS.speakIrina(cleanText))
+      const voiceProfile = options.voiceProfile
+        || window.NovaRussianTTS.getDefaultVoice?.()
+        || 'irina';
+      Promise.resolve(window.NovaRussianTTS.speak(cleanText, voiceProfile))
         .then(finish)
         .catch((error) => {
-          console.warn('[NOVA] Piper Irina speech failed:', error);
+          console.warn(`[NOVA] Russian TTS ${voiceProfile} speech failed:`, error);
           finish();
         });
       return;
