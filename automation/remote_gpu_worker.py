@@ -49,7 +49,7 @@ WANGP_SESSION_LOCK = threading.Lock()
 WANGP_JOBS: dict[str, Any] = {}
 DOWNLOAD_TICKETS: dict[str, dict[str, Any]] = {}
 DOWNLOAD_TICKET_TTL = int(os.environ.get("NOVA_REMOTE_DOWNLOAD_TTL", "600"))
-WORKER_VERSION = "1.4.0"
+WORKER_VERSION = "1.4.1"
 PROTOCOL_VERSION = 3
 SESSION_ID = uuid.uuid4().hex[:12]
 
