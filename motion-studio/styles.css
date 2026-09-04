@@ -21,3 +21,5 @@
 .remote-actions{display:grid;grid-template-columns:1fr 1.3fr .65fr;gap:7px;margin-top:4px}.remote-actions button.secondary{margin:0}.remote-progress{position:relative;height:14px;margin:12px 0 8px;border:1px solid #2c3550;border-radius:999px;background:#080b13;overflow:hidden}.remote-progress i{position:absolute;inset:0 auto 0 0;width:0;background:linear-gradient(90deg,#00e5ff,#7584ff);transition:width .25s ease}.remote-progress span{position:absolute;inset:0;display:grid;place-items:center;font-size:9px;font-weight:900;color:#eef5ff;text-shadow:0 1px 2px #000}
 .remote-status,.remote-hint{font-size:11px;line-height:1.45}.remote-status{color:#dbe8ff;margin:8px 1px}.remote-status[data-kind="ok"]{color:#8fffd0}.remote-status[data-kind="error"]{color:#ff9aad}.remote-status[data-kind="busy"]{color:#9edfff}.remote-hint{color:#8595ad;margin:4px 1px 0}
 @media(max-width:480px){.remote-actions{grid-template-columns:1fr}.remote-actions button{margin:0}}
+
+.remote-paste{width:100%;margin:-2px 0 12px}
