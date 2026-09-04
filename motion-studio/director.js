@@ -7,7 +7,7 @@ function lensFor(c,q){if(/крупн|close[- ]?up|портрет/.test(q))return
 function positions(n){return n===1?[[0,0,0]]:n===2?[[-1.05,0,0],[1.05,0,0]]:[[-1.35,.15,0],[0,-.1,0],[1.35,.15,0]]}
 function cameraPath(c){if(c==='push')return{start:[0,-7,2.2],end:[0,-5.6,2.2],target:[0,0,1.4]};if(c==='orbit')return{start:[-5.4,-5.4,2.3],end:[5.4,-5.4,2.3],target:[0,0,1.4]};if(c==='handheld')return{start:[0,-6.2,2],end:[.16,-6,2.08],target:[0,0,1.4]};return{start:[0,-6.2,2.1],end:[0,-6.2,2.1],target:[0,0,1.4]}}
 function blender(pack){
- const p=JSON.stringify(pack).replace(/\/g,'\\').replace(/'''/g,"\'\'\'");
+ const p=JSON.stringify(pack).split('\\').join('\\\\').split("'''").join("\\'\\'\\'");
  return [
  '# NOVA Auto Director — Blender blocking','import bpy, json, os','from mathutils import Vector',"PACK=json.loads(r'''"+p+"''')",
  "bpy.ops.object.select_all(action='SELECT')","bpy.ops.object.delete(use_global=False)",'scene=bpy.context.scene',
