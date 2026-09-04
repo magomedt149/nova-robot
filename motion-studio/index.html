@@ -125,9 +125,10 @@
         <p>Если iPhone слабый, отправь видео и Scene Pack на временный GPU Colab. Blender, FFmpeg и WanGP работают удалённо без платных API.</p>
         <a id="remoteColabLink" class="remote-colab-link" href="https://colab.research.google.com/github/magomedt149/nova-robot/blob/main/blender-colab/NOVA_Remote_GPU_Worker.ipynb" target="_blank" rel="noopener">🚀 Открыть NOVA Colab Worker</a>
         <div class="remote-smart-actions">
-          <button id="remoteAutoStart" type="button">⚡ Запустить Remote GPU</button>
+          <button id="remoteAutoStart" type="button">🤖 FULL AUTO GPU</button>
           <button id="remoteTest" class="secondary" type="button">🧪 Тест рендера 1 сек</button>
         </div>
+        <label class="remote-check"><input id="remoteAutoFinal" type="checkbox"> <span><b>Full Auto:</b> после preview автоматически запустить Final без повторной загрузки исходника.</span></label>
         <label>Быстрое подключение
           <input id="remoteConnectCode" autocomplete="off" placeholder="Вставь NOVA CONNECT CODE из Colab">
         </label>
@@ -167,7 +168,7 @@
         </div>
         <div class="remote-progress"><i id="remoteProgressBar"></i><span id="remoteProgressText">0%</span></div>
         <div id="remoteStatus" class="remote-status">Открой Colab Worker → Run all → нажми «Copy NOVA CONNECT CODE» → здесь нажми «Вставить код».</div>
-        <div id="remoteHint" class="remote-hint">Preview сначала, Final только после проверки — так GPU расходуется экономнее.</div>
+        <div id="remoteHint" class="remote-hint">Обычный режим: Preview сначала. FULL AUTO может автоматически перейти к Final.</div>
         <a id="remoteResult" class="download hidden">Открыть готовый MP4</a>
       </section>
 
