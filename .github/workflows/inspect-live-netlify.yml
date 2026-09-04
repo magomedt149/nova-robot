@@ -1,11 +1,9 @@
 name: Inspect Live Netlify
 # probe-refresh: 2026-09-04
 
+
 on:
-  push:
-    branches: [main]
-    paths:
-      - ".github/workflows/inspect-live-netlify.yml"
+  workflow_dispatch:
 
 permissions:
   contents: read
