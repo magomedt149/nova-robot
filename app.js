@@ -1444,10 +1444,14 @@
   function performRemoteGpu(pendingPrompt = '') {
     resetPerformance();
     markAction('remoteGpu');
-    const prompt = String(pendingPrompt || '').trim();
-    const bareGpuCommand = /^(?:запусти|открой|включи|покажи)?\s*(?:remote\s*gpu|gpu\s*(?:render|рендер)|google\s*colab|colab|колаб|рендер\s*(?:через\s*)?gpu|gpu)\s*[.!]?$/i.test(prompt);
-    if (prompt && !bareGpuCommand) {
-      localStorage.setItem('nova.remoteGpu.pendingPrompt', prompt);
+    const rawPrompt = String(pendingPrompt || '').trim();
+    const bareGpuCommand = /^(?:запусти|открой|включи|покажи)?\s*(?:remote\s*gpu|gpu\s*(?:render|рендер)|google\s*colab|colab|колаб|рендер\s*(?:через\s*)?gpu|gpu)\s*[.!]?$/i.test(rawPrompt);
+    const prompt = rawPrompt
+      .replace(/^(?:пожалуйста[, ]*)?(?:сделай|создай|сгенерируй|сделать|создать)\s+(?:мне\s+)?видео\s*(?:про|о|с|:|-)?\s*/i,'')
+      .replace(/^(?:please[, ]*)?(?:make|create|generate|render)\s+(?:me\s+)?(?:a\s+)?video\s*(?:of|about|with|:|-)?\s*/i,'')
+      .trim();
+    if (rawPrompt && !bareGpuCommand) {
+      localStorage.setItem('nova.remoteGpu.pendingPrompt', prompt || rawPrompt);
     } else {
       localStorage.removeItem('nova.remoteGpu.pendingPrompt');
     }
