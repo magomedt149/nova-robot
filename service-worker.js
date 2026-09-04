@@ -1,4 +1,4 @@
-const CACHE = 'nova-v37-irina-pronunciation-20260903';
+const CACHE = 'nova-v38-pwa-update-irina-20260904';
 const API_CACHE = 'nova-api-economy-v2';
 const YOUTUBE_TTL_MS = 24 * 60 * 60 * 1000;
 const TRANSLATE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
@@ -6,10 +6,19 @@ const TRANSLATE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const CORE = [
   './',
   './index.html',
+  './update.html',
+  './version.json',
   './styles.css',
   './app.js',
   './english-lessons.js',
   './brain.js',
+  './voice-fix.js',
+  './beach-mode.js',
+  './photo-studio.js',
+  './hollywood-studio.js',
+  './neural-russian-tts.js',
+  './nova-russian-pronunciation.js',
+  './nova-tts-diagnostics.js',
   './notebook-tools.js',
   './local-ai-worker.js',
   './manifest.webmanifest',
@@ -46,6 +55,18 @@ self.addEventListener('activate', (event) => {
       .then((keys) => Promise.all(keys.filter((key) => !keep.has(key)).map((key) => caches.delete(key))))
       .then(() => self.clients.claim())
   );
+});
+
+self.addEventListener('message', (event) => {
+  if (event.data?.type === 'NOVA_SKIP_WAITING') self.skipWaiting();
+  if (event.data?.type === 'NOVA_CLEAR_APP_CACHES') {
+    event.waitUntil(
+      caches.keys().then((keys) => Promise.all(
+        keys.filter((key) => /^nova-|^tumsoev-motion-/i.test(key) && key !== API_CACHE)
+          .map((key) => caches.delete(key))
+      ))
+    );
+  }
 });
 
 function getVideoId(input) {
@@ -423,6 +444,11 @@ self.addEventListener('fetch', (event) => {
   }
 
   if (event.request.method !== 'GET') return;
+
+  if (sameOrigin && (url.pathname.endsWith('/update.html') || url.pathname.endsWith('/version.json') || url.pathname.endsWith('/manifest.webmanifest'))) {
+    event.respondWith(fetch(event.request, { cache: 'no-store' }).catch(() => caches.match(event.request, { ignoreSearch: true })));
+    return;
+  }
 
   if (sameOrigin && url.pathname.startsWith('/.netlify/functions/')) {
     event.respondWith(fetch(event.request));
