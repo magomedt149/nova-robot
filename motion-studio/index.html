@@ -148,6 +148,13 @@
           <button id="remoteStudioToggle" class="secondary remote-studio-toggle" type="button">🎛️ Показать все настройки студии</button>
           <div class="remote-advanced-body">
             <p class="remote-advanced-note">Для обычного Motion/VFX этот блок не нужен. Для генеративного AI‑видео можно один раз подключить постоянный NOVA GPU Worker — он работает без Run all при автозапуске.</p>
+            <div class="permanent-gpu-setup">
+              <b>Постоянный GPU — один раз настроить</b>
+              <p>На Windows дважды нажми установщик. Worker сам стартует с Windows и публикуется по стабильному HTTPS через Tailscale Funnel.</p>
+              <a class="download permanent-gpu-download" href="../automation/NOVA_GPU_INSTALL_WINDOWS.cmd" download>🪟 Скачать NOVA GPU Installer для Windows</a>
+              <a class="download permanent-gpu-download" href="../automation/install_permanent_gpu_worker.sh" download>🐧 Скачать installer для Linux</a>
+              <small>После установки вставь NOVA CONNECT CODE один раз. Потом тяжёлые AI‑задачи запускаются без Colab и без Run all.</small>
+            </div>
             <div class="remote-smart-actions">
               <button id="remoteAutoStart" type="button">🤖 FULL AUTO GPU</button>
               <button id="remoteTest" class="secondary" type="button">🧪 Тест рендера 1 сек</button>
