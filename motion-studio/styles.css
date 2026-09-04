@@ -50,3 +50,5 @@
 .remote-steps span.done{border-color:rgba(73,218,160,.28);background:rgba(45,166,118,.1);color:#8fffd0}
 
 .remote-advanced-note{margin:0 0 10px;padding:9px 10px;border-radius:10px;background:#0b1020;color:#9fb0cb;font-size:10px;line-height:1.45}.remote-colab-fallback{margin-top:10px;padding-top:8px;border-top:1px solid #26304a}.remote-colab-fallback>summary{cursor:pointer;color:#7f8ea8;font-size:10px;font-weight:800}.remote-colab-fallback small{display:block;margin-top:6px;color:#738198;font-size:9px;line-height:1.4}
+
+.permanent-gpu-setup{margin:10px 0 12px;padding:11px;border:1px solid rgba(94,219,255,.28);border-radius:12px;background:#0b1120}.permanent-gpu-setup>b{display:block;margin-bottom:5px;font-size:11px;color:#dcecff}.permanent-gpu-setup p{margin:0 0 8px;color:#93a3bc;font-size:10px;line-height:1.45}.permanent-gpu-download{display:block;margin:6px 0;text-align:center}.permanent-gpu-setup small{display:block;margin-top:8px;color:#7f8ea6;font-size:9px;line-height:1.4}
