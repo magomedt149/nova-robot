@@ -147,7 +147,7 @@
       }
     } catch (_) {}
 
-    const response = await fetch('./.netlify/functions/translate', {
+    const response = await fetch('./__nova_free__/translate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ text: clean, from: source, to: target })
@@ -287,7 +287,7 @@
     status.textContent = 'Получаю доступные субтитры YouTube…';
     result.textContent = 'Загрузка…';
     try {
-      const response = await fetch('./.netlify/functions/youtube-transcript', {
+      const response = await fetch('./__nova_free__/youtube-transcript', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ url })
