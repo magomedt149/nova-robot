@@ -1,0 +1,83 @@
+name: NOVA FREE — Check & GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: nova-pages
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: FREE checks
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout NOVA
+        uses: actions/checkout@v4
+
+      - name: Verify critical files
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f index.html
+          test -f app.js
+          test -f styles.css
+          test -f manifest.webmanifest
+          echo "NOVA critical files: OK"
+
+      - name: Check JavaScript syntax
+        shell: bash
+        run: |
+          set -euo pipefail
+          while IFS= read -r -d '' file; do
+            node --check "$file"
+          done < <(find . -type f -name '*.js' -not -path './.git/*' -print0)
+          echo "JavaScript syntax: OK"
+
+      - name: Enforce FREE LOCK
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "No Netlify deploy, no paid API, no GPU job is started by this workflow."
+
+  deploy:
+    name: Deploy GitHub Pages
+    needs: check
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Checkout NOVA
+        uses: actions/checkout@v4
+
+      - name: Prepare static site
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p _site
+          rsync -a \
+            --exclude '.git/' \
+            --exclude '.github/' \
+            --exclude '_site/' \
+            ./ _site/
+          test -f _site/index.html
+
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
