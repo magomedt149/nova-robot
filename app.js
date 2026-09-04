@@ -13,6 +13,10 @@
   const compassWidget = $('#compassWidget');
   const compassDial = $('#compassDial');
   const compassReadout = $('#compassReadout');
+  const sacramentoClock = $('#sacramentoClock');
+  const sacramentoDate = $('#sacramentoDate');
+  const moscowClock = $('#moscowClock');
+  const moscowDate = $('#moscowDate');
   const owner = $('#owner');
   const robot = $('#robot');
   const cat = $('#cat');
@@ -85,6 +89,48 @@
   }
 
   lockStableViewport(true);
+
+  const clockTimeFormatters = {
+    sacramento: new Intl.DateTimeFormat('ru-RU', {
+      timeZone: 'America/Los_Angeles',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false
+    }),
+    moscow: new Intl.DateTimeFormat('ru-RU', {
+      timeZone: 'Europe/Moscow',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false
+    })
+  };
+  const clockDateFormatters = {
+    sacramento: new Intl.DateTimeFormat('ru-RU', {
+      timeZone: 'America/Los_Angeles',
+      weekday: 'short',
+      day: '2-digit',
+      month: 'short'
+    }),
+    moscow: new Intl.DateTimeFormat('ru-RU', {
+      timeZone: 'Europe/Moscow',
+      weekday: 'short',
+      day: '2-digit',
+      month: 'short'
+    })
+  };
+
+  function updateWorldClocks() {
+    const now = new Date();
+    if (sacramentoClock) sacramentoClock.textContent = clockTimeFormatters.sacramento.format(now);
+    if (moscowClock) moscowClock.textContent = clockTimeFormatters.moscow.format(now);
+    if (sacramentoDate) sacramentoDate.textContent = clockDateFormatters.sacramento.format(now).replace(/\.$/, '');
+    if (moscowDate) moscowDate.textContent = clockDateFormatters.moscow.format(now).replace(/\.$/, '');
+  }
+
+  updateWorldClocks();
+  setInterval(updateWorldClocks, 1000);
 
   const copy = {
     ru: {
