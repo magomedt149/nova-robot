@@ -323,16 +323,10 @@ async function browserYoutubeEconomy(request) {
     return response;
   }
 
-  try {
-    const serverResponse = await fetch(request.clone());
-    if (serverResponse.ok) {
-      const data = await serverResponse.clone().json().catch(() => null);
-      if (data?.ok && data?.transcript) await putApiCache('youtube', videoId, serverResponse);
-    }
-    return serverResponse;
-  } catch (_) {
-    return jsonResponse({ ok: false, error: 'Субтитры временно недоступны.' }, 404);
-  }
+  return jsonResponse({
+    ok: false,
+    error: 'Субтитры временно недоступны в бесплатном браузерном режиме.'
+  }, 404);
 }
 
 function splitTranslateText(text, max = 430) {
@@ -406,18 +400,6 @@ async function cachedTranslate(request) {
   const cached = await getFreshApiCache('translate', key, TRANSLATE_TTL_MS);
   if (cached) return cached;
 
-  let serverResponse = null;
-  try {
-    serverResponse = await fetch(request.clone());
-    if (serverResponse.ok) {
-      const data = await serverResponse.clone().json().catch(() => null);
-      if (data?.ok && data?.translatedText) {
-        await putApiCache('translate', key, serverResponse);
-        return serverResponse;
-      }
-    }
-  } catch (_) {}
-
   try {
     const translatedText = await browserTranslate(text, from, to);
     if (translatedText) {
@@ -427,20 +409,22 @@ async function cachedTranslate(request) {
     }
   } catch (_) {}
 
-  if (serverResponse) return serverResponse;
-  return jsonResponse({ ok: false, error: 'Перевод временно недоступен.' }, 503);
+  return jsonResponse({
+    ok: false,
+    error: 'Перевод временно недоступен в бесплатном браузерном режиме.'
+  }, 503);
 }
 
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
   const sameOrigin = url.origin === self.location.origin;
 
-  if (event.request.method === 'POST' && sameOrigin && url.pathname.endsWith('/.netlify/functions/youtube-transcript')) {
+  if (event.request.method === 'POST' && sameOrigin && (url.pathname.endsWith('/__nova_free__/youtube-transcript') || url.pathname.endsWith('/.netlify/functions/youtube-transcript'))) {
     event.respondWith(browserYoutubeEconomy(event.request));
     return;
   }
 
-  if (event.request.method === 'POST' && sameOrigin && url.pathname.endsWith('/.netlify/functions/translate')) {
+  if (event.request.method === 'POST' && sameOrigin && (url.pathname.endsWith('/__nova_free__/translate') || url.pathname.endsWith('/.netlify/functions/translate'))) {
     event.respondWith(cachedTranslate(event.request));
     return;
   }
