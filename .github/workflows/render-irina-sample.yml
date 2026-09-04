@@ -1,10 +1,7 @@
 name: Render Irina 12s Sample
 
+
 on:
-  push:
-    branches: [main]
-    paths:
-      - ".github/workflows/render-irina-sample.yml"
   workflow_dispatch:
 
 permissions:
