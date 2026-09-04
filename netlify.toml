@@ -26,6 +26,11 @@
     Cache-Control = "no-cache, no-store, must-revalidate"
 
 [[headers]]
+  for = "/voice-fix.js"
+  [headers.values]
+    Cache-Control = "no-cache, no-store, must-revalidate"
+
+[[headers]]
   for = "/service-worker.js"
   [headers.values]
     Cache-Control = "no-cache, no-store, must-revalidate"
@@ -45,13 +50,17 @@
   [headers.values]
     Cache-Control = "no-cache, no-store, must-revalidate"
 
-# Versioned static assets may be cached by the browser to reduce repeat bandwidth.
 [[headers]]
-  for = "/*.css"
+  for = "/app.js"
   [headers.values]
-    Cache-Control = "public, max-age=86400, stale-while-revalidate=604800"
+    Cache-Control = "no-cache, no-store, must-revalidate"
 
 [[headers]]
-  for = "/*.js"
+  for = "/neural-russian-tts.js"
   [headers.values]
-    Cache-Control = "public, max-age=86400, stale-while-revalidate=604800"
+    Cache-Control = "no-cache, no-store, must-revalidate"
+
+[[headers]]
+  for = "/nova-russian-pronunciation.js"
+  [headers.values]
+    Cache-Control = "no-cache, no-store, must-revalidate"
