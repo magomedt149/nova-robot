@@ -1,7 +1,7 @@
 {
   "name": "NOVA",
-  "version": "27.4.1",
-  "pwa": "27.4.1",
+  "version": "27.5.0",
+  "pwa": "27.5.0",
   "mode": "free-only",
   "paidApis": false,
   "externalComputeRequiresConfirmation": true,
@@ -10,7 +10,7 @@
   "motionStudio": true,
   "updateMethod": "./update.html",
   "threeDDirector": true,
-  "threeDDirectorVersion": "1.1.0",
+  "threeDDirectorVersion": "1.2.0",
   "threeDPipeline": [
     "3D Block",
     "True Blender Camera Path",
@@ -18,5 +18,10 @@
     "AI Realism stage"
   ],
   "trueBlenderOrbit": true,
-  "mediaTruthfulnessGuard": true
+  "mediaTruthfulnessGuard": true,
+  "blenderCameraBridge": true,
+  "blenderCameraBridgeVersion": "1.0.0",
+  "videoProVersion": "31.2.0",
+  "iphoneVirtualCameraOrientation": true,
+  "iphoneVirtualCameraTranslation": "blender-path"
 }
