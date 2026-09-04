@@ -1,0 +1,73 @@
+name: Irina Short Sacramento Section 8 Scam
+
+on:
+  push:
+    branches:
+      - irina-short-sacramento-section8-scam
+    paths:
+      - .github/workflows/irina-short-sacramento-section8-scam.yml
+
+permissions:
+  contents: read
+
+jobs:
+  render:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Piper
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install piper-tts
+
+      - name: Download locked Irina
+        run: |
+          python -m piper.download_voices ru_RU-irina-medium
+
+      - name: Render fresh Irina narration
+        shell: bash
+        run: |
+          cat > render.py <<'PY'
+          import wave
+          from piper import PiperVoice, SynthesisConfig
+
+          text = (
+              "Внимание, Сакраменто. "
+              "Эс-эйч-ар-эй предупреждает: в соцсетях распространяются фальшивые объявления, "
+              "которые обещают помочь подать на Секшн Эйт через сайт govassistance точка org. "
+              "Эс-эйч-ар-эй говорит: это неофициальный сайт. "
+              "Настоящие списки ожидания для округа Сакраменто публикуются только на sacwaitlist точка com. "
+              "Подача бесплатная. "
+              "Если кто-то просит деньги за место в очереди, сначала проверь информацию на официальном сайте Эс-эйч-ар-эй. "
+              "Сохрани это видео и отправь тому, кто ищет доступное жильё."
+          )
+
+          voice = PiperVoice.load(
+              "ru_RU-irina-medium.onnx",
+              config_path="ru_RU-irina-medium.onnx.json"
+          )
+          syn = SynthesisConfig(
+              length_scale=1.04,
+              noise_scale=0.667,
+              noise_w_scale=0.8,
+              normalize_audio=True
+          )
+          with wave.open("irina_short.wav", "wb") as w:
+              voice.synthesize_wav(text, w, syn_config=syn)
+          with wave.open("irina_short.wav", "rb") as w:
+              print("duration", w.getnframes() / w.getframerate())
+          PY
+          python render.py
+
+      - name: Upload Irina audio
+        uses: actions/upload-artifact@v4
+        with:
+          name: IRINA_SAC_SECTION8_SHORT
+          path: irina_short.wav
+          if-no-files-found: error
+          retention-days: 1
