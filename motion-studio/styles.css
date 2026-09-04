@@ -38,3 +38,13 @@
 .remote-easy-text{font-size:11px;line-height:1.5;color:#aebbd0;margin-bottom:10px}
 .remote-source-easy{margin:0}.remote-source-easy input{margin-top:6px}
 .remote-advanced{margin-top:10px;border-top:1px solid #26304a;padding-top:8px}.remote-advanced>summary{cursor:pointer;color:#9fb0cb;font-size:11px;font-weight:800;padding:6px 2px;list-style:none}.remote-advanced>summary::-webkit-details-marker{display:none}.remote-advanced>summary:before{content:'⚙️ ';}.remote-advanced[open]>summary{color:#dce8ff}.remote-advanced-body{padding-top:8px}
+
+/* NOVA simple mode: keep only the task, the one-button renderer and the heading. */
+.panel.nova-easy-mode > *:not(.eyebrow):not(h1):not(.lead):not(.nova-easy-visible):not(.remote-gpu-panel){display:none!important}
+.panel.nova-easy-mode .remote-gpu-panel{margin-top:8px}
+.panel.nova-easy-mode .remote-advanced{margin-top:12px}
+.remote-studio-toggle{width:100%;margin:6px 0 10px}
+.remote-steps{display:grid;grid-template-columns:repeat(4,1fr);gap:5px;margin:8px 0 11px}
+.remote-steps span{padding:6px 4px;border-radius:9px;border:1px solid #29334b;background:#0a0f1c;color:#71809a;font-size:8px;font-weight:900;text-align:center;white-space:nowrap}
+.remote-steps span.active{border-color:rgba(83,211,255,.5);background:rgba(42,143,205,.14);color:#a7ecff}
+.remote-steps span.done{border-color:rgba(73,218,160,.28);background:rgba(45,166,118,.1);color:#8fffd0}
