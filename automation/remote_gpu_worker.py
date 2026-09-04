@@ -49,8 +49,9 @@ WANGP_SESSION_LOCK = threading.Lock()
 WANGP_JOBS: dict[str, Any] = {}
 DOWNLOAD_TICKETS: dict[str, dict[str, Any]] = {}
 DOWNLOAD_TICKET_TTL = int(os.environ.get("NOVA_REMOTE_DOWNLOAD_TTL", "600"))
-WORKER_VERSION = "1.3.0"
-PROTOCOL_VERSION = 2
+WORKER_VERSION = "1.4.0"
+PROTOCOL_VERSION = 3
+SESSION_ID = uuid.uuid4().hex[:12]
 
 app = FastAPI(title="NOVA Remote GPU Worker", version="1.0")
 app.add_middleware(
@@ -628,10 +629,46 @@ def mirror_completed_job(job_id: str, job_dir: Path) -> str | None:
         return None
 
 
+def recovery_dir(job_id: str) -> Path:
+    return DRIVE_ROOT / "recovery" / job_id
+
+
+def checkpoint_job(job_id: str, job_dir: Path) -> str | None:
+    """Best-effort persistent checkpoint when Google Drive is already mounted."""
+    if not Path("/content/drive/MyDrive").exists():
+        return None
+    try:
+        target = recovery_dir(job_id)
+        target.mkdir(parents=True, exist_ok=True)
+        keep_names = {
+            "job.json",
+            "NOVA_scene_pack.json",
+            "WAN_GP_INPUT.mp4",
+            "WAN_GP_START.png",
+            "WAN_GP_PROMPT.txt",
+            "WANGP_SETTINGS.json",
+        }
+        for source in job_dir.iterdir():
+            if not source.is_file():
+                continue
+            if not (source.name.startswith("source.") or source.name in keep_names):
+                continue
+            destination = target / source.name
+            if destination.exists() and destination.stat().st_size == source.stat().st_size:
+                continue
+            shutil.copy2(source, destination)
+        return str(target)
+    except Exception as exc:
+        append_log(job_id, f"Recovery checkpoint skipped: {exc}")
+        return None
+
+
 def execute_job(job_id: str) -> None:
     job_dir = JOB_ROOT / job_id
     try:
         job = json.loads((job_dir / "job.json").read_text(encoding="utf-8"))
+        if bool(job.get("mirror_drive")):
+            checkpoint_job(job_id, job_dir)
         engine = str(job.get("engine") or "auto").lower()
         if engine == "auto":
             engine = "blender" if command_exists("blender") else "ffmpeg"
@@ -719,6 +756,7 @@ async def health(request: Request):
         "ok": True,
         "worker_version": WORKER_VERSION,
         "protocol_version": PROTOCOL_VERSION,
+        "session_id": SESSION_ID,
         "gpu": gpu_info(),
         "blender": command_exists("blender"),
         "ffmpeg": command_exists("ffmpeg"),
@@ -728,6 +766,8 @@ async def health(request: Request):
             "download_ticket": True,
             "preview_promote": True,
             "full_auto": True,
+            "auto_recovery": True,
+            "drive_restore": Path("/content/drive/MyDrive").exists(),
             "blender": command_exists("blender"),
             "ffmpeg": command_exists("ffmpeg"),
             "wangp": (WANGP_ROOT / "shared" / "api.py").is_file(),
@@ -777,6 +817,8 @@ async def create_job(request: Request, job_json: str = Form(...), source: Upload
         quality=str(job.get("quality") or "preview").lower(),
         created_at=time.time(),
     )
+    if bool(job.get("mirror_drive")) and source_file(job_dir) is not None:
+        checkpoint_job(job_id, job_dir)
     if not deferred:
         asyncio.create_task(asyncio.to_thread(execute_job, job_id))
     return {"ok": True, "job_id": job_id, "status": "uploading" if deferred else "queued"}
@@ -836,6 +878,9 @@ async def upload_chunk(
             upload_bytes=total_bytes,
             message="Видео полностью загружено. Можно запускать GPU render.",
         )
+        job = json.loads((job_dir / "job.json").read_text(encoding="utf-8"))
+        if bool(job.get("mirror_drive")):
+            checkpoint_job(job_id, job_dir)
     return {"ok": True, "job_id": job_id, "received": received, "total": total, "bytes": size}
 
 
@@ -917,6 +962,40 @@ async def promote_job(job_id: str, request: Request):
     )
     asyncio.create_task(asyncio.to_thread(execute_job, new_id))
     return {"ok": True, "job_id": new_id, "status": "queued", "promoted_from": job_id}
+
+
+@app.post("/recovery/{job_id}/restore")
+async def restore_recovery_job(job_id: str, request: Request):
+    require_token(request)
+    if not Path("/content/drive/MyDrive").exists():
+        raise HTTPException(status_code=409, detail="Google Drive is not mounted")
+    source = recovery_dir(job_id)
+    if not source.is_dir() or not (source / "job.json").is_file():
+        raise HTTPException(status_code=404, detail="Recovery checkpoint not found")
+    target = JOB_ROOT / job_id
+    if target.exists():
+        current = status_path(job_id)
+        if current.is_file():
+            return {"ok": True, "job_id": job_id, "status": read_status(job_id).get("status"), "restored": False}
+        shutil.rmtree(target, ignore_errors=True)
+    shutil.copytree(source, target)
+    job = json.loads((target / "job.json").read_text(encoding="utf-8"))
+    job["job_id"] = job_id
+    job["defer_start"] = False
+    (target / "job.json").write_text(json.dumps(job, ensure_ascii=False, indent=2), encoding="utf-8")
+    update_status(
+        job_id,
+        job_id=job_id,
+        status="queued",
+        quality=str(job.get("quality") or "preview").lower(),
+        progress=0,
+        stage="recovered",
+        message="Восстановил job из Google Drive checkpoint после новой Colab-сессии.",
+        recovered_from_drive=True,
+        created_at=time.time(),
+    )
+    asyncio.create_task(asyncio.to_thread(execute_job, job_id))
+    return {"ok": True, "job_id": job_id, "status": "queued", "restored": True}
 
 
 @app.get("/jobs/{job_id}")
