@@ -115,6 +115,19 @@ async function poll(jobId){
     pollTimer=setTimeout(()=>poll(jobId),5000);
   }
 }
+async function uploadVideoChunks(jobId,file){
+  const chunkSize=8*1024*1024;
+  const total=Math.max(1,Math.ceil(file.size/chunkSize));
+  for(let index=0;index<total;index++){
+    const start=index*chunkSize,end=Math.min(file.size,start+chunkSize);
+    const fd=new FormData();
+    fd.append('index',String(index));fd.append('total',String(total));fd.append('filename',file.name);
+    fd.append('chunk',file.slice(start,end),file.name+'.part');
+    await jsonFetch(endpoint()+'/jobs/'+encodeURIComponent(jobId)+'/upload-chunk',{method:'POST',headers:authHeaders(),body:fd});
+    const pct=Math.round(((index+1)/total)*12);
+    setProgress(pct);setStatus('Загружаю видео в Colab: '+(index+1)+'/'+total+' частей…','busy');
+  }
+}
 async function send(){
   const url=endpoint(),tok=token();
   if(!url||!tok){setStatus('Сначала подключи Colab worker.','error');return}
@@ -122,15 +135,19 @@ async function send(){
   const job=buildJob();
   const source=$('remoteSource')?.files?.[0]||null;
   if(job.engine==='ffmpeg'&&!source){setStatus('Для FFmpeg выбери исходное видео.','error');return}
+  if(source)job.defer_start=true;
   const fd=new FormData();
   fd.append('job_json',JSON.stringify(job));
-  if(source)fd.append('source',source,source.name);
   const btn=$('remoteSend');if(btn)btn.disabled=true;
   const result=$('remoteResult');if(result)result.classList.add('hidden');
-  setProgress(1);setStatus('Отправляю задачу'+(source?' и видео':'')+' в Colab…','busy');
+  setProgress(1);setStatus('Создаю задачу на Colab GPU…','busy');
   try{
     const data=await jsonFetch(url+'/jobs',{method:'POST',headers:authHeaders(),body:fd});
     lastJobId=data.job_id;localStorage.setItem(LS_JOB,lastJobId);
+    if(source){
+      await uploadVideoChunks(lastJobId,source);
+      await jsonFetch(url+'/jobs/'+encodeURIComponent(lastJobId)+'/start',{method:'POST',headers:authHeaders()});
+    }
     setStatus('Colab принял '+lastJobId+'. Запускаю preview/render…','busy');
     poll(lastJobId);
   }catch(error){setStatus('Не удалось отправить: '+error.message,'error')}
