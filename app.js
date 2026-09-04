@@ -1,7 +1,7 @@
 (() => {
   'use strict';
 
-  const VERSION = '26.9.0';
+  const VERSION = '27.0.0';
   const $ = (selector) => document.querySelector(selector);
   const $$ = (selector) => [...document.querySelectorAll(selector)];
 
@@ -852,6 +852,38 @@
     const token = ++speechToken;
     const lang = options.lang || (language === 'en' ? 'en-US' : 'ru-RU');
     const speakerCharacter = options.character === 'owner' ? owner : robot;
+    const cleanText = cleanSpeechText(text);
+    const russian = String(lang).toLowerCase().startsWith('ru');
+    const neuralIrina = russian && options.forceSystemVoice !== true && window.NovaRussianTTS?.speakIrina;
+
+    const finish = () => {
+      if (token !== speechToken) return;
+      speaking = false;
+      speakerCharacter.classList.remove('is-talking');
+      if (audioPerformance) setStatusKey('status.music', 'music');
+      else setStatusKey('status.ready');
+      if (typeof options.onEnd === 'function') options.onEnd();
+      maybeRestartRecognition(450);
+    };
+
+    if (neuralIrina) {
+      try { window.NovaRussianTTS.stop?.(); } catch (_) {}
+      speaking = true;
+      pauseRecognitionForOutput();
+      robot.classList.remove('is-talking');
+      owner.classList.remove('is-talking');
+      speakerCharacter.classList.add('is-talking');
+      setStatusKey(audioPerformance ? 'status.music' : 'status.speaking', audioPerformance ? 'music' : 'speaking');
+
+      Promise.resolve(window.NovaRussianTTS.speakIrina(cleanText))
+        .then(finish)
+        .catch((error) => {
+          console.warn('[NOVA] Piper Irina speech failed:', error);
+          finish();
+        });
+      return;
+    }
+
     if (!('speechSynthesis' in window) || typeof SpeechSynthesisUtterance === 'undefined') {
       if (typeof options.onEnd === 'function') later(options.onEnd, 50);
       return;
@@ -865,7 +897,7 @@
     speakerCharacter.classList.add('is-talking');
     setStatusKey(audioPerformance ? 'status.music' : 'status.speaking', audioPerformance ? 'music' : 'speaking');
 
-    const utterance = new SpeechSynthesisUtterance(cleanSpeechText(text));
+    const utterance = new SpeechSynthesisUtterance(cleanText);
     utterance.lang = lang;
     utterance.rate = options.rate || 0.94;
     utterance.pitch = options.pitch || 1.04;
@@ -873,15 +905,6 @@
     const voice = chooseVoice(lang);
     if (voice) utterance.voice = voice;
 
-    const finish = () => {
-      if (token !== speechToken) return;
-      speaking = false;
-      speakerCharacter.classList.remove('is-talking');
-      if (audioPerformance) setStatusKey('status.music', 'music');
-      else setStatusKey('status.ready');
-      if (typeof options.onEnd === 'function') options.onEnd();
-      maybeRestartRecognition(450);
-    };
     utterance.onend = finish;
     utterance.onerror = finish;
     window.speechSynthesis.speak(utterance);
@@ -2252,7 +2275,7 @@
 
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
-      navigator.serviceWorker.register('./service-worker.js?v=26.9.0')
+      navigator.serviceWorker.register('./service-worker.js?v=27.0.0')
         .then((registration) => registration.update())
         .catch(() => {});
     });
