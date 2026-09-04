@@ -123,7 +123,11 @@
       <section id="remoteGpu" class="remote-gpu-panel" aria-label="Удалённый GPU Google Colab">
         <div class="remote-gpu-head"><strong>☁️ Remote GPU / Google Colab</strong><span>FREE</span></div>
         <p>Если iPhone слабый, отправь видео и Scene Pack на временный GPU Colab. Blender, FFmpeg и WanGP работают удалённо без платных API.</p>
-        <a class="remote-colab-link" href="https://colab.research.google.com/github/magomedt149/nova-robot/blob/main/blender-colab/NOVA_Remote_GPU_Worker.ipynb" target="_blank" rel="noopener">🚀 Открыть NOVA Colab Worker</a>
+        <a id="remoteColabLink" class="remote-colab-link" href="https://colab.research.google.com/github/magomedt149/nova-robot/blob/main/blender-colab/NOVA_Remote_GPU_Worker.ipynb" target="_blank" rel="noopener">🚀 Открыть NOVA Colab Worker</a>
+        <div class="remote-smart-actions">
+          <button id="remoteAutoStart" type="button">⚡ Запустить Remote GPU</button>
+          <button id="remoteTest" class="secondary" type="button">🧪 Тест рендера 1 сек</button>
+        </div>
         <label>Быстрое подключение
           <input id="remoteConnectCode" autocomplete="off" placeholder="Вставь NOVA CONNECT CODE из Colab">
         </label>
