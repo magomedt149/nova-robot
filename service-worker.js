@@ -1,4 +1,4 @@
-const CACHE = 'nova-v59-auto-update-20260904';
+const CACHE = 'nova-v60-3d-director-20260904';
 const API_CACHE = 'nova-api-economy-v2';
 const METERED_NETLIFY_HOST = /(^|\\.)netlify\\.app$/i.test(self.location.hostname);
 const YOUTUBE_TTL_MS = 24 * 60 * 60 * 1000;
@@ -31,6 +31,7 @@ const CORE = [
   './nova-media-library.js',
   './nova-ios-output-actions.js',
   './nova-video-pro.js',
+  './nova-3d-director.js',
   './nova-unified-video-studio.js',
   './motion-studio/index.html',
   './motion-studio/styles.css',
