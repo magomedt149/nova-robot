@@ -2297,9 +2297,24 @@
     resetPerformance();
     respond(t('robot.tap'));
   });
-  makeDraggable(owner, () => {
+  let ownerPointerTapAt = 0;
+  function handleOwnerTap() {
     resetPerformance();
     respond(t('owner.tap'), { character: 'owner', pitch: 0.82, rate: 0.91 });
+  }
+
+  makeDraggable(owner, () => {
+    ownerPointerTapAt = Date.now();
+    handleOwnerTap();
+  });
+
+  // iPhone/PWA safety fallback: some Safari builds can swallow pointerup
+  // after a tiny finger movement. The following click path restores the T tap
+  // without firing twice when pointerup already succeeded.
+  owner.addEventListener('click', (event) => {
+    if (Date.now() - ownerPointerTapAt < 650) return;
+    event.preventDefault();
+    handleOwnerTap();
   });
   makeDraggable(cat, performCatScene);
 
