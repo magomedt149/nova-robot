@@ -1,0 +1,81 @@
+name: White Rock Irina One-Off
+
+on:
+  push:
+    branches:
+      - irina-white-rock-lesson
+    paths:
+      - .github/workflows/white-rock-irina-oneoff.yml
+
+permissions:
+  contents: read
+
+jobs:
+  render:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Piper
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install piper-tts
+
+      - name: Download locked Irina
+        run: |
+          python -m piper.download_voices ru_RU-irina-medium
+
+      - name: Render fresh Irina segments
+        shell: bash
+        run: |
+          cat > render_irina.py <<'PY'
+          import wave
+          from piper import PiperVoice, SynthesisConfig
+
+          VOICE_ID = "ru_RU-irina-medium"
+          voice = PiperVoice.load(
+              f"{VOICE_ID}.onnx",
+              config_path=f"{VOICE_ID}.onnx.json"
+          )
+          syn = SynthesisConfig(
+              length_scale=1.04,
+              noise_scale=0.667,
+              noise_w_scale=0.8,
+              normalize_audio=True
+          )
+
+          texts = [
+              """Смотри. Жилищная субсидия работает так. Сначала жилищное агентство проверяет твой подтверждённый доход и рассчитывает твою долю. Обычно ориентир — около тридцати процентов скорректированного дохода. Свою часть платишь ты, а остальную субсидию жилищное агентство перечисляет арендодателю напрямую. Это не деньги, которые просто присылают тебе на карту.""",
+              """Пример. Если учитываемый доход составляет тысячу долларов в месяц, грубая базовая доля — около трёхсот долларов. Если коммунальный вычет составляет сто пятьдесят долларов, платёж хозяину может быть около ста пятидесяти долларов. Если реальные коммунальные тоже сто пятьдесят, общий расход получается около трёхсот долларов. Если коммунальные сто восемьдесят, общий расход около трёхсот тридцати долларов.""",
+              """Теперь пример с нулевым учитываемым доходом. Платёж хозяину может получиться ноль. Но это не означает, что все расходы равны нулю. Если коммунальные составляют двести пятьдесят долларов и действует возмещение коммунальных расходов двести долларов, твой чистый расход может быть около пятидесяти долларов. Если возмещение не выплачивается, коммунальные придётся оплачивать самому. Точные правила всегда подтверждает жилищное агентство.""",
+              """Для подачи подготовь удостоверение личности, налоговую декларацию, формы десять девяносто девять, шедьюл си, банковские выписки и подтверждение дохода. Обязательно спроси: есть ли свободная квартира по программе проджект-бэйст ваучер, какой доход они засчитают, какой коммунальный вычет действует и какая будет твоя точная доля. Если откажут, попроси точную причину отказа письменно."""
+          ]
+
+          with open("durations.txt", "w", encoding="utf-8") as report:
+              for i, text in enumerate(texts, 1):
+                  out = f"irina_slide_{i}.wav"
+                  with wave.open(out, "wb") as w:
+                      voice.synthesize_wav(text, w, syn_config=syn)
+                  with wave.open(out, "rb") as w:
+                      dur = w.getnframes() / w.getframerate()
+                  report.write(f"{i}\t{dur:.6f}\n")
+                  print(out, dur)
+          PY
+          python render_irina.py
+
+      - name: Upload Irina audio
+        uses: actions/upload-artifact@v4
+        with:
+          name: WHITE_ROCK_IRINA_AUDIO
+          path: |
+            irina_slide_1.wav
+            irina_slide_2.wav
+            irina_slide_3.wav
+            irina_slide_4.wav
+            durations.txt
+          if-no-files-found: error
+          retention-days: 1
