@@ -1,8 +1,7 @@
 name: NOVA Video PRO v31 checks
 
+
 on:
-  push:
-    branches: [upgrade/video-studio-v31]
   workflow_dispatch:
 
 jobs:
