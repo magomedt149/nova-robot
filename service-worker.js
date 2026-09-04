@@ -1,4 +1,4 @@
-const CACHE = 'nova-v32-full-auto-gpu-20260903';
+const CACHE = 'nova-v33-full-auto-gpu-20260903';
 const API_CACHE = 'nova-api-economy-v2';
 const YOUTUBE_TTL_MS = 24 * 60 * 60 * 1000;
 const TRANSLATE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
