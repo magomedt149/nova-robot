@@ -2279,7 +2279,7 @@
       if (pwaReloading) return;
       pwaReloading = true;
       try {
-        const key = 'nova.pwa.controllerReload:27.1.0';
+        const key = `nova.pwa.controllerReload:${VERSION}`;
         if (sessionStorage.getItem(key) === '1') return;
         sessionStorage.setItem(key, '1');
       } catch (_) {}
@@ -2287,7 +2287,7 @@
     });
 
     window.addEventListener('load', () => {
-      navigator.serviceWorker.register('./service-worker.js?v=27.1.0', { updateViaCache: 'none' })
+      navigator.serviceWorker.register(`./service-worker.js?v=${encodeURIComponent(VERSION)}`, { updateViaCache: 'none' })
         .then(async (registration) => {
           try { await registration.update(); } catch (_) {}
           if (registration.waiting) {
