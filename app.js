@@ -1,7 +1,7 @@
 (() => {
   'use strict';
 
-  const VERSION = '27.0.0';
+  const VERSION = '27.1.0';
   const $ = (selector) => document.querySelector(selector);
   const $$ = (selector) => [...document.querySelectorAll(selector)];
 
@@ -2274,9 +2274,26 @@
   });
 
   if ('serviceWorker' in navigator) {
+    let pwaReloading = false;
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (pwaReloading) return;
+      pwaReloading = true;
+      try {
+        const key = 'nova.pwa.controllerReload:27.1.0';
+        if (sessionStorage.getItem(key) === '1') return;
+        sessionStorage.setItem(key, '1');
+      } catch (_) {}
+      window.location.reload();
+    });
+
     window.addEventListener('load', () => {
-      navigator.serviceWorker.register('./service-worker.js?v=27.0.0')
-        .then((registration) => registration.update())
+      navigator.serviceWorker.register('./service-worker.js?v=27.1.0', { updateViaCache: 'none' })
+        .then(async (registration) => {
+          try { await registration.update(); } catch (_) {}
+          if (registration.waiting) {
+            try { registration.waiting.postMessage({ type: 'NOVA_SKIP_WAITING' }); } catch (_) {}
+          }
+        })
         .catch(() => {});
     });
   }
