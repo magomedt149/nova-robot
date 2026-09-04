@@ -875,6 +875,7 @@ async def promote_job(job_id: str, request: Request):
     promoted = dict(original)
     promoted.pop("job_id", None)
     promoted["quality"] = "final"
+    promoted["fps"] = max(30, int(original.get("final_fps") or 30))
     promoted["defer_start"] = False
     promoted["promoted_from"] = job_id
     promoted["created_at"] = time.time()
