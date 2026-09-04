@@ -1,12 +1,20 @@
 {
   "name": "NOVA",
-  "version": "27.3.1",
-  "pwa": "27.3.1",
+  "version": "27.4.0",
+  "pwa": "27.4.0",
   "mode": "free-only",
   "paidApis": false,
   "externalComputeRequiresConfirmation": true,
   "automaticRemoteCompute": false,
   "irina": "ru_RU-irina-medium",
   "motionStudio": true,
-  "updateMethod": "./update.html"
+  "updateMethod": "./update.html",
+  "threeDDirector": true,
+  "threeDDirectorVersion": "1.0.0",
+  "threeDPipeline": [
+    "3D Block",
+    "Camera Path",
+    "Preview",
+    "AI Render stage"
+  ]
 }
