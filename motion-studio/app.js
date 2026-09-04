@@ -2,6 +2,7 @@ const $=id=>document.getElementById(id);
 const canvas=$('canvas');
 const ctx=canvas.getContext('2d');
 let raf=0, previewStart=performance.now();
+let localSourceVideo=null, localSourceObjectUrl='', localAudioContext=null;
 const controls=['title','subtitle','duration','ratio','style','motion','camera','vfx','intensity'];
 
 const VFX_PRESETS={
@@ -101,9 +102,19 @@ function drawVfx(prog,c,w,h,layer){
   ctx.restore();
 }
 
+function drawSourceCover(video,w,h){
+  if(!video||video.readyState<2||!video.videoWidth||!video.videoHeight)return false;
+  const scale=Math.max(w/video.videoWidth,h/video.videoHeight);
+  const dw=video.videoWidth*scale,dh=video.videoHeight*scale;
+  ctx.drawImage(video,(w-dw)/2,(h-dh)/2,dw,dh);
+  return true;
+}
 function draw(t,c){
   const w=canvas.width,h=canvas.height,p=palette(c.style);ctx.clearRect(0,0,w,h);
-  const g=ctx.createRadialGradient(w*.72,h*.14,10,w*.52,h*.45,Math.max(w,h));g.addColorStop(0,p.bg2);g.addColorStop(1,p.bg1);ctx.fillStyle=g;ctx.fillRect(0,0,w,h);
+  const hasSource=drawSourceCover(localSourceVideo,w,h);
+  const g=ctx.createRadialGradient(w*.72,h*.14,10,w*.52,h*.45,Math.max(w,h));g.addColorStop(0,p.bg2);g.addColorStop(1,p.bg1);
+  if(hasSource){ctx.save();ctx.globalAlpha=.24;ctx.fillStyle=g;ctx.fillRect(0,0,w,h);ctx.restore()}
+  else{ctx.fillStyle=g;ctx.fillRect(0,0,w,h)}
   const prog=(t%c.duration)/c.duration; const cam=cameraPose(prog,c,w,h);ctx.save();ctx.translate(w*.5+cam.x,h*.5+cam.y);ctx.rotate(cam.rot);ctx.scale(cam.scale,cam.scale);ctx.translate(-w*.5,-h*.5);drawVfx(prog,c,w,h,'back'); const intro=clamp(prog/.18,0,1), outro=clamp((1-prog)/.15,0,1); const alpha=Math.min(easeOutCubic(intro),easeOutCubic(outro));
   const portrait=c.ratio==='9:16'; const margin=w*.08; const top=h*.105; const bottom=h*.88;
   ctx.globalAlpha=.28;ctx.fillStyle=p.accent;ctx.fillRect(margin,top,w-margin*2,Math.max(2,h*.002));ctx.fillRect(margin,bottom,w-margin*2,Math.max(2,h*.002));ctx.globalAlpha=1;
@@ -147,12 +158,91 @@ $('applyPrompt').addEventListener('click',()=>{const q=$('prompt').value.toLower
 });
 
 function chooseMime(){const types=['video/mp4;codecs=avc1.42E01E','video/mp4','video/webm;codecs=vp9','video/webm;codecs=vp8','video/webm'];return types.find(t=>window.MediaRecorder&&MediaRecorder.isTypeSupported(t))||''}
-$('render').addEventListener('click',async()=>{
-  if(!canvas.captureStream||!window.MediaRecorder){$('status').innerHTML='<span class="note">Этот браузер не поддерживает запись Canvas. Открой страницу в Safari/Chrome на более новом устройстве.</span>';return}
-  const btn=$('render');btn.disabled=true;$('download').classList.add('hidden');$('video').classList.add('hidden');const c=config();setCanvasSize();const fps=30;const stream=canvas.captureStream(fps);const mime=chooseMime();let rec;try{rec=new MediaRecorder(stream,mime?{mimeType:mime,videoBitsPerSecond:8_000_000}:{videoBitsPerSecond:8_000_000})}catch(e){rec=new MediaRecorder(stream)}
-  const chunks=[];rec.ondataavailable=e=>{if(e.data&&e.data.size)chunks.push(e.data)};const started=performance.now();$('status').textContent=`Рендерю ${c.duration} сек на устройстве… не закрывай страницу.`;
-  let renderRaf=0;function renderFrame(now){const elapsed=(now-started)/1000;draw(Math.min(elapsed,c.duration-.001),c);if(elapsed<c.duration)renderRaf=requestAnimationFrame(renderFrame)}
-  rec.start(250);renderRaf=requestAnimationFrame(renderFrame);
-  await new Promise(r=>setTimeout(r,c.duration*1000+160));cancelAnimationFrame(renderRaf);rec.stop();await new Promise(r=>rec.addEventListener('stop',r,{once:true}));stream.getTracks().forEach(t=>t.stop());
-  const outType=rec.mimeType||mime||'video/webm';const blob=new Blob(chunks,{type:outType});const url=URL.createObjectURL(blob);const ext=outType.includes('mp4')?'mp4':'webm';$('download').href=url;$('download').download=`TUMSOEV_Motion_${c.duration}s.${ext}`;$('download').textContent=`Скачать ${ext.toUpperCase()}`;$('download').classList.remove('hidden');$('video').src=url;$('video').classList.remove('hidden');$('status').innerHTML=ext==='mp4'?'Готово. MP4 создан бесплатно на твоём устройстве.':'Готово. Браузер создал WEBM бесплатно. Для MP4 открой студию в Safari на iPhone/Mac или используй локальную FFmpeg-версию.';btn.disabled=false;restart();
-});
+
+async function prepareLocalSource(file){
+  if(localSourceObjectUrl){URL.revokeObjectURL(localSourceObjectUrl);localSourceObjectUrl=''}
+  localSourceVideo=null;
+  if(!file)return null;
+  const video=document.createElement('video');
+  video.playsInline=true;video.preload='auto';video.loop=true;video.muted=false;
+  localSourceObjectUrl=URL.createObjectURL(file);video.src=localSourceObjectUrl;
+  await new Promise((resolve,reject)=>{
+    const ok=()=>{cleanup();resolve()};
+    const bad=()=>{cleanup();reject(new Error('Не удалось открыть исходное видео'))};
+    const cleanup=()=>{video.removeEventListener('loadeddata',ok);video.removeEventListener('error',bad)};
+    video.addEventListener('loadeddata',ok,{once:true});video.addEventListener('error',bad,{once:true});
+  });
+  localSourceVideo=video;
+  return video;
+}
+
+async function attachSourceAudio(fileVideo,stream){
+  if(!fileVideo||!window.AudioContext)return null;
+  try{
+    localAudioContext=localAudioContext||new AudioContext();
+    await localAudioContext.resume();
+    const source=localAudioContext.createMediaElementSource(fileVideo);
+    const destination=localAudioContext.createMediaStreamDestination();
+    source.connect(destination);
+    destination.stream.getAudioTracks().forEach(track=>stream.addTrack(track));
+    return {source,destination};
+  }catch(_){return null}
+}
+
+async function renderLocalVideo(sourceFile=null){
+  if(!canvas.captureStream||!window.MediaRecorder){
+    $('status').innerHTML='<span class="note">Этот браузер не поддерживает локальную запись Canvas.</span>';
+    throw new Error('Local MediaRecorder unavailable');
+  }
+  $('applyPrompt')?.click();
+  const btn=$('render');if(btn)btn.disabled=true;
+  $('download').classList.add('hidden');$('video').classList.add('hidden');
+  const c=config();setCanvasSize();const fps=30;
+  let sourceVideo=null,audioBridge=null;
+  try{
+    if(sourceFile){
+      $('status').textContent='Готовлю исходное видео на iPhone…';
+      sourceVideo=await prepareLocalSource(sourceFile);
+      sourceVideo.currentTime=0;
+    }else{localSourceVideo=null}
+    const stream=canvas.captureStream(fps);
+    if(sourceVideo)audioBridge=await attachSourceAudio(sourceVideo,stream);
+    const mime=chooseMime();let rec;
+    try{rec=new MediaRecorder(stream,mime?{mimeType:mime,videoBitsPerSecond:8_000_000}:{videoBitsPerSecond:8_000_000})}
+    catch(_){rec=new MediaRecorder(stream)}
+    const chunks=[];rec.ondataavailable=e=>{if(e.data&&e.data.size)chunks.push(e.data)};
+    if(sourceVideo){try{await sourceVideo.play()}catch(_){sourceVideo.muted=true;await sourceVideo.play()}}
+    const started=performance.now();
+    $('status').textContent=sourceVideo?('Рендерю '+c.duration+' сек на iPhone с исходным видео…'):('Рендерю '+c.duration+' сек на iPhone…');
+    let renderRaf=0;
+    function renderFrame(now){
+      const elapsed=(now-started)/1000;
+      draw(Math.min(elapsed,c.duration-.001),c);
+      if(elapsed<c.duration)renderRaf=requestAnimationFrame(renderFrame);
+    }
+    rec.start(250);renderRaf=requestAnimationFrame(renderFrame);
+    await new Promise(r=>setTimeout(r,c.duration*1000+180));
+    cancelAnimationFrame(renderRaf);rec.stop();
+    await new Promise(r=>rec.addEventListener('stop',r,{once:true}));
+    if(sourceVideo)sourceVideo.pause();
+    stream.getTracks().forEach(t=>t.stop());
+    const outType=rec.mimeType||mime||'video/webm';
+    const blob=new Blob(chunks,{type:outType});
+    const url=URL.createObjectURL(blob);const ext=outType.includes('mp4')?'mp4':'webm';
+    $('download').href=url;$('download').download='NOVA_Video_'+c.duration+'s.'+ext;$('download').textContent='Скачать '+ext.toUpperCase();$('download').classList.remove('hidden');
+    $('video').src=url;$('video').classList.remove('hidden');
+    $('status').textContent=ext==='mp4'?'Готово. Видео создано бесплатно на iPhone.':'Готово. Видео создано локально в WEBM.';
+    restart();
+    window.dispatchEvent(new CustomEvent('nova-local-render-complete',{detail:{url,blob,ext,duration:c.duration,hasSource:Boolean(sourceFile)}}));
+    return {url,blob,ext,duration:c.duration,hasSource:Boolean(sourceFile)};
+  }finally{
+    if(btn)btn.disabled=false;
+    if(sourceVideo)sourceVideo.pause();
+    localSourceVideo=null;
+    if(localSourceObjectUrl){URL.revokeObjectURL(localSourceObjectUrl);localSourceObjectUrl=''}
+    if(audioBridge?.source){try{audioBridge.source.disconnect()}catch(_){}}
+    if(audioBridge?.destination){try{audioBridge.destination.disconnect()}catch(_){}}
+  }
+}
+window.NOVA_LOCAL_RENDER=renderLocalVideo;
+$('render').addEventListener('click',()=>renderLocalVideo(null).catch(error=>{$('status').textContent='Ошибка локального рендера: '+error.message}));
