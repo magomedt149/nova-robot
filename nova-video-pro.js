@@ -211,6 +211,97 @@
     return null;
   }
 
+  function wrapCanvasText(ctx, text, maxWidth, maxLines = 7) {
+    const words = clean(text).split(/\s+/).filter(Boolean);
+    const lines = [];
+    let line = '';
+    for (const word of words) {
+      const next = line ? `${line} ${word}` : word;
+      if (!line || ctx.measureText(next).width <= maxWidth) line = next;
+      else {
+        lines.push(line);
+        line = word;
+        if (lines.length >= maxLines - 1) break;
+      }
+    }
+    if (line && lines.length < maxLines) lines.push(line);
+    if (lines.length === maxLines && words.length > lines.join(' ').split(/\s+/).length) {
+      lines[maxLines - 1] = lines[maxLines - 1].replace(/[.…]+$/, '') + '…';
+    }
+    return lines;
+  }
+
+  async function makeTextPromptSource(prompt, ratio = '9:16') {
+    const text = clean(prompt);
+    if (!text) throw new Error('Напиши, какое видео хочешь создать.');
+    const width = ratio === '16:9' ? 1280 : 720;
+    const height = ratio === '16:9' ? 720 : 1280;
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext('2d', { alpha: false });
+
+    const seed = [...text].reduce((sum, ch) => (sum + ch.charCodeAt(0) * 17) % 360, 220);
+    const grad = ctx.createLinearGradient(0, 0, width, height);
+    grad.addColorStop(0, `hsl(${seed},58%,12%)`);
+    grad.addColorStop(.55, `hsl(${(seed + 38) % 360},55%,9%)`);
+    grad.addColorStop(1, '#02040b');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, width, height);
+
+    const glow = ctx.createRadialGradient(width * .25, height * .25, 0, width * .25, height * .25, Math.max(width, height) * .72);
+    glow.addColorStop(0, `hsla(${(seed + 65) % 360},90%,68%,.30)`);
+    glow.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = glow;
+    ctx.fillRect(0, 0, width, height);
+
+    for (let i = 0; i < 70; i++) {
+      const x = ((i * 83 + seed * 11) % 997) / 997 * width;
+      const y = ((i * 149 + seed * 7) % 991) / 991 * height;
+      const r = 0.7 + ((i * 13) % 8) / 8 * 1.8;
+      ctx.globalAlpha = .18 + ((i * 19) % 70) / 100;
+      ctx.fillStyle = i % 5 === 0 ? '#9edcff' : '#ffffff';
+      ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+
+    const panelW = width * .84;
+    const panelX = (width - panelW) / 2;
+    const panelY = height * .27;
+    const panelH = height * .46;
+    ctx.fillStyle = 'rgba(3,8,22,.58)';
+    ctx.strokeStyle = 'rgba(140,198,255,.28)';
+    ctx.lineWidth = Math.max(2, width / 500);
+    ctx.beginPath();
+    if (ctx.roundRect) ctx.roundRect(panelX, panelY, panelW, panelH, Math.min(34, width * .04));
+    else ctx.rect(panelX, panelY, panelW, panelH);
+    ctx.fill(); ctx.stroke();
+
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#8bdcff';
+    ctx.font = `800 ${Math.round(width * .035)}px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif`;
+    ctx.fillText('NOVA · TEXT → VIDEO · FREE', width / 2, panelY + height * .065);
+
+    const fontSize = Math.round(width * (ratio === '16:9' ? .042 : .052));
+    ctx.font = `800 ${fontSize}px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif`;
+    ctx.fillStyle = '#ffffff';
+    const lines = wrapCanvasText(ctx, text, panelW * .78, ratio === '16:9' ? 5 : 8);
+    const lineHeight = fontSize * 1.28;
+    const blockH = lines.length * lineHeight;
+    let y = panelY + panelH / 2 - blockH / 2 + lineHeight * .75;
+    lines.forEach((line) => { ctx.fillText(line, width / 2, y); y += lineHeight; });
+
+    ctx.font = `650 ${Math.round(width * .027)}px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif`;
+    ctx.fillStyle = 'rgba(220,235,255,.78)';
+    ctx.fillText('локальный motion-клип · без платных API', width / 2, panelY + panelH - height * .045);
+
+    const blob = await new Promise((resolve, reject) => {
+      canvas.toBlob((value) => value ? resolve(value) : reject(new Error('Не удалось создать локальный кадр из текста.')), 'image/png', 1);
+    });
+    const file = new File([blob], 'NOVA_TEXT_PROMPT.png', { type: 'image/png', lastModified: Date.now() });
+    return { kind: 'image', file, generatedFromText: true };
+  }
+
   async function useCurrentVideo() {
     const file = $('#novaLocalVideo')?.files?.[0];
     if (!file) throw new Error('Во вкладке «Видео» нет MP4/MOV.');
@@ -529,12 +620,19 @@
     const duration = clamp($('#novaProDuration')?.value || 5, 1, 15);
     const style = $('#novaProStyle')?.value || 'motion';
     const ratio = $('#novaProRatio')?.value || '9:16';
-    status(`${extend ? 'Extend' : 'Motion'}: локальный рендер…`);
-    const result = await renderLocalClip({ duration, style, ratio, prompt: state.prompt, negative: state.negative, refMode: state.refMode, extend });
-    const src = currentSource()?.file?.name?.replace(/\.[^.]+$/, '') || 'NOVA';
+    let source = currentSource();
+    if (!source) {
+      if (extend) throw new Error('Для Extend сначала нужен исходный ролик.');
+      source = await makeTextPromptSource(state.prompt, ratio);
+      status('TEXT → VIDEO: создал локальный кадр из текста, начинаю motion-рендер…');
+    } else {
+      status(`${extend ? 'Extend' : 'Motion'}: локальный рендер…`);
+    }
+    const result = await renderLocalClip({ source, duration, style, ratio, prompt: state.prompt, negative: state.negative, refMode: state.refMode, extend });
+    const src = source.generatedFromText ? 'NOVA_TEXT' : (source.file?.name?.replace(/\.[^.]+$/, '') || 'NOVA');
     const name = `${safeName(src)}_${extend ? 'EXTEND' : 'MOTION'}_${style.toUpperCase()}_${duration}s.${result.extension}`;
-    addOutput(result.blob, name, $('#novaProOutputs'), extend ? 'NOVA Extend' : 'NOVA Motion Control');
-    status(`✅ ${extend ? 'Extend' : 'Motion'} готов и сохранён в Медиатеке.`);
+    addOutput(result.blob, name, $('#novaProOutputs'), source.generatedFromText ? 'NOVA Text to Video FREE' : (extend ? 'NOVA Extend' : 'NOVA Motion Control'));
+    status(`✅ ${source.generatedFromText ? 'TEXT → VIDEO' : (extend ? 'Extend' : 'Motion')} готов и сохранён в Медиатеке.`);
   }
 
   function sceneRows(root = document) {
@@ -819,7 +917,7 @@
   }
 
   window.NovaVideoPro = Object.freeze({
-    version: '31.0.0',
+    version: '31.1.0',
     renderLocalClip,
     renderTimeline,
     renderFive: () => renderFiveLegacy(),
