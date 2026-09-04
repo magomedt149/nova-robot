@@ -1,0 +1,12 @@
+# Example only — do not rename/copy into an active Codex config until you trust
+# the third-party BlenderMCP server and have installed its Blender addon.
+
+[mcp_servers.blender]
+command = "uvx"
+args = ["--python", "3.11", "blender-mcp"]
+enabled = true
+
+[mcp_servers.blender.env]
+UV_PYTHON_PREFERENCE = "only-managed"
+BLENDER_HOST = "localhost"
+BLENDER_PORT = "9876"
