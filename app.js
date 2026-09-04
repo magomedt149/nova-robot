@@ -882,6 +882,15 @@
       || null;
   }
 
+  function chooseClassicRobotVoice(lang) {
+    if (!('speechSynthesis' in window)) return null;
+    const desired = lang === 'en' ? 'en' : 'ru';
+    const voices = window.speechSynthesis.getVoices();
+    return voices.find((voice) => String(voice.lang || '').toLowerCase().startsWith(desired) && /premium|enhanced|siri|google/i.test(String(voice.name || '')))
+      || voices.find((voice) => String(voice.lang || '').toLowerCase().startsWith(desired))
+      || null;
+  }
+
   function cleanSpeechText(text) {
     return String(text ?? '')
       .replace(/\\(?:n|r|t)/gi, ' ')
@@ -900,7 +909,8 @@
     const speakerCharacter = options.character === 'owner' ? owner : robot;
     const cleanText = cleanSpeechText(text);
     const russian = String(lang).toLowerCase().startsWith('ru');
-    const neuralRussian = russian && options.forceSystemVoice !== true && window.NovaRussianTTS?.speak;
+    const classicRobotVoice = speakerCharacter === robot && !options.voiceProfile && options.forceNeuralVoice !== true;
+    const neuralRussian = russian && !classicRobotVoice && options.forceSystemVoice !== true && window.NovaRussianTTS?.speak;
 
     const finish = () => {
       if (token !== speechToken) return;
@@ -938,6 +948,9 @@
       return;
     }
 
+    if (classicRobotVoice) {
+      try { window.NovaRussianTTS?.stop?.(); } catch (_) {}
+    }
     window.speechSynthesis.cancel();
     speaking = true;
     pauseRecognitionForOutput();
@@ -951,7 +964,7 @@
     utterance.rate = options.rate || 0.94;
     utterance.pitch = options.pitch || 1.04;
     utterance.volume = 1;
-    const voice = chooseVoice(lang);
+    const voice = classicRobotVoice ? chooseClassicRobotVoice(lang) : chooseVoice(lang);
     if (voice) utterance.voice = voice;
 
     utterance.onend = finish;
