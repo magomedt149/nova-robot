@@ -1,7 +1,7 @@
 {
   "name": "NOVA",
-  "version": "27.2.0",
-  "pwa": "27.2.0",
+  "version": "27.2.1",
+  "pwa": "27.2.1",
   "mode": "free-only",
   "paidApis": false,
   "externalComputeRequiresConfirmation": true,
