@@ -853,6 +853,8 @@ async def upload_chunk(
         status="uploading",
         stage="uploading",
         progress=min(12, round(received / total * 12, 2)),
+        upload_received=received,
+        upload_total=total,
         message=f"Получено {received}/{total} частей видео.",
     )
     if received == total:
@@ -876,6 +878,8 @@ async def upload_chunk(
             stage="uploaded",
             progress=12,
             upload_bytes=total_bytes,
+            upload_received=total,
+            upload_total=total,
             message="Видео полностью загружено. Можно запускать GPU render.",
         )
         job = json.loads((job_dir / "job.json").read_text(encoding="utf-8"))
