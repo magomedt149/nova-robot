@@ -621,7 +621,7 @@
       if (!select.querySelector('option[value="nova:irina"]')) {
         const irina = document.createElement('option');
         irina.value = 'nova:irina';
-        irina.textContent = 'Ирина — Piper · голос зафиксирован';
+        irina.textContent = 'Ирина — женский ru-RU · Piper + iPhone fallback';
         const liza = select.querySelector('option[value="nova:liza"]');
         liza?.insertAdjacentElement('afterend', irina);
       }
@@ -656,7 +656,7 @@
     const note = document.createElement('div');
     note.id = 'novaNeuralTtsNote';
     note.className = 'nova-note-meta';
-    note.textContent = '🇷🇺 Голоса NOVA: Ирина — зафиксированный Piper ru_RU-irina-medium. Денис — отдельный мужской профиль ru-RU; на iPhone автоматически выбирается ближайший мужской русский системный голос, а при его отсутствии используется Piper Denis.';
+    note.textContent = '🇷🇺 Голоса NOVA: Ирина — женский ru-RU (Piper Irina, при сбое только женский системный fallback). Денис — мужской ru-RU (на iPhone мужской системный голос, при необходимости Piper Denis). При переключении женский и мужской профили не смешиваются.';
     anchor.insertAdjacentElement('afterend', note);
   }
 
