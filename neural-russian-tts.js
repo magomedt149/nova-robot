@@ -137,10 +137,10 @@
 
   function getDefaultVoice() {
     try {
-      const stored = normalizeVoice(localStorage.getItem(PRESET_KEY) || 'liza');
+      const stored = normalizeVoice(localStorage.getItem(PRESET_KEY) || 'irina');
       return stored === 'denis' ? 'irina' : stored;
     } catch (_) {
-      return 'liza';
+      return 'irina';
     }
   }
 
