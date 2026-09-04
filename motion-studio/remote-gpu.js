@@ -301,10 +301,10 @@ async function downloadResult(jobId){
     const video=$('video');if(video){video.src=url;video.classList.remove('hidden')}
   }catch(error){setStatus('Рендер готов, но ссылка на файл не создалась: '+error.message,'error')}
 }
-async function uploadVideoChunks(jobId,file,filename){
+async function uploadVideoChunks(jobId,file,filename,startIndex=0){
   const chunkSize=8*1024*1024;
   const total=Math.max(1,Math.ceil(file.size/chunkSize));
-  for(let index=0;index<total;index++){
+  for(let index=Math.max(0,Math.min(total-1,Number(startIndex)||0));index<total;index++){
     const start=index*chunkSize,end=Math.min(file.size,start+chunkSize);
     let uploaded=false,lastError=null;
     for(let attempt=1;attempt<=3&&!uploaded;attempt++){
@@ -468,8 +468,30 @@ async function resumeOrRecover(){
     try{
       const data=await jsonFetch(endpoint()+'/jobs/'+encodeURIComponent(meta.remoteJobId),{headers:authHeaders()});
       lastJobId=meta.remoteJobId;localStorage.setItem(LS_JOB,lastJobId);await holdWakeLock();
+      if(data.status==='uploading'){
+        const bundle=await getRecoveryBundle();
+        const source=bundle?.source;
+        if(!source){
+          setRecoveryStatus('Auto Recovery: upload был прерван, но исходник не сохранился. Выбери тот же видеофайл — NOVA продолжит с нужной части.','error');
+          return false;
+        }
+        const startAt=Math.max(0,Number(data.upload_received)||0);
+        setRecoveryStatus('Auto Recovery: продолжаю upload с части '+(startAt+1)+'.','busy');
+        await uploadVideoChunks(lastJobId,source,bundle.sourceName,startAt);
+        await jsonFetch(endpoint()+'/jobs/'+encodeURIComponent(lastJobId)+'/start',{method:'POST',headers:authHeaders()});
+        await patchRecovery({phase:'running'});
+        poll(lastJobId);
+        return true;
+      }
+      if(data.status==='uploaded'){
+        setRecoveryStatus('Auto Recovery: видео уже загружено. Запускаю GPU render.','busy');
+        await jsonFetch(endpoint()+'/jobs/'+encodeURIComponent(lastJobId)+'/start',{method:'POST',headers:authHeaders()});
+        await patchRecovery({phase:'running'});
+        poll(lastJobId);
+        return true;
+      }
       setRecoveryStatus('Auto Recovery: старая Colab-сессия вернулась, продолжаю job.','ok');
-      if(data.status==='completed'){poll(lastJobId)}else poll(lastJobId);
+      poll(lastJobId);
       return true;
     }catch(error){
       if(error.status!==404){scheduleRecoveryProbe();return false}
