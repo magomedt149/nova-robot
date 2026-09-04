@@ -2017,6 +2017,22 @@
       setLanguage('en');
       return;
     }
+    if (/диагностик|проверь\s+(?:нову|nova|бесплатн)|free\s*lock|бесплатн.*режим|режим.*бесплат|nova\s*health|health\s*check/.test(lower)) {
+      const runtime = window.NOVA_FREE_RUNTIME;
+      const report = runtime?.health?.() || {
+        version: VERSION,
+        freeLock: true,
+        online: navigator.onLine,
+        serviceWorker: 'serviceWorker' in navigator,
+        secureContext: window.isSecureContext
+      };
+      const message = language === 'en'
+        ? `NOVA ${report.version || VERSION}. FREE LOCK is on. Remote auto-run is off. PWA: ${report.serviceWorker ? 'ready' : 'unavailable'}. Network: ${report.online ? 'online' : 'offline'}. Metered Netlify auto-check: ${report.meteredNetlifyHost ? 'off' : 'not used'}.`
+        : `NOVA ${report.version || VERSION}. FREE LOCK включён. Автозапуск Remote GPU выключен. PWA: ${report.serviceWorker ? 'готово' : 'недоступно'}. Сеть: ${report.online ? 'online' : 'offline'}. Автопроверка через Netlify: ${report.meteredNetlifyHost ? 'выключена' : 'не используется'}.`;
+      respond(message);
+      return;
+    }
+
     if (/motion\s*\+?\s*vfx|motion studio|remote gpu|gpu render|google colab|colab|колаб|удал[её]нн.*gpu|рендер.*gpu|gpu.*рендер|запусти.*gpu|gpu.*запусти|сделай.*видео|создай.*видео|сгенерируй.*видео|сделать.*видео|создать.*видео|make.*video|create.*video|generate.*video|render.*video/.test(lower)) {
       const videoAuto = /remote gpu|gpu render|google colab|colab|колаб|удал[её]нн.*gpu|рендер.*gpu|gpu.*рендер|запусти.*gpu|gpu.*запусти|сделай.*видео|создай.*видео|сгенерируй.*видео|сделать.*видео|создать.*видео|make.*video|create.*video|generate.*video|render.*video/.test(lower);
       if (videoAuto) performRemoteGpu(text);
