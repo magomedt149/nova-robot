@@ -1,0 +1,44 @@
+name: Check Live NOVA Version
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "version.json"
+      - "update.html"
+      - "index.html"
+      - "app.js"
+      - "service-worker.js"
+      - "manifest.webmanifest"
+      - "netlify.toml"
+
+permissions:
+  contents: read
+
+jobs:
+  check-live:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Wait for Netlify production and verify NOVA
+        shell: bash
+        env:
+          BASE: https://dashing-otter-990b47.netlify.app
+          EXPECTED: "27.1.0"
+        run: |
+          set -euo pipefail
+          for i in $(seq 1 30); do
+            body="$(curl -fsSL --max-time 12 -H 'Cache-Control: no-cache' "$BASE/version.json?t=$(date +%s)" 2>/dev/null || true)"
+            echo "attempt=$i body=$body"
+            if echo "$body" | grep -q "\"version\"[[:space:]]*:[[:space:]]*\"$EXPECTED\""; then
+              html="$(curl -fsSL --max-time 12 -H 'Cache-Control: no-cache' "$BASE/?t=$(date +%s)")"
+              echo "$html" | grep -q "v27.1"
+              echo "$html" | grep -q "Motion + VFX"
+              echo "LIVE_NOVA_VERSION=$EXPECTED"
+              echo "LIVE_MOTION_VFX=present"
+              exit 0
+            fi
+            sleep 6
+          done
+          echo "Production did not reach NOVA $EXPECTED in time." >&2
+          exit 1
