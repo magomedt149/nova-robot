@@ -1,10 +1,7 @@
 name: NOVA Irina fresh 6s example
 
+
 on:
-  push:
-    branches: [main]
-    paths:
-      - '.github/workflows/nova-irina-6s-example.yml'
   workflow_dispatch:
 
 jobs:
