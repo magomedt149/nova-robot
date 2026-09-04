@@ -1666,13 +1666,23 @@
     const destination = encodeURIComponent(homeDestination());
     const isiPhone = /iPhone|iPad|iPod/i.test(navigator.userAgent || '');
     const url = isiPhone
-      ? `https://maps.apple.com/?daddr=${destination}&dirflg=d`
+      ? `https://maps.apple.com/directions?destination=${destination}&mode=driving&start=0`
       : `https://www.google.com/maps/dir/?api=1&destination=${destination}&travelmode=driving`;
 
-    addMessage('assistant', language === 'en' ? 'Opening route home.' : 'Открываю маршрут домой.');
-    setStatus(language === 'en' ? 'Opening navigation…' : 'Открываю навигацию…', 'speaking');
-    window.setTimeout(() => { navigationInFlight = false; }, 12000);
-    window.location.assign(url);
+    addMessage('assistant', language === 'en' ? 'Opening Apple Maps route home.' : 'Открываю Apple Maps: маршрут домой.');
+    setStatus(language === 'en' ? 'Opening navigation…' : 'Открываю навигацию…');
+
+    // Keep the handoff one-shot. If iOS fails to leave NOVA, unlock instead of
+    // keeping a stuck background task or launching Maps repeatedly.
+    window.setTimeout(() => {
+      if (!document.hidden) {
+        navigationInFlight = false;
+        setStatusKey('status.ready');
+        if (micWanted) maybeRestartRecognition(350);
+      }
+    }, 3200);
+
+    window.location.replace(url);
     return true;
   }
 
@@ -2389,16 +2399,26 @@
       if (recognitionActive) {
         try { recognition?.abort(); } catch (_) { /* already stopped */ }
       }
-    } else {
-      navigationInFlight = false;
-      if (micWanted) maybeRestartRecognition(450);
+      return;
     }
+    navigationInFlight = false;
+    if (micWanted) maybeRestartRecognition(450);
   });
   window.addEventListener('pageshow', () => {
     navigationInFlight = false;
     if (micWanted) maybeRestartRecognition(500);
   });
-  window.addEventListener('pagehide', () => stopMicrophone(false));
+  window.addEventListener('pagehide', () => {
+    if (navigationInFlight) {
+      clearTimeout(recognitionTimer);
+      try { recognition?.abort?.(); } catch (_) {}
+      recognitionActive = false;
+      recognitionStarting = false;
+      updateMicUi();
+      return;
+    }
+    stopMicrophone(false);
+  });
 
   applyLanguage(false);
   addMessage('bot', visitorName ? t('chat.welcomeNamed', { name: visitorName }) : t('chat.welcome'));
