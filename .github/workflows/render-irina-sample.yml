@@ -55,10 +55,12 @@ jobs:
           )
           with wave.open("irina_clear.wav", "wb") as wav_file:
               voice.synthesize_wav(text, wav_file, syn_config=syn)
+
+          with wave.open("irina_clear.wav", "rb") as wav_file:
+              duration = wav_file.getnframes() / wav_file.getframerate()
+              print(f"duration={duration:.3f}s")
           PY
           python render.py
-          ffmpeg -y -i irina_clear.wav             -af "highpass=f=90,lowpass=f=8500,acompressor=threshold=-18dB:ratio=2:attack=8:release=120:makeup=2,loudnorm=I=-15:TP=-1.2:LRA=5"             -ar 48000 -ac 1 irina_clear_master.wav
-          ffprobe -v error -show_entries format=duration -of default=nw=1:nk=1 irina_clear_master.wav
 
       - name: Upload Irina WAV
         uses: actions/upload-artifact@v4
