@@ -16,6 +16,7 @@ const VFX_PRESETS={
 };
 
 function config(){return{title:$('title').value.trim()||'TUMSOEV',subtitle:$('subtitle').value.trim()||'FREE MOTION + VFX STUDIO',duration:+$('duration').value,ratio:$('ratio').value,style:$('style').value,motion:$('motion').value,camera:$('camera').value,vfx:$('vfx').value,intensity:+$('intensity').value}}
+window.NOVA_MOTION_CONFIG=config;
 function setCanvasSize(){const c=config(); const portrait=c.ratio==='9:16'; canvas.width=portrait?720:1280; canvas.height=portrait?1280:720;}
 
 function setPresetActive(name){
