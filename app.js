@@ -1831,14 +1831,14 @@
       recognitionStarting = false;
       recognitionActive = false;
       updateMicUi();
-      if (micWanted && !speaking && !audioPerformance && !knowledgeSearching && !brainThinking) maybeRestartRecognition(480);
+      if (micWanted && !navigationInFlight && !speaking && !audioPerformance && !knowledgeSearching && !brainThinking) maybeRestartRecognition(480);
     };
     return instance;
   }
 
   function startRecognition() {
     clearTimeout(recognitionTimer);
-    if (!micWanted || speaking || audioPerformance || knowledgeSearching || brainThinking || recognitionActive || recognitionStarting) return;
+    if (!micWanted || navigationInFlight || speaking || audioPerformance || knowledgeSearching || brainThinking || recognitionActive || recognitionStarting) return;
     if (!recognition) recognition = createRecognition();
     if (!recognition) return;
     recognition.lang = preferredRecognitionLanguage();
@@ -1853,7 +1853,7 @@
 
   function maybeRestartRecognition(delay = 450) {
     clearTimeout(recognitionTimer);
-    if (!micWanted || speaking || audioPerformance || knowledgeSearching || brainThinking || document.hidden) return;
+    if (!micWanted || navigationInFlight || speaking || audioPerformance || knowledgeSearching || brainThinking || document.hidden) return;
     recognitionTimer = window.setTimeout(startRecognition, delay);
   }
 
@@ -2389,9 +2389,14 @@
       if (recognitionActive) {
         try { recognition?.abort(); } catch (_) { /* already stopped */ }
       }
-    } else if (micWanted) {
-      maybeRestartRecognition(450);
+    } else {
+      navigationInFlight = false;
+      if (micWanted) maybeRestartRecognition(450);
     }
+  });
+  window.addEventListener('pageshow', () => {
+    navigationInFlight = false;
+    if (micWanted) maybeRestartRecognition(500);
   });
   window.addEventListener('pagehide', () => stopMicrophone(false));
 
