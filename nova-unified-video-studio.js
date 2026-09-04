@@ -125,31 +125,71 @@
     const pane = $('[data-media-pane="story"]');
     if (!pane || $('#novaIrinaQuick')) return;
     const panel = document.createElement('section');
+    const IRINA_SAMPLE = 'Привет, Тумсоев. Ирина готова озвучивать видео на русском языке чётко и естественно.';
+    const DENIS_SAMPLE = 'Привет, Тумсоев. Денис готов озвучивать видео на русском языке чётким мужским голосом.';
     panel.id = 'novaIrinaQuick';
     panel.className = 'nova-irina-quick';
     panel.innerHTML = `
-      <h3>🎙️ Ирина — быстрый голосовой тест</h3>
-      <div class="nova-irina-lock">LOCK: ru_RU-irina-medium · pitch 1.0 · formant 1.0 · без автоматической подмены голоса</div>
-      <textarea id="novaIrinaQuickText">Привет, Тумсоев. Ирина готова озвучивать видео на русском языке чётко и естественно.</textarea>
-      <div class="nova-irina-row"><select id="novaIrinaQuickVoice"><option value="irina" selected>♀ Ирина</option><option value="denis">♂ Денис</option></select><div class="nova-media-note">Ниже остаются рассказ, диалог Ирина+Денис, прослушивание и MP3.</div></div>
+      <h3>🎙️ Ирина / Денис — быстрый голосовой тест</h3>
+      <div class="nova-irina-lock" id="novaQuickVoiceProfile">Ирина: ru_RU-irina-medium · pitch 1.0 · formant 1.0</div>
+      <textarea id="novaIrinaQuickText">${IRINA_SAMPLE}</textarea>
+      <div class="nova-irina-row"><select id="novaIrinaQuickVoice"><option value="irina">♀ Ирина</option><option value="denis">♂ Денис</option></select><div class="nova-media-note">Переключение сразу останавливает прежний голос. Кнопка «Слушать» всегда запускает выбранный профиль.</div></div>
       <div class="nova-irina-actions"><button class="primary" id="novaIrinaQuickPlay" type="button">▶ Слушать</button><button id="novaIrinaQuickStop" type="button">⏹ Стоп</button></div>`;
     pane.prepend(panel);
+
+    const voiceSelect = $('#novaIrinaQuickVoice', panel);
+    const textBox = $('#novaIrinaQuickText', panel);
+    const profile = $('#novaQuickVoiceProfile', panel);
+    const ttsAtInit = window.NovaRussianTTS;
+    const storedVoice = ttsAtInit?.getDefaultVoice?.();
+    if (voiceSelect && (storedVoice === 'irina' || storedVoice === 'denis')) voiceSelect.value = storedVoice;
+
+    const syncSelectedVoice = (stopCurrent = true) => {
+      const tts = window.NovaRussianTTS;
+      const voice = voiceSelect?.value === 'denis' ? 'denis' : 'irina';
+      if (stopCurrent) {
+        try { tts?.stop?.(); } catch (_) {}
+      }
+      try { tts?.setDefaultVoice?.(voice); } catch (_) {}
+      if (textBox) {
+        const current = textBox.value.trim();
+        if (!current || current === IRINA_SAMPLE || current === DENIS_SAMPLE) {
+          textBox.value = voice === 'denis' ? DENIS_SAMPLE : IRINA_SAMPLE;
+        }
+      }
+      if (profile) {
+        profile.textContent = voice === 'denis'
+          ? 'Денис: мужской ru-RU · iPhone male voice → Piper ru_RU-denis-medium fallback'
+          : 'Ирина: женский ru-RU · Piper ru_RU-irina-medium → female iPhone fallback';
+      }
+      status(`Выбран голос: ${voice === 'denis' ? 'Денис' : 'Ирина'}.`);
+      return voice;
+    };
+
+    voiceSelect?.addEventListener('change', () => syncSelectedVoice(true));
+    syncSelectedVoice(false);
+
     $('#novaIrinaQuickPlay', panel)?.addEventListener('click', async () => {
       const tts = window.NovaRussianTTS;
-      if (!tts?.speak) return status('Ирина ещё загружается. Попробуй через несколько секунд.');
-      const text = $('#novaIrinaQuickText', panel)?.value?.trim();
-      const voice = $('#novaIrinaQuickVoice', panel)?.value || 'irina';
+      if (!tts?.speak) return status('Русские голоса ещё загружаются. Попробуй через несколько секунд.');
+      const text = textBox?.value?.trim();
+      const voice = voiceSelect?.value === 'denis' ? 'denis' : 'irina';
       if (!text) return status('Введи текст для озвучки.');
       try {
+        tts.unlock?.();
+        tts.stop?.();
+        tts.setDefaultVoice?.(voice);
         status(`Говорит ${voice === 'denis' ? 'Денис' : 'Ирина'}…`);
-        await tts.speak(text, voice);
+        if (voice === 'denis' && tts.speakDenis) await tts.speakDenis(text);
+        else if (voice === 'irina' && tts.speakIrina) await tts.speakIrina(text);
+        else await tts.speak(text, voice);
       } catch (error) {
-        status(`TTS: ${error?.message || error}`);
+        status(`TTS ${voice === 'denis' ? 'Денис' : 'Ирина'}: ${error?.message || error}`);
       }
     });
+
     $('#novaIrinaQuickStop', panel)?.addEventListener('click', () => {
       try { window.NovaRussianTTS?.stop?.(); } catch (_) {}
-      try { window.speechSynthesis?.cancel?.(); } catch (_) {}
       status('Озвучка остановлена.');
     });
   }
