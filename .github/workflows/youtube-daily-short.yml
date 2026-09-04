@@ -1,8 +1,6 @@
-name: Daily YouTube Short - FREE
+name: Daily YouTube Short - PREVIEW ONLY
 
 on:
-  schedule:
-    - cron: '0 19 * * *'
   workflow_dispatch:
     inputs:
       force:
@@ -14,19 +12,19 @@ on:
     branches:
       - main
     paths:
+      - 'youtube_queue/today.json'
+      - 'youtube/render_short.py'
       - '.github/workflows/youtube-daily-short.yml'
-      - 'youtube/**'
-      - 'youtube_queue/**'
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
-  group: youtube-daily-short
-  cancel-in-progress: false
+  group: youtube-daily-short-preview
+  cancel-in-progress: true
 
 jobs:
-  build-and-upload:
+  build-preview:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -43,7 +41,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y ffmpeg fonts-dejavu-core
           python -m pip install --upgrade pip
-          python -m pip install pillow piper-tts google-api-python-client google-auth google-auth-httplib2
+          python -m pip install pillow piper-tts
 
       - name: Check queue date
         id: queue
@@ -72,48 +70,14 @@ jobs:
         if: ${{ steps.queue.outputs.ready == 'true' }}
         run: python youtube/render_short.py
 
-      - name: Check YouTube OAuth secrets
-        if: ${{ steps.queue.outputs.ready == 'true' }}
-        id: auth
-        env:
-          YOUTUBE_CLIENT_ID: ${{ secrets.YOUTUBE_CLIENT_ID }}
-          YOUTUBE_CLIENT_SECRET: ${{ secrets.YOUTUBE_CLIENT_SECRET }}
-          YOUTUBE_REFRESH_TOKEN: ${{ secrets.YOUTUBE_REFRESH_TOKEN }}
-        run: |
-          if [ -n "$YOUTUBE_CLIENT_ID" ] && [ -n "$YOUTUBE_CLIENT_SECRET" ] && [ -n "$YOUTUBE_REFRESH_TOKEN" ]; then
-            echo 'ready=true' >> "$GITHUB_OUTPUT"
-          else
-            echo 'ready=false' >> "$GITHUB_OUTPUT"
-            echo 'YouTube OAuth is not configured yet. Build artifact only; no upload.'
-          fi
-
-      - name: Upload to YouTube via official API
-        if: ${{ steps.queue.outputs.ready == 'true' && steps.auth.outputs.ready == 'true' }}
-        env:
-          YOUTUBE_CLIENT_ID: ${{ secrets.YOUTUBE_CLIENT_ID }}
-          YOUTUBE_CLIENT_SECRET: ${{ secrets.YOUTUBE_CLIENT_SECRET }}
-          YOUTUBE_REFRESH_TOKEN: ${{ secrets.YOUTUBE_REFRESH_TOKEN }}
-        run: python youtube/upload_youtube.py
-
-      - name: Save last uploaded marker
-        if: ${{ steps.queue.outputs.ready == 'true' && steps.auth.outputs.ready == 'true' }}
-        run: |
-          cp youtube_output/youtube_upload_result.json youtube_queue/last_uploaded.json
-          git config user.name 'nova-youtube-bot'
-          git config user.email 'actions@users.noreply.github.com'
-          git add youtube_queue/last_uploaded.json
-          git diff --cached --quiet || git commit -m 'Record daily YouTube upload'
-          git push origin HEAD:main
-
-      - name: Upload ready video package
+      - name: Upload preview package
         if: ${{ steps.queue.outputs.ready == 'true' }}
         uses: actions/upload-artifact@v4
         with:
-          name: daily-youtube-short
+          name: daily-youtube-short-preview
           path: |
             youtube_output/short.mp4
             youtube_output/thumbnail.jpg
             youtube_output/metadata.json
-            youtube_output/youtube_upload_result.json
-          if-no-files-found: warn
+          if-no-files-found: error
           retention-days: 2
