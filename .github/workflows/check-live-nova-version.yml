@@ -3,14 +3,13 @@ name: Check Live NOVA Version
 on:
   push:
     branches: [main]
-    paths:
-      - "version.json"
-      - "update.html"
-      - "index.html"
-      - "app.js"
-      - "service-worker.js"
-      - "manifest.webmanifest"
-      - "netlify.toml"
+    paths-ignore:
+      - ".github/**"
+      - "README.md"
+      - "README.txt"
+      - "NOVA_DIAGNOSTICS_RU_2026-09-03.txt"
+      - "NOVA_IPHONE_UPDATE_METHOD.md"
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -18,27 +17,32 @@ permissions:
 jobs:
   check-live:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 6
     steps:
-      - name: Wait for Netlify production and verify NOVA
+      - name: Wait for exact Netlify production commit
         shell: bash
         env:
           BASE: https://dashing-otter-990b47.netlify.app
-          EXPECTED: "27.1.0"
+          SITE_ID: ae7fa0fb-e73d-413a-b122-7b9ff9419244
+          EXPECTED_VERSION: "27.1.0"
+          EXPECTED_SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
-          for i in $(seq 1 30); do
-            body="$(curl -fsSL --max-time 12 -H 'Cache-Control: no-cache' "$BASE/version.json?t=$(date +%s)" 2>/dev/null || true)"
-            echo "attempt=$i body=$body"
-            if echo "$body" | grep -q "\"version\"[[:space:]]*:[[:space:]]*\"$EXPECTED\""; then
+          for i in $(seq 1 50); do
+            meta="$(curl -fsSL --max-time 12 "https://api.netlify.com/api/v1/sites/$SITE_ID" 2>/dev/null || true)"
+            live_sha="$(printf '%s' "$meta" | python3 -c 'import json,sys; d=json.load(sys.stdin); print((d.get("published_deploy") or {}).get("commit_ref") or "")' 2>/dev/null || true)"
+            live_version="$(curl -fsSL --max-time 12 -H 'Cache-Control: no-cache' "$BASE/version.json?t=$(date +%s)" 2>/dev/null || true)"
+            echo "attempt=$i live_sha=$live_sha expected_sha=$EXPECTED_SHA"
+            if [ "$live_sha" = "$EXPECTED_SHA" ] && echo "$live_version" | grep -q "\"version\"[[:space:]]*:[[:space:]]*\"$EXPECTED_VERSION\""; then
               html="$(curl -fsSL --max-time 12 -H 'Cache-Control: no-cache' "$BASE/?t=$(date +%s)")"
               echo "$html" | grep -q "v27.1"
               echo "$html" | grep -q "Motion + VFX"
-              echo "LIVE_NOVA_VERSION=$EXPECTED"
+              echo "LIVE_NOVA_VERSION=$EXPECTED_VERSION"
+              echo "LIVE_GIT_SHA=$live_sha"
               echo "LIVE_MOTION_VFX=present"
               exit 0
             fi
             sleep 6
           done
-          echo "Production did not reach NOVA $EXPECTED in time." >&2
+          echo "Netlify production did not reach exact GitHub SHA $EXPECTED_SHA." >&2
           exit 1
