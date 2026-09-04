@@ -42,6 +42,11 @@ JOB_ROOT.mkdir(parents=True, exist_ok=True)
 LOCK = threading.Lock()
 PROCESSES: dict[str, subprocess.Popen[str]] = {}
 CANCELLED: set[str] = set()
+WANGP_ROOT = Path(os.environ.get("NOVA_WANGP_ROOT", "/content/Wan2GP")).resolve()
+WANGP_OUTPUT_ROOT = Path(os.environ.get("NOVA_WANGP_OUTPUT_ROOT", str(JOB_ROOT / "_wangp_outputs"))).resolve()
+WANGP_SESSION = None
+WANGP_SESSION_LOCK = threading.Lock()
+WANGP_JOBS: dict[str, Any] = {}
 
 app = FastAPI(title="NOVA Remote GPU Worker", version="1.0")
 app.add_middleware(
@@ -339,68 +344,270 @@ def run_blender_job(job_id: str, job: dict[str, Any], job_dir: Path) -> Path:
     return target
 
 
-def run_wangp_job(job_id: str, job: dict[str, Any], job_dir: Path) -> Path | None:
-    """Prepare a WanGP job.
+def extract_first_frame(job_id: str, source: Path, destination: Path) -> Path:
+    if not command_exists("ffmpeg"):
+        raise RuntimeError("FFmpeg is required to create a WanGP start image")
+    run_command(
+        job_id,
+        [
+            "ffmpeg", "-y", "-i", str(source), "-frames:v", "1",
+            "-vf", "scale='min(1280,iw)':-2", str(destination),
+        ],
+    )
+    if not destination.is_file():
+        raise RuntimeError("Could not extract a start image for WanGP")
+    return destination
 
-    Fully automatic WanGP is enabled only when NOVA_WANGP_API_URL and a compatible
-    Gradio api_name/kwargs are configured. Otherwise the job is staged for the
-    verified WanGP Colab UI without pretending that generation finished.
-    """
+
+def get_wangp_session():
+    global WANGP_SESSION
+    with WANGP_SESSION_LOCK:
+        if WANGP_SESSION is not None:
+            return WANGP_SESSION
+        if not (WANGP_ROOT / "shared" / "api.py").is_file():
+            raise RuntimeError(
+                "WanGP API is not installed. Run the WanGP setup cell in NOVA_Remote_GPU_Worker.ipynb."
+            )
+        if str(WANGP_ROOT) not in sys.path:
+            sys.path.insert(0, str(WANGP_ROOT))
+        WANGP_OUTPUT_ROOT.mkdir(parents=True, exist_ok=True)
+        update_env = {
+            "WAN_CACHE_DIR": str(WANGP_ROOT / "cache"),
+            "HF_HOME": str(WANGP_ROOT / "cache" / "huggingface"),
+            "HUGGINGFACE_HUB_CACHE": str(WANGP_ROOT / "cache" / "huggingface" / "hub"),
+            "TORCH_HOME": str(WANGP_ROOT / "cache" / "torch"),
+            "XDG_CACHE_HOME": str(WANGP_ROOT / "cache" / ".cache"),
+        }
+        os.environ.update(update_env)
+        from shared.api import init as wangp_init
+        WANGP_SESSION = wangp_init(
+            root=WANGP_ROOT,
+            output_dir=WANGP_OUTPUT_ROOT,
+            cli_args=["--attention", "sdpa", "--profile", "5"],
+            console_output=True,
+        )
+        return WANGP_SESSION
+
+
+def _model_inputs(record: dict[str, Any]) -> set[str]:
+    metadata = record.get("metadata") if isinstance(record.get("metadata"), dict) else record
+    raw = metadata.get("inputs") if isinstance(metadata, dict) else []
+    if isinstance(raw, str):
+        return {raw.lower()}
+    if isinstance(raw, (list, tuple, set)):
+        return {str(item).lower() for item in raw}
+    return set()
+
+
+def pick_wangp_model(session, job: dict[str, Any], has_source: bool) -> dict[str, Any]:
+    options = job.get("wangp") if isinstance(job.get("wangp"), dict) else {}
+    explicit = str(options.get("model_type") or "").strip()
+    if explicit:
+        records = session.list_model_metadata(model_type=explicit, limit=5)
+        if records:
+            return records[0]
+        return {"model_type": explicit, "name": explicit, "metadata": {}}
+
+    gpu = gpu_info()
+    low_vram = not gpu.get("memory_mb") or int(gpu.get("memory_mb") or 0) < 18000
+
+    # Free Colab T4: favor FastWan. With larger GPUs and a source video,
+    # first try control/animation-capable families.
+    queries: list[str] = []
+    if has_source and not low_vram:
+        queries += ["Scail 2", "Wan 2.2 Animate", "Bernini"]
+    queries += ["FastWan", "Wan 2.2"]
+
+    best_fallback = None
+    for query in queries:
+        try:
+            records = session.list_model_metadata(query=query, main_output="video", limit=20)
+        except Exception:
+            records = []
+        for record in records:
+            if best_fallback is None:
+                best_fallback = record
+            inputs = _model_inputs(record)
+            if has_source and "video" in inputs and (not low_vram or "fast" in str(record).lower()):
+                return record
+            if has_source and "image" in inputs and "fastwan" in str(record).lower():
+                return record
+            if not has_source and ("text" in inputs or not inputs):
+                return record
+
+    if best_fallback is not None:
+        return best_fallback
+
+    records = session.list_model_metadata(main_output="video", limit=30)
+    if not records:
+        raise RuntimeError("WanGP reported no video generation models")
+    return records[0]
+
+
+def build_wangp_settings(
+    session,
+    model_record: dict[str, Any],
+    job: dict[str, Any],
+    profile: dict[str, Any],
+    prepared_video: Path | None,
+    job_dir: Path,
+) -> dict[str, Any]:
+    model_type = str(model_record.get("model_type") or "").strip()
+    if not model_type:
+        metadata = model_record.get("metadata") if isinstance(model_record.get("metadata"), dict) else {}
+        model_type = str(metadata.get("model_type") or "").strip()
+    if not model_type:
+        raise RuntimeError("WanGP model discovery returned a model without model_type")
+
+    defaults = session.get_default_settings(model_type)
+    settings = dict(defaults or {})
+    settings["model_type"] = model_type
+    settings["prompt"] = str(job.get("source_prompt") or job.get("prompt") or "cinematic realistic motion")
+    settings["video_length"] = f"{float(profile['duration']):g}s"
+    settings["force_fps"] = int(profile["fps"])
+
+    gpu = gpu_info()
+    low_vram = not gpu.get("memory_mb") or int(gpu.get("memory_mb") or 0) < 18000
+    # Generate economically, then upscale the approved final with FFmpeg.
+    if low_vram:
+        settings["resolution"] = "480x832" if profile["ratio"] == "9:16" else "832x480"
+    else:
+        settings["resolution"] = "704x1248" if profile["ratio"] == "9:16" else "1248x704"
+
+    name_blob = (str(model_record.get("name") or "") + " " + model_type).lower()
+    if "fastwan" in name_blob:
+        try:
+            current_steps = int(settings.get("num_inference_steps") or 8)
+            settings["num_inference_steps"] = min(current_steps, 8)
+        except Exception:
+            settings["num_inference_steps"] = 8
+
+    inputs = _model_inputs(model_record)
+    if prepared_video is not None:
+        if "video" in inputs:
+            settings["video_source"] = str(prepared_video)
+        elif "image" in inputs:
+            start_image = extract_first_frame(job["job_id"], prepared_video, job_dir / "WAN_GP_START.png")
+            settings["image_start"] = str(start_image)
+
+    overrides = job.get("wangp") if isinstance(job.get("wangp"), dict) else {}
+    user_settings = overrides.get("settings")
+    if isinstance(user_settings, dict):
+        # Explicit per-job settings win, except model_type is normalized above.
+        settings.update(user_settings)
+        settings["model_type"] = str(user_settings.get("model_type") or model_type)
+
+    (job_dir / "WANGP_SETTINGS.json").write_text(
+        json.dumps(settings, ensure_ascii=False, indent=2, default=str),
+        encoding="utf-8",
+    )
+    return settings
+
+
+def run_wangp_job(job_id: str, job: dict[str, Any], job_dir: Path) -> Path:
+    """Run WanGP headlessly through its official in-process Python API."""
     profile = profile_for(job)
     source = source_file(job_dir)
     prepared = None
     if source is not None:
-        update_status(job_id, progress=18, stage="wangp_prepare", message="Готовлю WanGP reference video.")
+        update_status(job_id, progress=16, stage="wangp_prepare", message="Готовлю вход для WanGP.")
         prepared = job_dir / "WAN_GP_INPUT.mp4"
-        normalize_video(job_id, source, prepared, profile, keep_audio=True)
+        # AI generation stays economical; final delivery is upscaled afterwards.
+        ai_profile = dict(profile)
+        ai_profile.update({
+            "width": 480 if profile["ratio"] == "9:16" else 832,
+            "height": 832 if profile["ratio"] == "9:16" else 480,
+            "fps": min(24, int(profile["fps"])),
+            "crf": "21",
+            "preset": "veryfast",
+        })
+        normalize_video(job_id, source, prepared, ai_profile, keep_audio=True)
 
     prompt = str(job.get("source_prompt") or job.get("prompt") or "cinematic realistic motion")
     (job_dir / "WAN_GP_PROMPT.txt").write_text(prompt, encoding="utf-8")
-    handoff = {
-        "prompt": prompt,
-        "input_video": str(prepared) if prepared else None,
-        "ratio": profile["ratio"],
-        "duration": profile["duration"],
-        "quality": profile["quality"],
-        "recommended_model": "Wan 2.2 Animate 2",
-        "note": "Use the verified WanGP Colab UI unless a Gradio API is configured.",
-    }
-    (job_dir / "WANGP_HANDOFF.json").write_text(json.dumps(handoff, ensure_ascii=False, indent=2), encoding="utf-8")
 
-    api_url = os.environ.get("NOVA_WANGP_API_URL")
-    api_name = os.environ.get("NOVA_WANGP_API_NAME")
-    kwargs = (job.get("wangp") or {}).get("kwargs") if isinstance(job.get("wangp"), dict) else None
-    if api_url and api_name and isinstance(kwargs, dict):
-        update_status(job_id, progress=45, stage="wangp", message="Отправляю задачу в настроенный WanGP Gradio API.")
-        try:
-            from gradio_client import Client
-            client = Client(api_url)
-            result = client.predict(api_name=api_name, **kwargs)
-            candidate = None
-            if isinstance(result, str):
-                candidate = Path(result)
-            elif isinstance(result, (list, tuple)):
-                for item in result:
-                    if isinstance(item, str) and Path(item).suffix.lower() in {".mp4", ".webm", ".mov"}:
-                        candidate = Path(item)
-                        break
-            if candidate and candidate.is_file():
-                target = job_dir / ("FINAL.mp4" if profile["quality"] == "final" else "preview.mp4")
-                shutil.copy2(candidate, target)
-                return target
-            raise RuntimeError("WanGP API returned no video file")
-        except Exception as exc:
-            append_log(job_id, f"WanGP API bridge failed: {exc}")
-
+    update_status(job_id, progress=22, stage="wangp_init", message="Запускаю WanGP Python API.")
+    session = get_wangp_session()
+    model_record = pick_wangp_model(session, job, prepared is not None)
+    model_type = str(model_record.get("model_type") or (model_record.get("metadata") or {}).get("model_type") or "")
+    model_name = str(model_record.get("name") or model_type)
     update_status(
         job_id,
-        status="waiting_wangp",
-        progress=70,
-        stage="wangp_handoff",
-        message="WanGP inputs готовы. Открой WanGP в Colab, запусти генерацию и финализируй результат.",
-        handoff_file="WANGP_HANDOFF.json",
+        progress=26,
+        stage="wangp_model",
+        message=f"WanGP: {model_name}. Подготавливаю модель.",
+        wangp_model=model_type,
+        wangp_model_name=model_name,
     )
-    return None
+
+    settings = build_wangp_settings(session, model_record, job, profile, prepared, job_dir)
+
+    class Callbacks:
+        def on_status(self, status):
+            text_status = str(status or "").strip()
+            if text_status:
+                update_status(
+                    job_id,
+                    stage="wangp",
+                    message="WanGP: " + text_status[:240],
+                )
+
+        def on_progress(self, update):
+            try:
+                raw = float(getattr(update, "progress", 0) or 0)
+            except Exception:
+                raw = 0.0
+            mapped = 28 + max(0.0, min(100.0, raw)) * 0.62
+            update_status(
+                job_id,
+                progress=round(mapped, 2),
+                stage="wangp",
+                message="WanGP генерирует видео…",
+            )
+            if job_id in CANCELLED:
+                active = WANGP_JOBS.get(job_id)
+                if active is not None:
+                    try:
+                        active.cancel()
+                    except Exception:
+                        pass
+
+        def on_stream(self, line):
+            try:
+                append_log(job_id, f"[WanGP] {getattr(line, 'text', line)}")
+            except Exception:
+                pass
+
+    update_status(job_id, progress=28, stage="wangp", message="WanGP начинает генерацию.")
+    api_job = session.submit_task(settings, callbacks=Callbacks())
+    WANGP_JOBS[job_id] = api_job
+    try:
+        result = api_job.result()
+    finally:
+        WANGP_JOBS.pop(job_id, None)
+
+    if job_id in CANCELLED or bool(getattr(result, "cancelled", False)):
+        raise RuntimeError("Job cancelled")
+    if not bool(getattr(result, "success", False)):
+        errors = getattr(result, "errors", None) or []
+        message = "; ".join(str(getattr(err, "message", err)) for err in errors[:5]) or "WanGP generation failed"
+        raise RuntimeError(message)
+
+    generated = list(getattr(result, "generated_files", None) or [])
+    candidate = None
+    for item in generated:
+        path = Path(os.fspath(item))
+        if path.suffix.lower() in {".mp4", ".mov", ".mkv", ".webm"} and path.is_file():
+            candidate = path
+            break
+    if candidate is None:
+        raise RuntimeError("WanGP completed but returned no video file")
+
+    update_status(job_id, progress=92, stage="wangp_encode", message="WanGP готов. Кодирую файл для iPhone.")
+    target = job_dir / ("FINAL.mp4" if profile["quality"] == "final" else "preview.mp4")
+    # Final jobs are delivered as 1080p H.264/AAC. Preview stays light.
+    normalize_video(job_id, candidate, target, profile, keep_audio=True)
+    return target
 
 
 def mirror_completed_job(job_id: str, job_dir: Path) -> str | None:
@@ -486,7 +693,8 @@ async def health(request: Request):
         "gpu": gpu_info(),
         "blender": command_exists("blender"),
         "ffmpeg": command_exists("ffmpeg"),
-        "wangp_api_configured": bool(os.environ.get("NOVA_WANGP_API_URL") and os.environ.get("NOVA_WANGP_API_NAME")),
+        "wangp_api_ready": (WANGP_ROOT / "shared" / "api.py").is_file(),
+        "wangp_root": str(WANGP_ROOT),
         "job_root": str(JOB_ROOT),
         "drive_mounted": Path("/content/drive/MyDrive").exists(),
         "free_disk_gb": round(disk.free / 1024**3, 1),
@@ -675,6 +883,12 @@ async def cancel_job(job_id: str, request: Request):
                 proc.terminate()
             except Exception:
                 pass
+    api_job = WANGP_JOBS.get(job_id)
+    if api_job is not None:
+        try:
+            api_job.cancel()
+        except Exception:
+            pass
     update_status(job_id, status="cancelled", progress=0, stage="cancelled", message="Задание остановлено.")
     return JSONResponse({"ok": True, "job_id": job_id, "status": "cancelled"})
 
