@@ -26,6 +26,9 @@ jobs:
           curl -fsSL --max-time 15 "$BASE/?t=$(date +%s)" | grep -Eo 'v[0-9]+\.[0-9]+(\.[0-9]+)?|Motion \+ VFX|Сделать видео' | head -30
           echo "=== VERSION.JSON ==="
           curl -sS -w "\nHTTP=%{http_code}\n" --max-time 15 "$BASE/version.json?t=$(date +%s)" | head -40
+          echo "=== NETLIFY PUBLIC DEPLOYS ==="
+          curl -sS --max-time 15 "https://api.netlify.com/api/v1/sites/ae7fa0fb-e73d-413a-b122-7b9ff9419244/deploys?per_page=12" | head -c 16000
+          echo
           echo "=== NETLIFY PUBLIC SITE META ==="
           curl -sS -w "\nHTTP=%{http_code}\n" --max-time 15 "https://api.netlify.com/api/v1/sites/dashing-otter-990b47.netlify.app" | head -c 5000
           echo
