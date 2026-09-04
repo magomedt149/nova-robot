@@ -1,5 +1,6 @@
 const CACHE = 'nova-v40-free-runtime-20260904';
 const API_CACHE = 'nova-api-economy-v2';
+const METERED_NETLIFY_HOST = /(^|\\.)netlify\\.app$/i.test(self.location.hostname);
 const YOUTUBE_TTL_MS = 24 * 60 * 60 * 1000;
 const TRANSLATE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -447,12 +448,45 @@ self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
 
   if (sameOrigin && (url.pathname.endsWith('/update.html') || url.pathname.endsWith('/version.json') || url.pathname.endsWith('/manifest.webmanifest'))) {
-    event.respondWith(fetch(event.request, { cache: 'no-store' }).catch(() => caches.match(event.request, { ignoreSearch: true })));
+    if (METERED_NETLIFY_HOST) {
+      event.respondWith(
+        caches.match(event.request, { ignoreSearch: true })
+          .then((cached) => cached || fetch(event.request, { cache: 'no-store' })
+            .then((response) => {
+              if (response.ok) caches.open(CACHE).then((cache) => cache.put(event.request, response.clone()));
+              return response;
+            }))
+          .catch(() => caches.match('./index.html'))
+      );
+    } else {
+      event.respondWith(fetch(event.request, { cache: 'no-store' }).catch(() => caches.match(event.request, { ignoreSearch: true })));
+    }
     return;
   }
 
   if (sameOrigin && url.pathname.startsWith('/.netlify/functions/')) {
     event.respondWith(fetch(event.request));
+    return;
+  }
+
+  if (sameOrigin && METERED_NETLIFY_HOST) {
+    event.respondWith(
+      caches.match(event.request, { ignoreSearch: true })
+        .then((cached) => {
+          if (cached) return cached;
+          return fetch(event.request).then((response) => {
+            if (response.ok) {
+              const copy = response.clone();
+              caches.open(CACHE).then((cache) => cache.put(event.request, copy));
+            }
+            return response;
+          });
+        })
+        .catch(() => {
+          if (event.request.mode === 'navigate') return caches.match('./index.html');
+          return Response.error();
+        })
+    );
     return;
   }
 
