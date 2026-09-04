@@ -7,6 +7,8 @@ const LS_FULLAUTO='nova.remoteGpu.fullAuto';
 const LS_PENDING='nova.remoteGpu.pendingPrompt';
 const LS_AUTORECOVER='nova.remoteGpu.autoRecover';
 const LS_RECOVERY='nova.remoteGpu.recovery';
+const LS_WAITING='nova.remoteGpu.waitingColab';
+const LS_SIMPLE='nova.motion.simpleMode';
 const DB_NAME='nova-remote-gpu-recovery-v1';
 const DB_STORE='state';
 const DB_KEY='current';
@@ -34,26 +36,80 @@ function setEasyState(label,text,kind=''){
   const state=$('remoteEasyState');if(state){state.textContent=label;state.dataset.kind=kind}
   const body=$('remoteEasyText');if(body)body.textContent=text;
 }
+function setEasyStep(step){
+  const order=['input','gpu','preview','final'];
+  const index=Math.max(0,order.indexOf(step));
+  document.querySelectorAll('#remoteSteps [data-step]').forEach((el,i)=>{
+    el.classList.toggle('active',i===index);
+    el.classList.toggle('done',i<index);
+  });
+}
+function setEasyButton(label){
+  const btn=$('remoteEasyAction');if(btn)btn.textContent=label;
+}
+function setWaitingColab(on){
+  if(on)localStorage.setItem(LS_WAITING,'1');else localStorage.removeItem(LS_WAITING);
+  refreshEasyState();
+}
+function setupSimpleStudioMode(){
+  const panel=document.querySelector('.panel');
+  const promptLabel=$('prompt')?.closest('label');
+  const remote=$('remoteGpu');
+  if(!panel||!promptLabel||!remote)return;
+  promptLabel.classList.add('nova-easy-visible');
+  if(remote.previousElementSibling!==promptLabel)promptLabel.after(remote);
+  const simple=localStorage.getItem(LS_SIMPLE)!=='0';
+  panel.classList.toggle('nova-easy-mode',simple);
+  const toggle=$('remoteStudioToggle');
+  if(toggle)toggle.textContent=simple?'🎛️ Показать все настройки студии':'✨ Вернуться в простой режим';
+}
+function toggleSimpleStudioMode(){
+  const panel=document.querySelector('.panel');if(!panel)return;
+  const simple=!panel.classList.contains('nova-easy-mode');
+  panel.classList.toggle('nova-easy-mode',simple);
+  localStorage.setItem(LS_SIMPLE,simple?'1':'0');
+  const toggle=$('remoteStudioToggle');
+  if(toggle)toggle.textContent=simple?'🎛️ Показать все настройки студии':'✨ Вернуться в простой режим';
+  if(!simple)document.getElementById('remoteAdvanced')?.setAttribute('open','');
+}
 function refreshEasyState(){
   const active=lastJobId||localStorage.getItem(LS_JOB);
   const meta=recoveryMeta();
+  const waiting=localStorage.getItem(LS_WAITING)==='1';
   if(active){
-    setEasyState('РЕНДЕР ИДЁТ','Ничего нажимать не нужно. NOVA следит за GPU и вернёт готовый файл.','busy');
+    const phase=meta?.phase||'running';
+    setEasyStep(phase==='final'||phase==='promoting'?'final':phase==='preview'?'preview':'gpu');
+    setEasyButton('⏳ РЕНДЕР ИДЁТ');
+    setEasyState('РАБОТАЮ','Ничего нажимать не нужно. NOVA следит за GPU и вернёт готовый файл.','busy');
     return;
   }
   if(meta&&['recovering','uploading','running','final','promoting','submitting'].includes(meta.phase)){
-    setEasyState('ВОССТАНОВЛЕНИЕ','NOVA хранит состояние работы и пытается продолжить её автоматически.','busy');
+    setEasyStep(meta.phase==='final'||meta.phase==='promoting'?'final':'gpu');
+    setEasyButton('♻️ ВОССТАНОВИТЬ И ПРОДОЛЖИТЬ');
+    setEasyState('ВОССТАНОВЛЕНИЕ','NOVA сохранила работу и пытается продолжить её автоматически.','busy');
     return;
   }
   if(lastHealth){
-    setEasyState('GPU ПОДКЛЮЧЁН','Добавь описание сцены или выбери видео. FULL AUTO запустит рендер сам.','ok');
+    setEasyStep('gpu');
+    setEasyButton('✨ СДЕЛАТЬ ВИДЕО');
+    setEasyState('GPU ГОТОВ','Опиши сцену сверху или выбери видео. Одного нажатия достаточно.','ok');
+    return;
+  }
+  if(waiting){
+    setEasyStep('gpu');
+    setEasyButton('📋 ПРОДОЛЖИТЬ ПОСЛЕ COLAB');
+    setEasyState('ЖДУ COLAB','Вернулся из Colab? Нажми эту же кнопку. NOVA попробует взять Connect Code из буфера и продолжить сама.','busy');
     return;
   }
   if(endpoint()&&token()){
-    setEasyState('ПРОВЕРКА GPU','Сохранённое подключение найдено. NOVA проверит его автоматически.','busy');
+    setEasyStep('gpu');
+    setEasyButton('🔄 ПРОВЕРИТЬ И СДЕЛАТЬ');
+    setEasyState('ПРОВЕРКА GPU','Сохранённое подключение найдено. NOVA проверит его сама.','busy');
     return;
   }
-  setEasyState('1 НАЖАТИЕ','Нажми «ДЕЛАЙ ВСЁ САМ». NOVA попробует буфер обмена, сохранённое подключение и только потом откроет Colab.','');
+  setEasyStep('input');
+  setEasyButton('✨ СДЕЛАТЬ ВИДЕО');
+  setEasyState('1 КНОПКА','Опиши видео сверху, при необходимости выбери файл и нажми кнопку.','');
 }
 async function requestRecoveryPersistence(){
   try{
@@ -292,7 +348,7 @@ async function connect({resume=true}={}){
   saveConnection();setStatus('Проверяю Colab worker…','busy');setProgress(0);
   try{
     const data=await jsonFetch(url+'/health',{headers:authHeaders()});
-    lastHealth=data;pollFailures=0;recoveryAttempt=0;clearRecoveryTimer();
+    lastHealth=data;pollFailures=0;recoveryAttempt=0;clearRecoveryTimer();setWaitingColab(false);
     const gpu=data.gpu?.available?(data.gpu.name||'NVIDIA GPU'):'GPU не обнаружен';
     const protocol=data.protocol_version!=null?'P'+data.protocol_version:'old';
     const bits=[gpu,data.blender?'Blender ✓':'Blender —',data.ffmpeg?'FFmpeg ✓':'FFmpeg —',data.wangp_api_ready?'WanGP API ✓':'WanGP —',protocol,data.free_disk_gb!=null?data.free_disk_gb+' GB free':''];
@@ -401,11 +457,12 @@ async function poll(jobId){
     pollFailures=0;recoveryAttempt=0;
     setProgress(data.progress||0);
     const state=data.status||'running';
-    await patchRecovery({phase:state,remoteJobId:jobId,workerUrl:endpoint(),workerSessionId:lastHealth?.session_id||''});
+    const quality=String(data.quality||'preview').toLowerCase();
+    setEasyStep(quality==='final'?'final':state==='completed'?'preview':'gpu');
+    await patchRecovery({phase:quality==='final'?'final':state,remoteJobId:jobId,workerUrl:endpoint(),workerSessionId:lastHealth?.session_id||''});
     setStatus((data.message||state)+(data.engine?' • '+data.engine:''),state==='error'?'error':state==='completed'?'ok':'busy');
     if(state==='completed'){
       localStorage.removeItem(LS_JOB);
-      const quality=String(data.quality||'preview').toLowerCase();
       if(fullAutoEnabled()&&quality==='preview'&&lastHealth?.capabilities?.preview_promote){
         setStatus('Preview готов. FULL AUTO запускает Final без повторной загрузки…','busy');
         await patchRecovery({phase:'promoting'}, {quality:'final',fps:30});
@@ -541,13 +598,10 @@ async function maybeAutoSend(){
   await send();return true;
 }
 async function easyAction(){
-  setFullAuto(true);setAutoRecover(true);
-  refreshEasyState();
+  setFullAuto(true);setAutoRecover(true);await requestRecoveryPersistence();refreshEasyState();
 
   const active=lastJobId||localStorage.getItem(LS_JOB);
-  if(active){
-    lastJobId=active;await holdWakeLock();poll(active);return;
-  }
+  if(active){lastJobId=active;await holdWakeLock();poll(active);return}
 
   if(endpoint()&&token()){
     const health=await connect();
@@ -571,15 +625,15 @@ async function easyAction(){
     currentSourceFile=source;
     await beginRecovery(buildJob(),source,source?.name||'source.mp4');
   }
-  setEasyState('НУЖЕН COLAB','Открою Google Colab. Там только Run all → Copy NOVA CONNECT CODE. После возврата NOVA продолжит сама.','busy');
+  setEasyState('НУЖЕН COLAB','Открою Google Colab. Там только Run all → Copy & Return. После возврата NOVA продолжит сама.','busy');
   openColab();
 }
-
 function openColab(){
   const link=$('remoteColabLink');
   const url=link?.href||'https://colab.research.google.com/github/magomedt149/nova-robot/blob/main/blender-colab/NOVA_Remote_GPU_Worker.ipynb';
   const win=window.open(url,'_blank','noopener');
-  setStatus('Colab открыт. Нажми Runtime → Run all, потом Copy NOVA CONNECT CODE и вернись сюда.','busy');
+  setWaitingColab(true);
+  setStatus('Colab открыт. Нажми Runtime → Run all, затем кнопку Copy & Return. После возврата NOVA продолжит сама.','busy');
   setRecoveryStatus('Auto Recovery продолжит job автоматически после нового Connect Code.','busy');
   return Boolean(win);
 }
@@ -617,6 +671,7 @@ async function recoverNow(){
   else scheduleRecoveryProbe(1000);
 }
 async function restore(){
+  setupSimpleStudioMode();
   if($('remoteUrl'))$('remoteUrl').value=localStorage.getItem(LS_URL)||'';
   if($('remoteToken'))$('remoteToken').value=localStorage.getItem(LS_TOKEN)||'';
   if($('remoteConnectCode'))$('remoteConnectCode').value='';
@@ -635,6 +690,7 @@ async function restore(){
 }
 
 $('remoteEasyAction')?.addEventListener('click',easyAction);
+$('remoteStudioToggle')?.addEventListener('click',toggleSimpleStudioMode);
 $('remoteAutoStart')?.addEventListener('click',autoStart);
 $('remoteAutoFinal')?.addEventListener('change',e=>setFullAuto(e.target.checked));
 $('remoteAutoRecover')?.addEventListener('change',e=>setAutoRecover(e.target.checked));
