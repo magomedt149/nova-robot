@@ -23,11 +23,12 @@
   });
 
   const DENIS_PROFILE = Object.freeze({
-    provider: 'piper+ios-system-fallback',
+    provider: 'piper-primary+ios-system-fallback',
     voiceId: 'ru_RU-denis-medium',
+    fallbackVoiceIds: Object.freeze(['ru_RU-dmitri-medium', 'ru_RU-ruslan-medium']),
     locale: 'ru-RU',
     gender: 'male',
-    preferSystemVoiceOnIOS: true,
+    preferSystemVoiceOnIOS: false,
     automaticMaleFallback: true,
     pitchFactor: 1,
     rate: 0.92
@@ -491,14 +492,49 @@
     const chunks = splitForSpeech(clean);
     const engine = await ensurePiper();
     const blobs = [];
+    let denisVoiceId = DENIS_PROFILE.voiceId;
+
     for (let index = 0; index < chunks.length; index++) {
-      const selectedVoiceId = key === 'irina' ? IRINA_LOCK.voiceId : VOICES[key].id;
-      const blob = await engine.predict(
-        { text: chunks[index], voiceId: selectedVoiceId },
-        (progress) => {
-          if (typeof onProgress === 'function') onProgress({ ...progress, index, totalChunks: chunks.length, voice: key, voiceSignature: getVoiceSignature(key) });
+      if (key !== 'denis') {
+        const blob = await engine.predict(
+          { text: chunks[index], voiceId: IRINA_LOCK.voiceId },
+          (progress) => {
+            if (typeof onProgress === 'function') onProgress({ ...progress, index, totalChunks: chunks.length, voice: key, voiceSignature: getVoiceSignature(key) });
+          }
+        );
+        blobs.push(blob);
+        continue;
+      }
+
+      const candidates = [denisVoiceId, ...DENIS_PROFILE.fallbackVoiceIds.filter((id) => id !== denisVoiceId)];
+      let lastError = null;
+      let blob = null;
+      for (const voiceId of candidates) {
+        try {
+          blob = await engine.predict(
+            { text: chunks[index], voiceId },
+            (progress) => {
+              if (typeof onProgress === 'function') onProgress({
+                ...progress,
+                index,
+                totalChunks: chunks.length,
+                voice: key,
+                voiceId,
+                voiceSignature: `piper:${voiceId}:${DENIS_PROFILE.locale}`
+              });
+            }
+          );
+          denisVoiceId = voiceId;
+          if (voiceId !== DENIS_PROFILE.voiceId) {
+            setStatus(`🔊 Денис: основной голос недоступен, использую резервный мужской Piper ${voiceId}.`);
+          }
+          break;
+        } catch (error) {
+          lastError = error;
+          console.warn('[NOVA Russian TTS] Piper male voice failed:', voiceId, error);
         }
-      );
+      }
+      if (!blob) throw lastError || new Error('Не удалось загрузить мужской голос Денис.');
       blobs.push(blob);
     }
     return blobs;
@@ -529,11 +565,13 @@
     if (key === 'liza') return speakExactLiza(clean);
     if (key === 'irina') assertIrinaLocked();
 
+    // Denis is Piper-first on iPhone too. This avoids Safari returning an empty
+    // or female-only system voice list after a quick Irina -> Denis switch.
     if (key === 'denis' && DENIS_PROFILE.preferSystemVoiceOnIOS && isIOSDevice()) {
       try {
         return await speakDenisSystem(clean);
       } catch (systemError) {
-        console.info('[NOVA Russian TTS] iOS male ru-RU voice unavailable; trying Piper Denis:', systemError);
+        console.info('[NOVA Russian TTS] iOS male ru-RU voice unavailable; continuing with Piper Denis:', systemError);
       }
     }
 
