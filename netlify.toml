@@ -1,6 +1,19 @@
 [build]
   publish = "."
 
+# FREE DEPLOY GATE:
+# Production deploys run only when .netlify-release changes.
+# Normal commits are skipped and consume no production-deploy credits.
+[context.production]
+  ignore = "git diff --quiet $CACHED_COMMIT_REF $COMMIT_REF -- .netlify-release"
+
+# Deploy Previews and branch deploys remain available for free testing.
+[context.deploy-preview]
+  ignore = "exit 1"
+
+[context.branch-deploy]
+  ignore = "exit 1"
+
 [[headers]]
   for = "/*"
   [headers.values]
@@ -9,11 +22,6 @@
 
 [[headers]]
   for = "/index.html"
-  [headers.values]
-    Cache-Control = "no-cache, no-store, must-revalidate"
-
-[[headers]]
-  for = "/voice-fix.js"
   [headers.values]
     Cache-Control = "no-cache, no-store, must-revalidate"
 
@@ -37,17 +45,13 @@
   [headers.values]
     Cache-Control = "no-cache, no-store, must-revalidate"
 
+# Versioned static assets may be cached by the browser to reduce repeat bandwidth.
 [[headers]]
-  for = "/app.js"
+  for = "/*.css"
   [headers.values]
-    Cache-Control = "no-cache, no-store, must-revalidate"
+    Cache-Control = "public, max-age=86400, stale-while-revalidate=604800"
 
 [[headers]]
-  for = "/neural-russian-tts.js"
+  for = "/*.js"
   [headers.values]
-    Cache-Control = "no-cache, no-store, must-revalidate"
-
-[[headers]]
-  for = "/nova-russian-pronunciation.js"
-  [headers.values]
-    Cache-Control = "no-cache, no-store, must-revalidate"
+    Cache-Control = "public, max-age=86400, stale-while-revalidate=604800"
