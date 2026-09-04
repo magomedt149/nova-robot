@@ -1,10 +1,8 @@
 name: NOVA production probe
 
+
 on:
-  push:
-    branches: [main]
-    paths:
-      - '.github/workflows/nova-production-probe.yml'
+  workflow_dispatch:
 
 jobs:
   probe:
