@@ -22,6 +22,13 @@ hashtags = " ".join(meta.get("hashtags", []))
 if hashtags:
     description = (description + "\n\n" + hashtags).strip()
 
+requested_privacy = os.environ.get(
+    "YOUTUBE_PRIVACY_STATUS",
+    meta.get("privacy_status", "private"),
+).strip().lower()
+if requested_privacy not in {"private", "unlisted", "public"}:
+    requested_privacy = "private"
+
 credentials = Credentials(
     token=None,
     refresh_token=REFRESH_TOKEN,
@@ -42,8 +49,7 @@ body = {
         "defaultLanguage": "ru",
     },
     "status": {
-        # Keep private by default. New/unverified API projects can be forced private by YouTube.
-        "privacyStatus": meta.get("privacy_status", "private"),
+        "privacyStatus": requested_privacy,
         "selfDeclaredMadeForKids": False,
     },
 }
@@ -72,7 +78,7 @@ result = {
     "date": meta.get("date"),
     "title": meta.get("title"),
     "video_id": video_id,
-    "privacy_status_requested": body["status"]["privacyStatus"],
+    "privacy_status_requested": requested_privacy,
 }
 RESULT_PATH.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
 print(f"YOUTUBE_VIDEO_ID={video_id}")
