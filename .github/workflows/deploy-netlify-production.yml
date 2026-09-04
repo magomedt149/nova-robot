@@ -3,8 +3,11 @@ name: Deploy NOVA to Netlify Production
 on:
   push:
     branches: [main]
-    paths:
-      - ".github/workflows/deploy-netlify-production.yml"
+    paths-ignore:
+      - "README.md"
+      - "README.txt"
+      - "NOVA_DIAGNOSTICS_RU_2026-09-03.txt"
+      - "NOVA_IPHONE_UPDATE_METHOD.md"
   workflow_dispatch:
 
 permissions:
@@ -41,7 +44,11 @@ jobs:
         env:
           NETLIFY_AUTH_TOKEN: ${{ env.NOVA_NETLIFY_TOKEN }}
         run: |
-          npx --yes netlify-cli@latest deploy             --prod             --dir .             --site "$NETLIFY_SITE_ID"             --message "NOVA v27.1 iPhone PWA update"
+          npx --yes netlify-cli@latest deploy \
+            --prod \
+            --dir . \
+            --site "$NETLIFY_SITE_ID" \
+            --message "NOVA v27.1 production update"
 
       - name: Verify production
         shell: bash
@@ -51,9 +58,14 @@ jobs:
             body="$(curl -fsSL --max-time 12 -H 'Cache-Control: no-cache' "$BASE/version.json?t=$(date +%s)" 2>/dev/null || true)"
             echo "attempt=$i body=$body"
             if echo "$body" | grep -q '"version"[[:space:]]*:[[:space:]]*"27.1.0"'; then
+              html="$(curl -fsSL --max-time 12 -H 'Cache-Control: no-cache' "$BASE/?t=$(date +%s)")"
+              echo "$html" | grep -q "v27.1"
+              echo "$html" | grep -q "Motion + VFX"
               echo "PRODUCTION_NOVA=27.1.0"
+              echo "PRODUCTION_MOTION_VFX=present"
               exit 0
             fi
             sleep 4
           done
+          echo "Production did not reach NOVA 27.1.0." >&2
           exit 1
