@@ -8,5 +8,5 @@
   "automaticRemoteCompute": false,
   "irina": "ru_RU-irina-medium",
   "motionStudio": true,
-  "updateMethod": "/update.html"
+  "updateMethod": "./update.html"
 }
