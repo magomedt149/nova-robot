@@ -1,0 +1,150 @@
+name: Publish Approved YouTube Short
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - 'youtube_queue/publish_approved.json'
+      - '.github/workflows/youtube-publish-approved.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: youtube-approved-publish
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check explicit approval and duplicate guard
+        id: gate
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          queue = json.loads(Path('youtube_queue/today.json').read_text(encoding='utf-8'))
+          approval = json.loads(Path('youtube_queue/publish_approved.json').read_text(encoding='utf-8'))
+          last_path = Path('youtube_queue/last_uploaded.json')
+          last = json.loads(last_path.read_text(encoding='utf-8')) if last_path.exists() else {}
+
+          queue_date = str(queue.get('date', ''))
+          approved = (
+              approval.get('approved') is True
+              and str(approval.get('date', '')) == queue_date
+          )
+          duplicate = (
+              str(last.get('date', '')) == queue_date
+              and str(last.get('title', '')) == str(queue.get('title', ''))
+          )
+          publish = approved and not duplicate
+          privacy = str(approval.get('privacy_status', 'public')).lower()
+          if privacy not in {'private', 'unlisted', 'public'}:
+              privacy = 'public'
+
+          with open(__import__('os').environ['GITHUB_OUTPUT'], 'a') as f:
+              f.write('publish=' + str(publish).lower() + '\n')
+              f.write('privacy=' + privacy + '\n')
+              f.write('queue_date=' + queue_date + '\n')
+
+          print('approved:', approved, 'duplicate:', duplicate, 'publish:', publish)
+          PY
+
+      - name: Stop when there is no fresh explicit approval
+        if: ${{ steps.gate.outputs.publish != 'true' }}
+        run: echo "No fresh explicit user approval. Nothing will be published."
+
+      - name: Set up Python
+        if: ${{ steps.gate.outputs.publish == 'true' }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install free dependencies
+        if: ${{ steps.gate.outputs.publish == 'true' }}
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg fonts-dejavu-core
+          python -m pip install --upgrade pip
+          python -m pip install pillow piper-tts google-api-python-client google-auth google-auth-httplib2
+
+      - name: Verify YouTube OAuth secrets exist
+        if: ${{ steps.gate.outputs.publish == 'true' }}
+        env:
+          YOUTUBE_CLIENT_ID: ${{ secrets.YOUTUBE_CLIENT_ID }}
+          YOUTUBE_CLIENT_SECRET: ${{ secrets.YOUTUBE_CLIENT_SECRET }}
+          YOUTUBE_REFRESH_TOKEN: ${{ secrets.YOUTUBE_REFRESH_TOKEN }}
+        run: |
+          test -n "$YOUTUBE_CLIENT_ID" || (echo "Missing YOUTUBE_CLIENT_ID" && exit 1)
+          test -n "$YOUTUBE_CLIENT_SECRET" || (echo "Missing YOUTUBE_CLIENT_SECRET" && exit 1)
+          test -n "$YOUTUBE_REFRESH_TOKEN" || (echo "Missing YOUTUBE_REFRESH_TOKEN" && exit 1)
+
+      - name: Download locked Irina voice
+        if: ${{ steps.gate.outputs.publish == 'true' }}
+        run: python -m piper.download_voices ru_RU-irina-medium
+
+      - name: Re-render approved Short deterministically
+        if: ${{ steps.gate.outputs.publish == 'true' }}
+        run: python youtube/render_short.py
+
+      - name: Upload approved Short to YouTube
+        if: ${{ steps.gate.outputs.publish == 'true' }}
+        env:
+          YOUTUBE_CLIENT_ID: ${{ secrets.YOUTUBE_CLIENT_ID }}
+          YOUTUBE_CLIENT_SECRET: ${{ secrets.YOUTUBE_CLIENT_SECRET }}
+          YOUTUBE_REFRESH_TOKEN: ${{ secrets.YOUTUBE_REFRESH_TOKEN }}
+          YOUTUBE_PRIVACY_STATUS: ${{ steps.gate.outputs.privacy }}
+        run: python youtube/upload_youtube.py
+
+      - name: Record upload and reset approval
+        if: ${{ steps.gate.outputs.publish == 'true' }}
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          result = json.loads(Path('youtube_output/youtube_upload_result.json').read_text(encoding='utf-8'))
+          Path('youtube_queue/last_uploaded.json').write_text(
+              json.dumps(result, ensure_ascii=False, indent=2) + '\n',
+              encoding='utf-8'
+          )
+
+          approval_path = Path('youtube_queue/publish_approved.json')
+          approval = json.loads(approval_path.read_text(encoding='utf-8'))
+          approval['approved'] = False
+          approval['date'] = ''
+          approval['note'] = 'Reset automatically after successful upload. Set approved=true only after the user watches the preview and explicitly says to publish.'
+          approval_path.write_text(
+              json.dumps(approval, ensure_ascii=False, indent=2) + '\n',
+              encoding='utf-8'
+          )
+          PY
+
+          git config user.name 'nova-youtube-bot'
+          git config user.email 'actions@users.noreply.github.com'
+          git add youtube_queue/last_uploaded.json youtube_queue/publish_approved.json
+          git diff --cached --quiet || git commit -m 'Record approved YouTube upload and reset approval'
+          git push origin HEAD:main
+
+      - name: Save published package
+        if: ${{ steps.gate.outputs.publish == 'true' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: published-youtube-short
+          path: |
+            youtube_output/short.mp4
+            youtube_output/thumbnail.jpg
+            youtube_output/metadata.json
+            youtube_output/youtube_upload_result.json
+          if-no-files-found: error
+          retention-days: 2
