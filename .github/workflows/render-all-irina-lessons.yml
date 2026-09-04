@@ -1,10 +1,7 @@
 name: Render All Irina Lessons
 
+
 on:
-  push:
-    branches: [main]
-    paths:
-      - ".github/workflows/render-all-irina-lessons.yml"
   workflow_dispatch:
 
 permissions:
