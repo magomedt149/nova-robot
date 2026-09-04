@@ -1,10 +1,8 @@
 name: NOVA Whisper E2E one-off
 
+
 on:
-  push:
-    branches: [main]
-    paths:
-      - .github/workflows/nova-whisper-e2e-oneoff.yml
+  workflow_dispatch:
 
 permissions:
   contents: read
