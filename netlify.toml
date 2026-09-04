@@ -1,6 +1,5 @@
 [build]
   publish = "."
-  ignore = "test -z \"$(git diff-tree --no-commit-id --name-only -r $COMMIT_REF -- . ':(exclude).github/**' ':(exclude)README.md' ':(exclude)README.txt')\""
 
 [[headers]]
   for = "/*"
