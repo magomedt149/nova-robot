@@ -1,4 +1,4 @@
-const CACHE = 'tumsoev-motion-vfx-studio-v16';
+const CACHE = 'tumsoev-motion-vfx-studio-v17';
 const ASSETS = [
   '/motion-studio/',
   '/motion-studio/index.html',
