@@ -1634,6 +1634,47 @@
   let recognitionTimer = 0;
   let lastTranscript = '';
   let lastTranscriptAt = 0;
+  let navigationInFlight = false;
+  let lastNavigationAt = 0;
+  const HOME_DESTINATION_KEY = 'novaHomeDestination:v1';
+
+  function homeDestination() {
+    try { return String(localStorage.getItem(HOME_DESTINATION_KEY) || 'Home').trim() || 'Home'; }
+    catch (_) { return 'Home'; }
+  }
+
+  function isHomeNavigationCommand(value) {
+    const text = String(value || '').toLocaleLowerCase('ru-RU')
+      .replace(/[.,!?;:]+/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+    return /^(?:нова\s+)?(?:построй\s+|открой\s+|включи\s+|запусти\s+)?(?:маршрут|навигацию|навигатор|дорогу)?\s*(?:домой|до\s+дома|к\s+дому)$/.test(text)
+      || /^(?:nova\s+)?(?:open\s+|start\s+|show\s+)?(?:route|directions|navigation)?\s*(?:home|to\s+home)$/.test(text);
+  }
+
+  function launchHomeNavigation() {
+    const now = Date.now();
+    if (navigationInFlight || now - lastNavigationAt < 8000) return true;
+    navigationInFlight = true;
+    lastNavigationAt = now;
+    clearTimeout(recognitionTimer);
+    try { recognition?.abort?.(); } catch (_) {}
+    recognitionActive = false;
+    recognitionStarting = false;
+    updateMicUi();
+
+    const destination = encodeURIComponent(homeDestination());
+    const isiPhone = /iPhone|iPad|iPod/i.test(navigator.userAgent || '');
+    const url = isiPhone
+      ? `https://maps.apple.com/?daddr=${destination}&dirflg=d`
+      : `https://www.google.com/maps/dir/?api=1&destination=${destination}&travelmode=driving`;
+
+    addMessage('assistant', language === 'en' ? 'Opening route home.' : 'Открываю маршрут домой.');
+    setStatus(language === 'en' ? 'Opening navigation…' : 'Открываю навигацию…', 'speaking');
+    window.setTimeout(() => { navigationInFlight = false; }, 12000);
+    window.location.assign(url);
+    return true;
+  }
 
   function preferredRecognitionLanguage() {
     return lessonState.open && lessonState.quiz
@@ -1668,6 +1709,10 @@
         ['Привет, Нова', 10],
         ['Привет Нова', 10],
         ['Нова', 9],
+        ['Маршрут домой', 10],
+        ['Построй маршрут домой', 10],
+        ['Открой навигатор домой', 10],
+        ['Домой', 9],
         ['Hey Nova', 10]
       ].map(([phrase, boost]) => new PhraseAPI(phrase, boost));
     } catch (_) { /* contextual hints are optional */ }
@@ -1686,6 +1731,7 @@
   function dispatchRecognizedText(text) {
     const clean = String(text || '').trim();
     if (!clean) return false;
+    if (isHomeNavigationCommand(clean)) return launchHomeNavigation();
     const normalized = clean.toLocaleLowerCase('ru-RU')
       .replace(/[^a-zа-яё0-9\s-]/g, ' ')
       .replace(/\s+/g, ' ')
@@ -1728,7 +1774,8 @@
         const result = event.results[i];
         const candidates = recognitionCandidates(result);
         const wakeCandidate = candidates.find(isNovaWakePhrase);
-        const fragment = wakeCandidate || candidates[0] || '';
+        const navigationCandidate = candidates.find(isHomeNavigationCommand);
+        const fragment = navigationCandidate || wakeCandidate || candidates[0] || '';
         if (result.isFinal) finalParts.push(fragment);
         else {
           interim += `${fragment} `;
@@ -2042,6 +2089,11 @@
     addMessage('user', text);
     setStatusKey('status.thinking', 'speaking');
     const lower = text.toLocaleLowerCase(language === 'ru' ? 'ru-RU' : 'en-US');
+
+    if (isHomeNavigationCommand(text)) {
+      launchHomeNavigation();
+      return;
+    }
 
     if (isNovaWakePhrase(text)) {
       resetPerformance();
