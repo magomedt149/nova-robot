@@ -4,6 +4,36 @@
 Версия метода: 1.0  
 Production: https://dashing-otter-990b47.netlify.app/
 
+## Шаг 0 — сначала проверить production
+
+Перед очисткой iPhone проверить:
+
+**https://dashing-otter-990b47.netlify.app/version.json**
+
+Если файл показывает текущую версию — использовать update.html.
+
+Если version.json даёт 404 или production показывает старую версию, проблема НЕ в iPhone: сначала нужно опубликовать свежий main на Netlify.
+
+Текущий Netlify Project ID:
+
+**ae7fa0fb-e73d-413a-b122-7b9ff9419244**
+
+Netlify project:
+
+**https://app.netlify.com/projects/dashing-otter-990b47**
+
+GitHub repository:
+
+**https://github.com/magomedt149/nova-robot**
+
+Для постоянного автоматического обновления один раз связать существующий Netlify project с этим GitHub repository:
+
+Project configuration → Build & deploy → Continuous deployment → Repository → Link repository → GitHub → magomedt149/nova-robot → branch main.
+
+Publish directory: **.**
+
+После этой привязки каждый push в main должен публиковать свежую NOVA, а iPhone обновляется через update.html без удаления памяти.
+
 ## Главное правило
 
 Если установленная NOVA на iPhone показывает старую версию или старые кнопки, использовать:
