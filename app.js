@@ -1,7 +1,7 @@
 (() => {
   'use strict';
 
-  const VERSION = '27.2.1';
+  const VERSION = '27.3.1';
   const $ = (selector) => document.querySelector(selector);
   const $$ = (selector) => [...document.querySelectorAll(selector)];
 
@@ -1645,11 +1645,20 @@
 
   function isHomeNavigationCommand(value) {
     const text = String(value || '').toLocaleLowerCase('ru-RU')
+      .replace(/ё/g, 'е')
       .replace(/[.,!?;:]+/g, ' ')
+      .replace(/\b(?:дамой|домои|дамои)\b/g, 'домой')
+      .replace(/\bмаршру[тд]\b/g, 'маршрут')
       .replace(/\s+/g, ' ')
       .trim();
-    return /^(?:нова\s+)?(?:построй\s+|открой\s+|включи\s+|запусти\s+)?(?:маршрут|навигацию|навигатор|дорогу)?\s*(?:домой|до\s+дома|к\s+дому)$/.test(text)
-      || /^(?:nova\s+)?(?:open\s+|start\s+|show\s+)?(?:route|directions|navigation)?\s*(?:home|to\s+home)$/.test(text);
+
+    // Require an explicit navigation intent. A bare “домой” is intentionally
+    // not enough because iPhone speech recognition can surface it accidentally.
+    const russianRoute = /^(?:нова\s+)?(?:построй\s+|открой\s+|включи\s+|запусти\s+)?(?:маршрут|навигацию|навигатор|дорогу)\s*(?:домой|до\s+дома|к\s+дому)$/.test(text);
+    const russianWakeHome = /^нова\s+(?:домой|до\s+дома|к\s+дому)$/.test(text);
+    const englishRoute = /^(?:nova\s+)?(?:open\s+|start\s+|show\s+)?(?:route|directions|navigation)\s*(?:home|to\s+home)$/.test(text);
+    const englishWakeHome = /^nova\s+(?:home|to\s+home)$/.test(text);
+    return russianRoute || russianWakeHome || englishRoute || englishWakeHome;
   }
 
   function launchHomeNavigation() {
@@ -1722,7 +1731,7 @@
         ['Маршрут домой', 10],
         ['Построй маршрут домой', 10],
         ['Открой навигатор домой', 10],
-        ['Домой', 9],
+        ['Нова маршрут домой', 10],
         ['Hey Nova', 10]
       ].map(([phrase, boost]) => new PhraseAPI(phrase, boost));
     } catch (_) { /* contextual hints are optional */ }
@@ -1789,6 +1798,13 @@
         if (result.isFinal) finalParts.push(fragment);
         else {
           interim += `${fragment} `;
+          if (navigationCandidate) {
+            setStatusKey('status.heard', 'listening', { text: navigationCandidate });
+            if (dispatchRecognizedText(navigationCandidate)) {
+              try { instance.stop?.(); } catch (_) { /* navigation command is complete enough */ }
+            }
+            return;
+          }
           if (wakeCandidate) {
             setStatusKey('status.heard', 'listening', { text: wakeCandidate });
             if (dispatchRecognizedText(wakeCandidate)) {
