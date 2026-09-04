@@ -1,0 +1,59 @@
+name: Deploy NOVA to Netlify Production
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/deploy-netlify-production.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    env:
+      NETLIFY_SITE_ID: ae7fa0fb-e73d-413a-b122-7b9ff9419244
+      NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
+      NETLIFY_TOKEN: ${{ secrets.NETLIFY_TOKEN }}
+      NETLIFY_API_TOKEN: ${{ secrets.NETLIFY_API_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select Netlify token
+        shell: bash
+        run: |
+          set -euo pipefail
+          TOKEN="${NETLIFY_AUTH_TOKEN:-}"
+          if [ -z "$TOKEN" ]; then TOKEN="${NETLIFY_TOKEN:-}"; fi
+          if [ -z "$TOKEN" ]; then TOKEN="${NETLIFY_API_TOKEN:-}"; fi
+          if [ -z "$TOKEN" ]; then
+            echo "NETLIFY_TOKEN_MISSING"
+            exit 2
+          fi
+          echo "::add-mask::$TOKEN"
+          echo "NOVA_NETLIFY_TOKEN=$TOKEN" >> "$GITHUB_ENV"
+
+      - name: Deploy current main to production
+        shell: bash
+        env:
+          NETLIFY_AUTH_TOKEN: ${{ env.NOVA_NETLIFY_TOKEN }}
+        run: |
+          npx --yes netlify-cli@latest deploy             --prod             --dir .             --site "$NETLIFY_SITE_ID"             --message "NOVA v27.1 iPhone PWA update"
+
+      - name: Verify production
+        shell: bash
+        run: |
+          BASE="https://dashing-otter-990b47.netlify.app"
+          for i in $(seq 1 20); do
+            body="$(curl -fsSL --max-time 12 -H 'Cache-Control: no-cache' "$BASE/version.json?t=$(date +%s)" 2>/dev/null || true)"
+            echo "attempt=$i body=$body"
+            if echo "$body" | grep -q '"version"[[:space:]]*:[[:space:]]*"27.1.0"'; then
+              echo "PRODUCTION_NOVA=27.1.0"
+              exit 0
+            fi
+            sleep 4
+          done
+          exit 1
