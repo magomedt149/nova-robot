@@ -1,0 +1,45 @@
+name: Validate NOVA
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  syntax:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Python syntax
+        run: |
+          python -m py_compile             automation/remote_gpu_worker.py             automation/nova_pipeline.py             blender-colab/scripts/extract_pose.py
+      - name: JavaScript syntax
+        run: |
+          node --check app.js
+          node --check motion-studio/app.js
+          node --check motion-studio/director.js
+          node --check motion-studio/remote-gpu.js
+          node --check service-worker.js
+          node --check motion-studio/service-worker.js
+      - name: Notebook JSON
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          path=Path("blender-colab/NOVA_Remote_GPU_Worker.ipynb")
+          data=json.loads(path.read_text(encoding="utf-8"))
+          assert data.get("nbformat") == 4
+          assert data.get("cells")
+          print("Notebook OK:", len(data["cells"]), "cells")
+          PY
