@@ -81,7 +81,7 @@ async function connect(){
   try{
     const data=await jsonFetch(url+'/health',{headers:authHeaders()});
     const gpu=data.gpu?.available?(data.gpu.name||'NVIDIA GPU'):'GPU не обнаружен';
-    const bits=[gpu,data.blender?'Blender ✓':'Blender —',data.ffmpeg?'FFmpeg ✓':'FFmpeg —',data.free_disk_gb!=null?data.free_disk_gb+' GB free':''];
+    const bits=[gpu,data.blender?'Blender ✓':'Blender —',data.ffmpeg?'FFmpeg ✓':'FFmpeg —',data.wangp_api_ready?'WanGP API ✓':'WanGP —',data.free_disk_gb!=null?data.free_disk_gb+' GB free':''];
     setStatus('Подключено: '+bits.filter(Boolean).join(' • '),'ok');
   }catch(error){setStatus('Не подключено: '+error.message,'error')}
 }
