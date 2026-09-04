@@ -909,8 +909,10 @@
     const speakerCharacter = options.character === 'owner' ? owner : robot;
     const cleanText = cleanSpeechText(text);
     const russian = String(lang).toLowerCase().startsWith('ru');
-    const classicRobotVoice = speakerCharacter === robot && !options.voiceProfile && options.forceNeuralVoice !== true;
-    const neuralRussian = russian && !classicRobotVoice && options.forceSystemVoice !== true && window.NovaRussianTTS?.speak;
+    const classicCharacterVoice = (speakerCharacter === robot || speakerCharacter === owner)
+      && !options.voiceProfile
+      && options.forceNeuralVoice !== true;
+    const neuralRussian = russian && !classicCharacterVoice && options.forceSystemVoice !== true && window.NovaRussianTTS?.speak;
 
     const finish = () => {
       if (token !== speechToken) return;
@@ -948,7 +950,7 @@
       return;
     }
 
-    if (classicRobotVoice) {
+    if (classicCharacterVoice) {
       try { window.NovaRussianTTS?.stop?.(); } catch (_) {}
     }
     window.speechSynthesis.cancel();
@@ -964,8 +966,9 @@
     utterance.rate = options.rate || 0.94;
     utterance.pitch = options.pitch || 1.04;
     utterance.volume = 1;
-    const voice = classicRobotVoice ? chooseClassicRobotVoice(lang) : chooseVoice(lang);
+    const voice = classicCharacterVoice ? chooseClassicRobotVoice(lang) : chooseVoice(lang);
     if (voice) utterance.voice = voice;
+    if (classicCharacterVoice || options.forceSystemVoice === true) utterance.__novaForceSystemVoice = true;
 
     utterance.onend = finish;
     utterance.onerror = finish;
