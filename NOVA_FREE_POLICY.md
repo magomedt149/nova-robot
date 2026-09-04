@@ -15,4 +15,15 @@ NOVA 27.2 uses a free-only default policy.
 - GitHub Actions workflows are manual-only; ordinary pushes do not start runners.
 - A paid deploy, paid API, credit-consuming render, or other billable action must not be started without the owner's explicit permission.
 
-Current policy version: **NOVA 27.2.0**
+Current policy version: **NOVA 27.2.1**
+
+## Runtime automation
+
+- NOVA 27.2.1 includes `nova-free-runtime.js`.
+- Old FULL AUTO / Auto Recovery flags are repaired to OFF on startup and when returning to the app.
+- Automatic update checks run only on free static hosts such as GitHub Pages; they are disabled on `*.netlify.app`.
+- On Netlify, the Service Worker uses cache-first for same-origin static files to reduce web requests and bandwidth.
+- Notebook translation and YouTube tools use local virtual routes under `/__nova_free__/`.
+- Automatic fallback to Netlify Functions is disabled in FREE mode.
+- A local command such as “диагностика NOVA” reports FREE LOCK/PWA/network status without a network request.
+- GitHub Pages is prepared for zero-build branch publishing with `.nojekyll`.
