@@ -132,13 +132,16 @@ async function beginRecovery(job,source,sourceName){
   };
   saveRecoveryMeta(meta);
   let cachedSource=null;
-  if(source&&await canCacheSource(source)){
-    try{cachedSource=source;meta.sourceCached=true;saveRecoveryMeta(meta)}catch(_){}
-  }
+  if(source&&await canCacheSource(source))cachedSource=source;
   try{
     await dbPut({id:DB_KEY,job:meta.job,source:cachedSource,sourceName:name,sourceType:meta.sourceType,meta});
+    if(cachedSource){
+      meta.sourceCached=true;saveRecoveryMeta(meta);
+      await dbPut({id:DB_KEY,job:meta.job,source:cachedSource,sourceName:name,sourceType:meta.sourceType,meta});
+    }
     setRecoveryStatus(meta.sourceSize?(meta.sourceCached?'Auto Recovery: исходник сохранён на iPhone.':'Auto Recovery: job сохранён; большой исходник держится пока страница открыта.'):'Auto Recovery: Scene Pack сохранён.','ok');
   }catch(_){
+    meta.sourceCached=false;saveRecoveryMeta(meta);
     setRecoveryStatus('Auto Recovery: сохранены параметры job; локальный файл-кэш недоступен.','');
   }
   return meta;
@@ -174,6 +177,17 @@ async function readClipboardCode(){
   if(!parseConnectCode(text))throw new Error('В буфере нет NOVA CONNECT CODE');
   if($('remoteConnectCode'))$('remoteConnectCode').value=text;
   return true;
+}
+async function tryClipboardReconnect(){
+  if(!autoRecoverEnabled()||!recoveryMeta()||!navigator.clipboard?.readText)return false;
+  try{
+    const text=await navigator.clipboard.readText();
+    if(!text||!parseConnectCode(text))return false;
+    if($('remoteConnectCode'))$('remoteConnectCode').value=text;
+    setRecoveryStatus('Auto Recovery: найден новый Connect Code в буфере. Переподключаюсь…','busy');
+    await connect();
+    return true;
+  }catch(_){return false}
 }
 function parseConnectCode(value){
   const raw=String(value||'').trim();
@@ -576,7 +590,9 @@ window.addEventListener('online',()=>{if(autoRecoverEnabled()&&recoveryMeta())re
 document.addEventListener('visibilitychange',()=>{
   if(document.visibilityState==='visible'){
     if(lastJobId||localStorage.getItem(LS_JOB))holdWakeLock();
-    if(autoRecoverEnabled()&&recoveryMeta())recoverNow().catch(()=>{});
+    if(autoRecoverEnabled()&&recoveryMeta()){
+      tryClipboardReconnect().then(found=>{if(!found)recoverNow().catch(()=>{})}).catch(()=>recoverNow().catch(()=>{}));
+    }
   }
 });
 restore().catch(()=>{});
