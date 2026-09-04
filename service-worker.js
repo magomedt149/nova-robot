@@ -1,4 +1,4 @@
-const CACHE = 'nova-v38-pwa-update-irina-20260904';
+const CACHE = 'nova-v39-free-lock-20260904';
 const API_CACHE = 'nova-api-economy-v2';
 const YOUTUBE_TTL_MS = 24 * 60 * 60 * 1000;
 const TRANSLATE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
