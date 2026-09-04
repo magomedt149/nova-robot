@@ -25,3 +25,9 @@
 .remote-paste{width:100%;margin:-2px 0 12px}
 
 .remote-smart-actions{display:grid;grid-template-columns:1.2fr 1fr;gap:8px;margin:0 0 12px}.remote-smart-actions button{margin:0}.remote-smart-actions .secondary{background:#11182b}@media(max-width:480px){.remote-smart-actions{grid-template-columns:1fr}}
+
+.remote-recovery-status{margin:8px 1px 6px;padding:8px 10px;border:1px solid #29334d;border-radius:10px;background:#0b1020;color:#9fb0cb;font-size:10px;line-height:1.4}
+.remote-recovery-status[data-kind="ok"]{border-color:rgba(69,220,164,.3);color:#8fffd0}
+.remote-recovery-status[data-kind="busy"]{border-color:rgba(64,186,255,.35);color:#9edfff}
+.remote-recovery-status[data-kind="error"]{border-color:rgba(255,96,130,.35);color:#ff9aad}
+.remote-recover-now{width:100%;margin:0 0 4px}
