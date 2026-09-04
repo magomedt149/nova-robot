@@ -16,6 +16,24 @@ function saveConnection(){
   localStorage.setItem(LS_URL,endpoint());
   localStorage.setItem(LS_TOKEN,token());
 }
+function parseConnectCode(value){
+  const raw=String(value||'').trim();
+  if(!raw)return false;
+  let data=null;
+  try{
+    if(raw.startsWith('{'))data=JSON.parse(raw);
+    else if(raw.startsWith('NOVA_CONNECT='))data=JSON.parse(raw.slice('NOVA_CONNECT='.length));
+    else if(raw.includes('|')){
+      const [url,tok]=raw.split('|',2);
+      data={url,token:tok};
+    }
+  }catch(_){data=null}
+  if(!data||!data.url||!data.token)return false;
+  if($('remoteUrl'))$('remoteUrl').value=String(data.url).trim();
+  if($('remoteToken'))$('remoteToken').value=String(data.token).trim();
+  saveConnection();
+  return true;
+}
 function setStatus(text,kind=''){
   const el=$('remoteStatus');if(!el)return;
   el.textContent=text;el.dataset.kind=kind;
@@ -164,6 +182,7 @@ async function cancel(){
 function restore(){
   if($('remoteUrl'))$('remoteUrl').value=localStorage.getItem(LS_URL)||'';
   if($('remoteToken'))$('remoteToken').value=localStorage.getItem(LS_TOKEN)||'';
+  if($('remoteConnectCode'))$('remoteConnectCode').value='';
   const saved=localStorage.getItem(LS_JOB);
   if(saved&&endpoint()&&token()){lastJobId=saved;poll(saved)}
 }
@@ -173,5 +192,22 @@ $('remoteSend')?.addEventListener('click',send);
 $('remoteCancel')?.addEventListener('click',cancel);
 $('remoteUrl')?.addEventListener('change',saveConnection);
 $('remoteToken')?.addEventListener('change',saveConnection);
+$('remoteConnectCode')?.addEventListener('change',async(e)=>{
+  if(parseConnectCode(e.target.value)){
+    setStatus('Connect Code принят. Проверяю GPU…','busy');
+    await connect();
+  }else if(e.target.value.trim()){
+    setStatus('Не удалось прочитать NOVA CONNECT CODE.','error');
+  }
+});
+$('remoteConnectCode')?.addEventListener('paste',()=>{
+  setTimeout(async()=>{
+    const el=$('remoteConnectCode');
+    if(el&&parseConnectCode(el.value)){
+      setStatus('Connect Code принят. Проверяю GPU…','busy');
+      await connect();
+    }
+  },0);
+});
 restore();
 })();
