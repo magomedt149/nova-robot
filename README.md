@@ -25,7 +25,7 @@ NOVA — бесплатный браузерный ИИ-агент Тумсое�
 
 ### FULL AUTO GPU
 
-Команда или кнопка **GPU Render** переводит Motion Studio в режим `FULL AUTO`. NOVA переносит текст команды в prompt, проверяет сохранённый worker, выбирает движок и при готовом Colab сразу создаёт Preview. Если включён Full Auto Final, завершённый preview повышается до нового Final job на стороне worker **без повторной загрузки исходного видео**. Final job использует сохранённый source/Scene Pack, а готовый MP4 возвращается на iPhone по временной download-ticket ссылке.
+Команда или кнопка **GPU Render** переводит Motion Studio в режим `FULL AUTO`. NOVA переносит текст команды в prompt, проверяет сохранённый worker, выбирает движок и при готовом Colab сразу создаёт Preview. Если включён Full Auto Final, завершённый preview повышается до нового Final job на стороне worker **без повторной загрузки исходного видео**; Final по умолчанию рендерится в 30 FPS. Final job использует сохранённый source/Scene Pack, а готовый MP4 возвращается на iPhone по временной download-ticket ссылке.
 
 Если Colab runtime уже жив, после команды пользователя дополнительных действий не нужно. Если Google завершил бесплатный runtime, остаётся только разрешённое Google действие запуска новой Colab-сессии; сайт не может программно выдать себе GPU или обойти Google authorization. После запуска runtime NOVA продолжает автоматический pipeline.
 
