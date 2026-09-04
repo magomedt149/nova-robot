@@ -16,7 +16,10 @@ import urllib.error
 
 DEVICE_ENDPOINT = "https://oauth2.googleapis.com/device/code"
 TOKEN_ENDPOINT = "https://oauth2.googleapis.com/token"
-SCOPE = "https://www.googleapis.com/auth/youtube.upload"
+SCOPES = (
+    "https://www.googleapis.com/auth/youtube.upload "
+    "https://www.googleapis.com/auth/youtube.readonly"
+)
 
 
 def post_form(url, payload):
@@ -42,6 +45,7 @@ def post_form(url, payload):
 def main():
     print("NOVA → YouTube: одноразовое подключение")
     print("Нужен OAuth client типа: TVs and Limited Input devices.")
+    print("Разрешения: загрузка видео + чтение данных своего канала для проверки и статистики.")
     client_id = input("YOUTUBE_CLIENT_ID: ").strip()
     client_secret = getpass.getpass("YOUTUBE_CLIENT_SECRET (скрыт): ").strip()
 
@@ -50,7 +54,7 @@ def main():
 
     status, device = post_form(
         DEVICE_ENDPOINT,
-        {"client_id": client_id, "scope": SCOPE},
+        {"client_id": client_id, "scope": SCOPES},
     )
     if status != 200:
         raise SystemExit(f"Не удалось получить device code: HTTP {status}: {device}")
