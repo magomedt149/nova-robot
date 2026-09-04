@@ -127,6 +127,13 @@
     const panel = document.createElement('section');
     const IRINA_SAMPLE = 'Привет, Тумсоев. Ирина готова озвучивать видео на русском языке чётко и естественно.';
     const DENIS_SAMPLE = 'Привет, Тумсоев. Денис готов озвучивать видео на русском языке чётким мужским голосом.';
+    const DIALOGUE_SAMPLE = Object.freeze([
+      { voice: 'irina', text: 'Привет, Денис. Ты меня слышишь?' },
+      { voice: 'denis', text: 'Да, Ирина. Слышу отлично.' },
+      { voice: 'irina', text: 'Тогда проверим наши голоса по очереди.' },
+      { voice: 'denis', text: 'Готов. Сейчас говорю я, мужским голосом.' },
+      { voice: 'irina', text: 'А теперь снова я. Диалог работает правильно.' }
+    ]);
     panel.id = 'novaIrinaQuick';
     panel.className = 'nova-irina-quick';
     panel.innerHTML = `
@@ -134,7 +141,7 @@
       <div class="nova-irina-lock" id="novaQuickVoiceProfile">Ирина: ru_RU-irina-medium · pitch 1.0 · formant 1.0</div>
       <textarea id="novaIrinaQuickText">${IRINA_SAMPLE}</textarea>
       <div class="nova-irina-row"><select id="novaIrinaQuickVoice"><option value="irina">♀ Ирина</option><option value="denis">♂ Денис</option></select><div class="nova-media-note">Переключение сразу останавливает прежний голос. Кнопка «Слушать» всегда запускает выбранный профиль.</div></div>
-      <div class="nova-irina-actions"><button class="primary" id="novaIrinaQuickPlay" type="button">▶ Слушать</button><button id="novaIrinaQuickStop" type="button">⏹ Стоп</button></div>`;
+      <div class="nova-irina-actions"><button class="primary" id="novaIrinaQuickPlay" type="button">▶ Слушать</button><button id="novaIrinaDialoguePlay" type="button">💬 Диалог Ирина + Денис</button><button id="novaIrinaQuickStop" type="button">⏹ Стоп</button></div>`;
     pane.prepend(panel);
 
     const voiceSelect = $('#novaIrinaQuickVoice', panel);
@@ -185,6 +192,25 @@
         else await tts.speak(text, voice);
       } catch (error) {
         status(`TTS ${voice === 'denis' ? 'Денис' : 'Ирина'}: ${error?.message || error}`);
+      }
+    });
+
+    $('#novaIrinaDialoguePlay', panel)?.addEventListener('click', async () => {
+      const tts = window.NovaRussianTTS;
+      if (!tts?.speakDialogue) return status('Диалог Ирина + Денис ещё загружается. Попробуй через несколько секунд.');
+      try {
+        tts.unlock?.();
+        tts.stop?.();
+        if (textBox) {
+          textBox.value = DIALOGUE_SAMPLE
+            .map((turn) => `${turn.voice === 'denis' ? 'Денис' : 'Ирина'}: ${turn.text}`)
+            .join('\n');
+        }
+        status('💬 Диалог: Ирина → Денис → Ирина → Денис → Ирина…');
+        await tts.speakDialogue(DIALOGUE_SAMPLE);
+        status('✅ Диалог Ирина + Денис завершён.');
+      } catch (error) {
+        status(`Диалог TTS: ${error?.message || error}`);
       }
     });
 
