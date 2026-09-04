@@ -31,7 +31,9 @@
       const blob = await response.blob();
       const record = { blob, name: link.download, kind: kindFromName(link.download), href: link.href };
       cache.set(link.href, record);
-      window.NovaMediaLibrary?.registerBlob?.(blob, link.download, link.closest('#novaShortDownloads') ? 'Multi Shorts' : 'NOVA Media Studio').catch?.(() => {});
+      if (link.dataset.novaLibraryOwn !== '1') {
+        window.NovaMediaLibrary?.registerBlob?.(blob, link.download, link.closest('#novaShortDownloads') ? 'Multi Shorts' : 'NOVA Media Studio').catch?.(() => {});
+      }
       decorate(link, record);
       updateFiveShortsButton();
       return record;
