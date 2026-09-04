@@ -18,7 +18,29 @@ NOVA — бесплатный браузерный ИИ-агент Тумсое�
 - компас, анимации NOVA, Тумсоева и лунной кошки;
 - Motion + VFX Studio: бесплатные локальные camera moves и эффекты дождя, дыма, тумана, искр, молнии, огня, обломков и взрыва;
 - NOVA Auto Director: из описания сцены автоматически создаёт shot plan, 3D blocking, объектив, camera path, continuity lock и финальный AI prompt; платные вызовы по умолчанию отключены;
+- Remote GPU / Google Colab: Motion + VFX Studio может отправить исходное видео и Scene Pack на временный Colab GPU, следить за прогрессом и вернуть готовый MP4 на телефон; большие видео грузятся по частям;
 - установка на главный экран как PWA.
+
+## Remote GPU / Google Colab
+
+Открой в Motion + VFX Studio блок **Remote GPU / Google Colab**, затем ноутбук:
+
+`blender-colab/NOVA_Remote_GPU_Worker.ipynb`
+
+Ноутбук устанавливает Blender/FFmpeg, запускает защищённый токеном NOVA worker и бесплатный Cloudflare Quick Tunnel. В Motion Studio вставляются только два временных значения: **Worker URL** и **Token**.
+
+Поток работы:
+
+```
+NOVA on iPhone → chunked HTTPS upload → Colab GPU → Blender / FFmpeg / WanGP handoff → MP4 → NOVA
+```
+
+- Blender jobs и FFmpeg jobs выполняются автоматически.
+- Preview по умолчанию облегчённый; Final — 1080p после проверки.
+- Большие исходники передаются частями по 8 MB, чтобы не зависеть от лимита одного HTTP-запроса.
+- При включённом Drive mirror completed job копируется в `MyDrive/NOVA_RENDER_QUEUE/completed/`.
+- WanGP автоматически получает подготовленный input/prompt; полностью автоматический запуск возможен только при настроенном совместимом Gradio API. Иначе worker честно оставляет job в статусе `waiting_wangp` для проверенного WanGP UI.
+- URL и Token действуют только пока живёт Colab runtime. После перезапуска Colab подключение нужно вставить заново.
 
 ## NOVA Auto Director / Blender
 
