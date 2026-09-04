@@ -11,8 +11,10 @@ permissions:
 jobs:
   inspect:
     runs-on: ubuntu-latest
-    timeout-minutes: 3
+    timeout-minutes: 8
     steps:
+      - uses: actions/checkout@v4
+
       - name: Inspect Netlify public deploy state
         shell: bash
         run: |
@@ -42,3 +44,27 @@ jobs:
 
           echo "=== LIVE VERSION ==="
           curl -sS -w "\nHTTP=%{http_code}\n" --max-time 20 "https://dashing-otter-990b47.netlify.app/version.json?t=$(date +%s)" | head -80
+
+      - name: Check Netlify token without exposing it
+        shell: bash
+        env:
+          NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
+        run: |
+          if [ -n "${NETLIFY_AUTH_TOKEN:-}" ]; then
+            echo "NETLIFY_TOKEN_PRESENT=true"
+          else
+            echo "NETLIFY_TOKEN_PRESENT=false"
+          fi
+
+      - name: Create zero-production-credit preview
+        shell: bash
+        env:
+          NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
+          NETLIFY_SITE_ID: ae7fa0fb-e73d-413a-b122-7b9ff9419244
+        run: |
+          if [ -z "${NETLIFY_AUTH_TOKEN:-}" ]; then
+            echo "Skipping preview: NETLIFY_AUTH_TOKEN is not configured."
+            exit 0
+          fi
+          npx --yes netlify-cli@latest deploy             --dir=.             --site "$NETLIFY_SITE_ID"             --auth "$NETLIFY_AUTH_TOKEN"             --json > /tmp/netlify-preview.json
+          jq '{deploy_id, deploy_url, url, logs}' /tmp/netlify-preview.json
