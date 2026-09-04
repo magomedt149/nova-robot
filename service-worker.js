@@ -1,4 +1,4 @@
-const CACHE = 'nova-v42-video-studio-free-only-20260904';
+const CACHE = 'nova-v43-text-video-free-only-20260904';
 const API_CACHE = 'nova-api-economy-v2';
 const METERED_NETLIFY_HOST = /(^|\\.)netlify\\.app$/i.test(self.location.hostname);
 const YOUTUBE_TTL_MS = 24 * 60 * 60 * 1000;
