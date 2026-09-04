@@ -23,3 +23,5 @@
 @media(max-width:480px){.remote-actions{grid-template-columns:1fr}.remote-actions button{margin:0}}
 
 .remote-paste{width:100%;margin:-2px 0 12px}
+
+.remote-smart-actions{display:grid;grid-template-columns:1.2fr 1fr;gap:8px;margin:0 0 12px}.remote-smart-actions button{margin:0}.remote-smart-actions .secondary{background:#11182b}@media(max-width:480px){.remote-smart-actions{grid-template-columns:1fr}}
