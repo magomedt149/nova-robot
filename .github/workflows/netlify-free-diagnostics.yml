@@ -42,6 +42,15 @@ jobs:
             curl -sS --max-time 20 "$BASE/builds/$BUILD_ID" | jq . || true
           fi
 
+          echo "=== DEPLOY COUNTS ==="
+          curl -sS --max-time 20 "$BASE/sites/$SITE_ID/deploys?per_page=100" > /tmp/deploys100.json
+          echo -n "READY_PRODUCTION_LAST_100="
+          jq '[.[] | select(.context=="production" and .state=="ready")] | length' /tmp/deploys100.json
+          echo -n "SKIPPED_PRODUCTION_LAST_100="
+          jq '[.[] | select(.context=="production" and .skipped==true)] | length' /tmp/deploys100.json
+          echo "READY_PRODUCTION_TIMES="
+          jq -r '.[] | select(.context=="production" and .state=="ready") | [.created_at,.commit_ref,.title] | @tsv' /tmp/deploys100.json | head -30
+
           echo "=== LIVE VERSION ==="
           curl -sS -w "\nHTTP=%{http_code}\n" --max-time 20 "https://dashing-otter-990b47.netlify.app/version.json?t=$(date +%s)" | head -80
 
