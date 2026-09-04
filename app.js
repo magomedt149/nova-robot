@@ -2443,6 +2443,73 @@
     repositionCharacters();
   });
 
+  const NOVA_AUTO_UPDATE_INTERVAL_MS = 30 * 60 * 1000;
+  let novaAutoUpdateRunning = false;
+  let novaAutoUpdateRedirecting = false;
+  let novaAutoUpdateTimer = 0;
+
+  function compareNovaVersions(left, right) {
+    const a = String(left || '').split('.').map((part) => Number(part) || 0);
+    const b = String(right || '').split('.').map((part) => Number(part) || 0);
+    const size = Math.max(a.length, b.length, 3);
+    for (let index = 0; index < size; index += 1) {
+      const delta = (a[index] || 0) - (b[index] || 0);
+      if (delta) return delta;
+    }
+    return 0;
+  }
+
+  function scheduleNovaAutoUpdate(delay = NOVA_AUTO_UPDATE_INTERVAL_MS) {
+    clearTimeout(novaAutoUpdateTimer);
+    novaAutoUpdateTimer = window.setTimeout(() => {
+      checkForNovaUpdate().finally(() => scheduleNovaAutoUpdate());
+    }, Math.max(1000, Number(delay) || NOVA_AUTO_UPDATE_INTERVAL_MS));
+  }
+
+  async function checkForNovaUpdate() {
+    if (novaAutoUpdateRunning || novaAutoUpdateRedirecting || document.hidden || !navigator.onLine) return false;
+    // Never auto-poll the metered Netlify host. NOVA's free update path is GitHub Pages/static hosting.
+    if (/(^|\\.)netlify\\.app$/i.test(location.hostname)) return false;
+
+    novaAutoUpdateRunning = true;
+    try {
+      const response = await fetch(`./version.json?nova_auto_update=${Date.now()}`, {
+        cache: 'no-store',
+        credentials: 'same-origin'
+      });
+      if (!response.ok) return false;
+      const info = await response.json();
+      const target = String(info?.pwa || info?.version || '').trim();
+      if (!/^\\d+\\.\\d+\\.\\d+$/.test(target) || compareNovaVersions(target, VERSION) <= 0) return false;
+
+      novaAutoUpdateRedirecting = true;
+      pauseRecognitionForOutput();
+      setStatus(language === 'en' ? `Updating NOVA to ${target}…` : `Обновляю NOVA до ${target}…`, 'speaking');
+
+      try {
+        const registration = await navigator.serviceWorker?.getRegistration?.('./');
+        await registration?.update?.().catch(() => {});
+        if (registration?.waiting) {
+          try { registration.waiting.postMessage({ type: 'NOVA_SKIP_WAITING' }); } catch (_) {}
+        }
+      } catch (_) {}
+
+      try {
+        sessionStorage.setItem('nova.autoUpdate.from', VERSION);
+        sessionStorage.setItem('nova.autoUpdate.to', target);
+      } catch (_) {}
+
+      window.setTimeout(() => {
+        location.replace(`./update.html?auto=1&from=${encodeURIComponent(VERSION)}&to=${encodeURIComponent(target)}&t=${Date.now()}`);
+      }, 650);
+      return true;
+    } catch (_) {
+      return false;
+    } finally {
+      novaAutoUpdateRunning = false;
+    }
+  }
+
   if ('serviceWorker' in navigator) {
     let pwaReloading = false;
     const isMeteredNetlifyHost = /(^|\\.)netlify\\.app$/i.test(location.hostname);
@@ -2472,7 +2539,22 @@
         if (registration?.waiting) {
           try { registration.waiting.postMessage({ type: 'NOVA_SKIP_WAITING' }); } catch (_) {}
         }
-      } catch (_) {}
+
+        await checkForNovaUpdate();
+        scheduleNovaAutoUpdate();
+      } catch (_) {
+        scheduleNovaAutoUpdate();
+      }
+    });
+
+    window.addEventListener('online', () => {
+      checkForNovaUpdate().finally(() => scheduleNovaAutoUpdate());
+    });
+    window.addEventListener('focus', () => {
+      checkForNovaUpdate().finally(() => scheduleNovaAutoUpdate());
+    });
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden) checkForNovaUpdate().finally(() => scheduleNovaAutoUpdate());
     });
   }
 
