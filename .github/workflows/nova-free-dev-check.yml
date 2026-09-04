@@ -1,0 +1,40 @@
+name: NOVA Free Dev Check
+
+on:
+  push:
+    branches: [nova-dev-free]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nova-free-dev-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate NOVA static release
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f index.html
+          test -f app.js
+          test -f service-worker.js
+          test -f version.json
+          test -f netlify.toml
+
+          VERSION="$(jq -r '.version' version.json)"
+          test -n "$VERSION"
+          grep -q "NOVA 27.1" index.html
+          grep -q "Motion + VFX" index.html
+          grep -q 'publish = "."' netlify.toml
+
+          echo "NOVA_VERSION=$VERSION"
+          echo "STATIC_RELEASE_VALID=true"
+          echo "NETLIFY_PRODUCTION_DEPLOY=false"
