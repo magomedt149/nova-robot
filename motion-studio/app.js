@@ -246,3 +246,19 @@ async function renderLocalVideo(sourceFile=null){
 }
 window.NOVA_LOCAL_RENDER=renderLocalVideo;
 $('render').addEventListener('click',()=>renderLocalVideo(null).catch(error=>{$('status').textContent='Ошибка локального рендера: '+error.message}));
+
+
+// NOVA 3D Director bridge: receives a prepared Camera Path prompt without starting Remote GPU.
+function applyNova3DPrefill(){
+  try{
+    const value=localStorage.getItem('nova.motion.prefill.prompt');
+    if(!value)return;
+    const prompt=$('prompt');
+    if(prompt)prompt.value=value;
+    $('applyPrompt')?.click();
+    localStorage.removeItem('nova.motion.prefill.prompt');
+    if($('status'))$('status').textContent='✅ 3D Director: Camera Path получен. Проверь preview; Remote GPU не запущен.';
+  }catch(_){}
+}
+setTimeout(applyNova3DPrefill,0);
+window.addEventListener('storage',event=>{if(event.key==='nova.motion.prefill.prompt'&&event.newValue)setTimeout(applyNova3DPrefill,0)});
