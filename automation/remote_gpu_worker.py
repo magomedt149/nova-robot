@@ -635,7 +635,15 @@ def execute_job(job_id: str) -> None:
         engine = str(job.get("engine") or "auto").lower()
         if engine == "auto":
             engine = "blender" if command_exists("blender") else "ffmpeg"
-        update_status(job_id, status="running", engine=engine, progress=5, stage="start", message=f"Запускаю {engine}.")
+        update_status(
+            job_id,
+            status="running",
+            engine=engine,
+            quality=str(job.get("quality") or "preview").lower(),
+            progress=5,
+            stage="start",
+            message=f"Запускаю {engine}.",
+        )
         if engine == "ffmpeg":
             result = run_ffmpeg_job(job_id, job, job_dir)
         elif engine == "blender":
@@ -658,6 +666,7 @@ def execute_job(job_id: str) -> None:
             message="Готово. Результат можно открыть на телефоне.",
             result_file=result.name,
             result_bytes=result.stat().st_size,
+            quality=str(job.get("quality") or "preview").lower(),
             drive_path=drive_path,
         )
     except Exception as exc:
@@ -717,6 +726,7 @@ async def health(request: Request):
         "capabilities": {
             "chunked_upload": True,
             "download_ticket": True,
+            "preview_promote": True,
             "blender": command_exists("blender"),
             "ffmpeg": command_exists("ffmpeg"),
             "wangp": (WANGP_ROOT / "shared" / "api.py").is_file(),
@@ -763,6 +773,7 @@ async def create_job(request: Request, job_json: str = Form(...), source: Upload
         stage="uploading" if deferred else "queued",
         message="Задание создано. Жду видео по частям." if deferred else "Задание принято Colab worker.",
         upload_bytes=upload_bytes,
+        quality=str(job.get("quality") or "preview").lower(),
         created_at=time.time(),
     )
     if not deferred:
@@ -845,6 +856,65 @@ async def start_job(job_id: str, request: Request):
     update_status(job_id, status="queued", stage="queued", progress=max(12, current.get("progress") or 0), message="Видео принято. Запускаю GPU.")
     asyncio.create_task(asyncio.to_thread(execute_job, job_id))
     return {"ok": True, "job_id": job_id, "status": "queued"}
+
+
+@app.post("/jobs/{job_id}/promote")
+async def promote_job(job_id: str, request: Request):
+    require_token(request)
+    source_dir = JOB_ROOT / job_id
+    if not source_dir.is_dir():
+        raise HTTPException(status_code=404, detail="Job not found")
+    status = read_status(job_id)
+    if status.get("status") != "completed":
+        raise HTTPException(status_code=409, detail=f"Job is {status.get('status')}")
+    original = json.loads((source_dir / "job.json").read_text(encoding="utf-8"))
+    if str(original.get("quality") or "preview").lower() == "final":
+        return {"ok": True, "job_id": job_id, "status": "completed", "already_final": True}
+
+    promoted = dict(original)
+    promoted.pop("job_id", None)
+    promoted["quality"] = "final"
+    promoted["defer_start"] = False
+    promoted["promoted_from"] = job_id
+    promoted["created_at"] = time.time()
+    new_id = safe_job_id()
+    promoted["job_id"] = new_id
+    target_dir = JOB_ROOT / new_id
+    target_dir.mkdir(parents=True)
+
+    for source in source_dir.iterdir():
+        if not source.is_file():
+            continue
+        if source.name.startswith("source.") or source.name in {
+            "NOVA_scene_pack.json",
+            "WAN_GP_INPUT.mp4",
+            "WAN_GP_START.png",
+            "WAN_GP_PROMPT.txt",
+            "WANGP_SETTINGS.json",
+        }:
+            target = target_dir / source.name
+            try:
+                os.link(source, target)
+            except Exception:
+                shutil.copy2(source, target)
+
+    (target_dir / "job.json").write_text(
+        json.dumps(promoted, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+    update_status(
+        new_id,
+        job_id=new_id,
+        status="queued",
+        quality="final",
+        progress=0,
+        stage="queued",
+        message=f"Preview {job_id} одобрен FULL AUTO. Запускаю Final без повторной загрузки.",
+        promoted_from=job_id,
+        created_at=time.time(),
+    )
+    asyncio.create_task(asyncio.to_thread(execute_job, new_id))
+    return {"ok": True, "job_id": new_id, "status": "queued", "promoted_from": job_id}
 
 
 @app.get("/jobs/{job_id}")
