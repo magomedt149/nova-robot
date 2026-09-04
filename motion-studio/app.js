@@ -256,6 +256,7 @@ function applyNova3DPrefill(){
     const prompt=$('prompt');
     if(prompt)prompt.value=value;
     $('applyPrompt')?.click();
+    $('autoDirector')?.click();
     localStorage.removeItem('nova.motion.prefill.prompt');
     if($('status'))$('status').textContent='✅ 3D Director: Camera Path получен. Проверь preview; Remote GPU не запущен.';
   }catch(_){}
