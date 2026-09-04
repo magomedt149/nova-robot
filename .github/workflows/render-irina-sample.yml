@@ -1,0 +1,69 @@
+name: Render Irina 12s Sample
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/render-irina-sample.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  render:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Piper
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install piper-tts
+
+      - name: Download Irina
+        run: |
+          python -m piper.download_voices ru_RU-irina-medium
+
+      - name: Synthesize clear Russian sample
+        shell: bash
+        run: |
+          cat > render.py <<'PY'
+          import wave
+          from piper import PiperVoice, SynthesisConfig
+
+          text = (
+              "Это Нова. "
+              "Сначала даём команду на сайте. "
+              "Затем нажимаем Сделать видео. "
+              "Нова запускает видеостудию и возвращает готовый ролик на айфон."
+          )
+
+          voice = PiperVoice.load(
+              "ru_RU-irina-medium.onnx",
+              config_path="ru_RU-irina-medium.onnx.json"
+          )
+          syn = SynthesisConfig(
+              length_scale=1.04,
+              noise_scale=0.667,
+              noise_w_scale=0.8,
+              normalize_audio=True
+          )
+          with wave.open("irina_clear.wav", "wb") as wav_file:
+              voice.synthesize_wav(text, wav_file, syn_config=syn)
+          PY
+          python render.py
+          ffmpeg -y -i irina_clear.wav             -af "highpass=f=90,lowpass=f=8500,acompressor=threshold=-18dB:ratio=2:attack=8:release=120:makeup=2,loudnorm=I=-15:TP=-1.2:LRA=5"             -ar 48000 -ac 1 irina_clear_master.wav
+          ffprobe -v error -show_entries format=duration -of default=nw=1:nk=1 irina_clear_master.wav
+
+      - name: Upload Irina WAV
+        uses: actions/upload-artifact@v4
+        with:
+          name: nova-irina-clear-12s
+          path: irina_clear_master.wav
+          if-no-files-found: error
+          retention-days: 1
