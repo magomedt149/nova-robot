@@ -48,8 +48,8 @@
 
     let normalizationSample = '';
     try {
-      normalizationSample = pronunciation?.normalize?.('NOVA, урок 4. TTS Ирины: 10 секунд, 100%. Ещё один проект.') || '';
-      checks.push(row('russian-normalization', /НОВА/.test(normalizationSample) && /десять/.test(normalizationSample) && /сто/.test(normalizationSample), normalizationSample, 'normalized Russian speech text'));
+      normalizationSample = pronunciation?.normalize?.('NOVA, урок 4. TTS Ирины: GPU Render, WanGP, Blender, FFmpeg, MP4, 30 FPS, 9:16, 100%.') || '';
+      checks.push(row('russian-normalization', /НОВА/.test(normalizationSample) && /джи-пи-ю/i.test(normalizationSample) && /эм-пэ-четыре/i.test(normalizationSample) && /кадров в секунду/i.test(normalizationSample) && /девять на шестнадцать/i.test(normalizationSample) && /сто/.test(normalizationSample), normalizationSample, 'normalized Russian speech text'));
     } catch (error) {
       checks.push(row('russian-normalization', false, error?.message || String(error), 'normalized Russian speech text'));
     }
