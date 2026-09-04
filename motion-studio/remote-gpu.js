@@ -1,7 +1,7 @@
 (()=>{
 const $=id=>document.getElementById(id);
 const LS_URL='nova.remoteGpu.url',LS_TOKEN='nova.remoteGpu.token',LS_JOB='nova.remoteGpu.job';
-let pollTimer=0,lastJobId='';
+let pollTimer=0,lastJobId='',wakeLock=null;
 
 function endpoint(){
   return ($('remoteUrl')?.value||'').trim().replace(/\/+$/,'');
@@ -16,6 +16,22 @@ function saveConnection(){
   localStorage.setItem(LS_URL,endpoint());
   localStorage.setItem(LS_TOKEN,token());
 }
+async function holdWakeLock(){
+  try{
+    if('wakeLock' in navigator&&!wakeLock)wakeLock=await navigator.wakeLock.request('screen');
+  }catch(_){}
+}
+async function releaseWakeLock(){
+  try{if(wakeLock){await wakeLock.release();wakeLock=null}}catch(_){wakeLock=null}
+}
+async function readClipboardCode(){
+  if(!navigator.clipboard?.readText)throw new Error('Буфер обмена недоступен в этом браузере');
+  const text=await navigator.clipboard.readText();
+  if(!parseConnectCode(text))throw new Error('В буфере нет NOVA CONNECT CODE');
+  if($('remoteConnectCode'))$('remoteConnectCode').value=text;
+  return true;
+}
+async function sleep(ms){return new Promise(r=>setTimeout(r,ms))}
 function parseConnectCode(value){
   const raw=String(value||'').trim();
   if(!raw)return false;
@@ -106,14 +122,12 @@ async function connect(){
 function clearPoll(){if(pollTimer){clearTimeout(pollTimer);pollTimer=0}}
 async function downloadResult(jobId){
   try{
-    const r=await fetch(endpoint()+'/jobs/'+encodeURIComponent(jobId)+'/result',{headers:authHeaders()});
-    if(!r.ok)throw new Error('HTTP '+r.status);
-    const blob=await r.blob();
-    const url=URL.createObjectURL(blob);
+    const ticket=await jsonFetch(endpoint()+'/jobs/'+encodeURIComponent(jobId)+'/download-ticket',{method:'POST',headers:authHeaders()});
+    const url=endpoint()+ticket.path;
     const a=$('remoteResult');
-    if(a){a.href=url;a.download='NOVA_'+jobId+'.mp4';a.classList.remove('hidden');a.textContent='Открыть / сохранить готовый MP4'}
+    if(a){a.href=url;a.download=ticket.filename||('NOVA_'+jobId+'.mp4');a.classList.remove('hidden');a.textContent='Открыть / сохранить готовый MP4'}
     const video=$('video');if(video){video.src=url;video.classList.remove('hidden')}
-  }catch(error){setStatus('Рендер готов, но файл не загрузился: '+error.message,'error')}
+  }catch(error){setStatus('Рендер готов, но ссылка на файл не создалась: '+error.message,'error')}
 }
 async function poll(jobId){
   clearPoll();
@@ -122,10 +136,10 @@ async function poll(jobId){
     setProgress(data.progress||0);
     const state=data.status||'running';
     setStatus((data.message||state)+(data.engine?' • '+data.engine:''),state==='error'?'error':state==='completed'?'ok':'busy');
-    if(state==='completed'){localStorage.removeItem(LS_JOB);await downloadResult(jobId);return}
-    if(state==='error'||state==='cancelled'){localStorage.removeItem(LS_JOB);return}
+    if(state==='completed'){localStorage.removeItem(LS_JOB);await releaseWakeLock();await downloadResult(jobId);return}
+    if(state==='error'||state==='cancelled'){localStorage.removeItem(LS_JOB);await releaseWakeLock();return}
     if(state==='waiting_wangp'){
-      const note=$('remoteHint');if(note)note.textContent='WanGP входы готовы в Colab. Запусти WanGP UI там и финализируй результат — NOVA продолжит отслеживание.';
+      const note=$('remoteHint');if(note)note.textContent='Подключена старая версия worker. Перезапусти актуальный Colab notebook: WanGP теперь работает через Python API автоматически.';
     }
     pollTimer=setTimeout(()=>poll(jobId),2200);
   }catch(error){
@@ -141,7 +155,17 @@ async function uploadVideoChunks(jobId,file){
     const fd=new FormData();
     fd.append('index',String(index));fd.append('total',String(total));fd.append('filename',file.name);
     fd.append('chunk',file.slice(start,end),file.name+'.part');
-    await jsonFetch(endpoint()+'/jobs/'+encodeURIComponent(jobId)+'/upload-chunk',{method:'POST',headers:authHeaders(),body:fd});
+    let uploaded=false,lastError=null;
+    for(let attempt=1;attempt<=3&&!uploaded;attempt++){
+      try{
+        await jsonFetch(endpoint()+'/jobs/'+encodeURIComponent(jobId)+'/upload-chunk',{method:'POST',headers:authHeaders(),body:fd});
+        uploaded=true;
+      }catch(error){
+        lastError=error;
+        if(attempt<3){setStatus('Сеть прервалась. Повтор части '+(index+1)+'…','busy');await sleep(800*attempt)}
+      }
+    }
+    if(!uploaded)throw lastError||new Error('Не удалось загрузить часть видео');
     const pct=Math.round(((index+1)/total)*12);
     setProgress(pct);setStatus('Загружаю видео в Colab: '+(index+1)+'/'+total+' частей…','busy');
   }
@@ -149,7 +173,7 @@ async function uploadVideoChunks(jobId,file){
 async function send(){
   const url=endpoint(),tok=token();
   if(!url||!tok){setStatus('Сначала подключи Colab worker.','error');return}
-  saveConnection();
+  saveConnection();await holdWakeLock();
   const job=buildJob();
   const source=$('remoteSource')?.files?.[0]||null;
   if(job.engine==='ffmpeg'&&!source){setStatus('Для FFmpeg выбери исходное видео.','error');return}
@@ -168,7 +192,7 @@ async function send(){
     }
     setStatus('Colab принял '+lastJobId+'. Запускаю preview/render…','busy');
     poll(lastJobId);
-  }catch(error){setStatus('Не удалось отправить: '+error.message,'error')}
+  }catch(error){await releaseWakeLock();setStatus('Не удалось отправить: '+error.message,'error')}
   finally{if(btn)btn.disabled=false}
 }
 async function cancel(){
@@ -176,7 +200,7 @@ async function cancel(){
   if(!jobId){setStatus('Активного задания нет.');return}
   try{
     await jsonFetch(endpoint()+'/jobs/'+encodeURIComponent(jobId),{method:'DELETE',headers:authHeaders()});
-    clearPoll();localStorage.removeItem(LS_JOB);setProgress(0);setStatus('Задание остановлено.','ok');
+    clearPoll();localStorage.removeItem(LS_JOB);await releaseWakeLock();setProgress(0);setStatus('Задание остановлено.','ok');
   }catch(error){setStatus('Не удалось остановить: '+error.message,'error')}
 }
 function restore(){
@@ -188,6 +212,13 @@ function restore(){
 }
 
 $('remoteConnect')?.addEventListener('click',connect);
+$('remotePasteCode')?.addEventListener('click',async()=>{
+  try{
+    setStatus('Читаю NOVA CONNECT CODE из буфера…','busy');
+    await readClipboardCode();
+    await connect();
+  }catch(error){setStatus(error.message,'error')}
+});
 $('remoteSend')?.addEventListener('click',send);
 $('remoteCancel')?.addEventListener('click',cancel);
 $('remoteUrl')?.addEventListener('change',saveConnection);
@@ -208,6 +239,9 @@ $('remoteConnectCode')?.addEventListener('paste',()=>{
       await connect();
     }
   },0);
+});
+document.addEventListener('visibilitychange',()=>{
+  if(document.visibilityState==='visible'&&(lastJobId||localStorage.getItem(LS_JOB)))holdWakeLock();
 });
 restore();
 })();
