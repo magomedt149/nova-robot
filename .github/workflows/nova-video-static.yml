@@ -1,8 +1,7 @@
 name: NOVA video studio checks
 
+
 on:
-  push:
-    branches: [fix/video-subtitles-motion-cinema-20260902]
   workflow_dispatch:
 
 jobs:
