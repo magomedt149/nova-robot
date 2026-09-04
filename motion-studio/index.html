@@ -122,57 +122,75 @@
 
       <section id="remoteGpu" class="remote-gpu-panel" aria-label="Удалённый GPU Google Colab">
         <div class="remote-gpu-head"><strong>☁️ Remote GPU / Google Colab</strong><span>FREE</span></div>
-        <p>Если iPhone слабый, отправь видео и Scene Pack на временный GPU Colab. Blender, FFmpeg и WanGP работают удалённо без платных API.</p>
-        <a id="remoteColabLink" class="remote-colab-link" href="https://colab.research.google.com/github/magomedt149/nova-robot/blob/main/blender-colab/NOVA_Remote_GPU_Worker.ipynb" target="_blank" rel="noopener">🚀 Открыть NOVA Colab Worker</a>
-        <div class="remote-smart-actions">
-          <button id="remoteAutoStart" type="button">🤖 FULL AUTO GPU</button>
-          <button id="remoteTest" class="secondary" type="button">🧪 Тест рендера 1 сек</button>
-        </div>
-        <label class="remote-check"><input id="remoteAutoFinal" type="checkbox"> <span><b>Full Auto:</b> после preview автоматически запустить Final без повторной загрузки исходника.</span></label>
-        <label class="remote-check"><input id="remoteAutoRecover" type="checkbox" checked> <span><b>Auto Recovery:</b> автоматически переподключаться после краткого обрыва, восстанавливать job и повторно отправлять его в новую Colab-сессию после подключения.</span></label>
-        <label>Быстрое подключение
-          <input id="remoteConnectCode" autocomplete="off" placeholder="Вставь NOVA CONNECT CODE из Colab">
-        </label>
-        <button id="remotePasteCode" class="secondary remote-paste" type="button">📋 Вставить код из буфера и подключить</button>
-        <div class="grid2 remote-connection-grid">
-          <label>Worker URL
-            <input id="remoteUrl" inputmode="url" autocomplete="off" placeholder="https://…trycloudflare.com">
-          </label>
-          <label>Token
-            <input id="remoteToken" type="password" autocomplete="off" placeholder="NOVA token из Colab">
+        <p>Тяжёлый рендер делает удалённый GPU Google. NOVA сама выбирает Blender, FFmpeg или WanGP, следит за работой и возвращает MP4 на iPhone.</p>
+
+        <div class="remote-easy-card">
+          <div class="remote-easy-top"><b>Простой режим</b><span id="remoteEasyState">ГОТОВ К ЗАПУСКУ</span></div>
+          <button id="remoteEasyAction" class="remote-easy-action" type="button">🚀 ДЕЛАЙ ВСЁ САМ</button>
+          <div id="remoteEasyText" class="remote-easy-text">Нажми один раз. NOVA проверит сохранённый GPU, попробует восстановить незавершённую работу или откроет Colab, если новой сессии ещё нет.</div>
+          <label class="remote-source-easy">Видео, если оно нужно для задачи
+            <input id="remoteSource" type="file" accept="video/mp4,video/quicktime,video/webm,video/x-matroska,video/*">
           </label>
         </div>
-        <div class="grid2">
-          <label>Движок
-            <select id="remoteEngine">
-              <option value="auto" selected>Auto</option>
-              <option value="blender">Blender GPU</option>
-              <option value="wangp">WanGP</option>
-              <option value="ffmpeg">FFmpeg</option>
-            </select>
-          </label>
-          <label>Качество
-            <select id="remoteQuality">
-              <option value="preview" selected>Preview — быстро</option>
-              <option value="final">Final — 1080p</option>
-            </select>
-          </label>
-        </div>
-        <label>Исходное видео
-          <input id="remoteSource" type="file" accept="video/mp4,video/quicktime,video/webm,video/x-matroska,video/*">
-        </label>
-        <label class="remote-check"><input id="remoteMirrorDrive" type="checkbox"> <span>Сохранить копию результата в Google Drive, если Drive смонтирован в Colab</span></label>
-        <div class="remote-actions">
-          <button id="remoteConnect" class="secondary" type="button">Проверить GPU</button>
-          <button id="remoteSend" type="button">☁️ Отправить в Colab</button>
-          <button id="remoteCancel" class="secondary" type="button">Стоп</button>
-        </div>
+
         <div class="remote-progress"><i id="remoteProgressBar"></i><span id="remoteProgressText">0%</span></div>
-        <div id="remoteStatus" class="remote-status">Открой Colab Worker → Run all → нажми «Copy NOVA CONNECT CODE» → здесь нажми «Вставить код».</div>
-        <div id="remoteHint" class="remote-hint">Обычный режим: Preview сначала. FULL AUTO может автоматически перейти к Final.</div>
+        <div id="remoteStatus" class="remote-status">FULL AUTO и Auto Recovery готовы.</div>
         <div id="remoteRecoveryStatus" class="remote-recovery-status">Auto Recovery: готов.</div>
-        <button id="remoteRecoverNow" class="secondary remote-recover-now" type="button">♻️ Восстановить сейчас</button>
         <a id="remoteResult" class="download hidden">Открыть готовый MP4</a>
+
+        <details id="remoteAdvanced" class="remote-advanced">
+          <summary>Дополнительные настройки</summary>
+          <div class="remote-advanced-body">
+            <a id="remoteColabLink" class="remote-colab-link" href="https://colab.research.google.com/github/magomedt149/nova-robot/blob/main/blender-colab/NOVA_Remote_GPU_Worker.ipynb" target="_blank" rel="noopener">🚀 Открыть NOVA Colab Worker</a>
+            <div class="remote-smart-actions">
+              <button id="remoteAutoStart" type="button">🤖 FULL AUTO GPU</button>
+              <button id="remoteTest" class="secondary" type="button">🧪 Тест рендера 1 сек</button>
+            </div>
+            <label class="remote-check"><input id="remoteAutoFinal" type="checkbox" checked> <span><b>Full Auto:</b> после Preview автоматически запустить Final без повторной загрузки исходника.</span></label>
+            <label class="remote-check"><input id="remoteAutoRecover" type="checkbox" checked> <span><b>Auto Recovery:</b> автоматически переподключаться, продолжать upload и восстанавливать job после обрыва.</span></label>
+
+            <label>Быстрое подключение
+              <input id="remoteConnectCode" autocomplete="off" placeholder="Вставь NOVA CONNECT CODE из Colab">
+            </label>
+            <button id="remotePasteCode" class="secondary remote-paste" type="button">📋 Вставить код из буфера и подключить</button>
+
+            <div class="grid2 remote-connection-grid">
+              <label>Worker URL
+                <input id="remoteUrl" inputmode="url" autocomplete="off" placeholder="https://…trycloudflare.com">
+              </label>
+              <label>Token
+                <input id="remoteToken" type="password" autocomplete="off" placeholder="NOVA token из Colab">
+              </label>
+            </div>
+
+            <div class="grid2">
+              <label>Движок
+                <select id="remoteEngine">
+                  <option value="auto" selected>Auto</option>
+                  <option value="blender">Blender GPU</option>
+                  <option value="wangp">WanGP</option>
+                  <option value="ffmpeg">FFmpeg</option>
+                </select>
+              </label>
+              <label>Качество
+                <select id="remoteQuality">
+                  <option value="preview" selected>Preview — быстро</option>
+                  <option value="final">Final — 1080p</option>
+                </select>
+              </label>
+            </div>
+
+            <label class="remote-check"><input id="remoteMirrorDrive" type="checkbox"> <span>Drive checkpoint — усиленное восстановление, если Google Drive уже смонтирован.</span></label>
+
+            <div class="remote-actions">
+              <button id="remoteConnect" class="secondary" type="button">Проверить GPU</button>
+              <button id="remoteSend" type="button">☁️ Отправить в Colab</button>
+              <button id="remoteCancel" class="secondary" type="button">Стоп</button>
+            </div>
+            <div id="remoteHint" class="remote-hint">Обычно эти настройки трогать не нужно — простой режим делает всё сам.</div>
+            <button id="remoteRecoverNow" class="secondary remote-recover-now" type="button">♻️ Восстановить сейчас</button>
+          </div>
+        </details>
       </section>
 
       <div class="actions">
