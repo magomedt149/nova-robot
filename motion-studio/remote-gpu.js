@@ -1,7 +1,7 @@
 (()=>{
 const $=id=>document.getElementById(id);
 const LS_URL='nova.remoteGpu.url',LS_TOKEN='nova.remoteGpu.token',LS_JOB='nova.remoteGpu.job';
-let pollTimer=0,lastJobId='',wakeLock=null;
+let pollTimer=0,lastJobId='',wakeLock=null,lastHealth=null;
 
 function endpoint(){
   return ($('remoteUrl')?.value||'').trim().replace(/\/+$/,'');
@@ -63,7 +63,10 @@ function chosenEngine(){
   const raw=$('remoteEngine')?.value||'auto';
   if(raw!=='auto')return raw;
   const q=($('prompt')?.value||'').toLowerCase();
-  if(/wang|wan2|ai video|генер.*видео|реалистичн.*генер/.test(q))return 'wangp';
+  const hasSource=Boolean($('remoteSource')?.files?.[0]);
+  if(/ffmpeg|конверт|перекод|encode|transcod|upscale|апскейл/.test(q)&&hasSource)return 'ffmpeg';
+  if(/wang|wan2|ai video|генер.*видео|сгенер.*видео|реалистичн.*генер|замен.*персонаж|video.?to.?video/.test(q))return 'wangp';
+  if(!hasSource&&!/blender|3d|блокинг|blocking/.test(q))return 'wangp';
   return 'blender';
 }
 function buildJob(){
@@ -110,14 +113,21 @@ async function jsonFetch(url,options={}){
 }
 async function connect(){
   const url=endpoint(),tok=token();
-  if(!url||!tok){setStatus('Вставь Worker URL и Token из Google Colab.','error');return}
+  if(!url||!tok){setStatus('Вставь NOVA CONNECT CODE или Worker URL + Token.','error');return null}
   saveConnection();setStatus('Проверяю Colab worker…','busy');setProgress(0);
   try{
     const data=await jsonFetch(url+'/health',{headers:authHeaders()});
+    lastHealth=data;
     const gpu=data.gpu?.available?(data.gpu.name||'NVIDIA GPU'):'GPU не обнаружен';
-    const bits=[gpu,data.blender?'Blender ✓':'Blender —',data.ffmpeg?'FFmpeg ✓':'FFmpeg —',data.wangp_api_ready?'WanGP API ✓':'WanGP —',data.free_disk_gb!=null?data.free_disk_gb+' GB free':''];
+    const protocol=data.protocol_version!=null?'P'+data.protocol_version:'old';
+    const bits=[gpu,data.blender?'Blender ✓':'Blender —',data.ffmpeg?'FFmpeg ✓':'FFmpeg —',data.wangp_api_ready?'WanGP API ✓':'WanGP —',protocol,data.free_disk_gb!=null?data.free_disk_gb+' GB free':''];
     setStatus('Подключено: '+bits.filter(Boolean).join(' • '),'ok');
-  }catch(error){setStatus('Не подключено: '+error.message,'error')}
+    if(data.protocol_version!=null&&Number(data.protocol_version)<2){
+      setStatus('Worker устарел. Перезапусти актуальный Colab notebook.','error');
+      return null;
+    }
+    return data;
+  }catch(error){lastHealth=null;setStatus('Не подключено: '+error.message,'error');return null}
 }
 function clearPoll(){if(pollTimer){clearTimeout(pollTimer);pollTimer=0}}
 async function downloadResult(jobId){
@@ -170,13 +180,84 @@ async function uploadVideoChunks(jobId,file){
     setProgress(pct);setStatus('Загружаю видео в Colab: '+(index+1)+'/'+total+' частей…','busy');
   }
 }
+function openColab(){
+  const link=$('remoteColabLink');
+  const url=link?.href||'https://colab.research.google.com/github/magomedt149/nova-robot/blob/main/blender-colab/NOVA_Remote_GPU_Worker.ipynb';
+  const win=window.open(url,'_blank','noopener');
+  setStatus('Colab открыт. Нажми Runtime → Run all, потом Copy NOVA CONNECT CODE и вернись сюда.','busy');
+  return Boolean(win);
+}
+async function autoStart(){
+  const active=lastJobId||localStorage.getItem(LS_JOB);
+  if(active&&endpoint()&&token()){
+    lastJobId=active;
+    await holdWakeLock();
+    setStatus('Возобновляю активный GPU-рендер…','busy');
+    poll(active);
+    return;
+  }
+  if(endpoint()&&token()){
+    const health=await connect();
+    if(health){
+      setStatus('Remote GPU уже готов. Выбери видео и нажми «Отправить в Colab», либо запусти тест 1 сек.','ok');
+      return;
+    }
+  }
+  openColab();
+}
+async function preflight(engine,hasSource){
+  const health=lastHealth||await connect();
+  if(!health)throw new Error('Colab worker не подключён');
+  if(engine==='wangp'&&!health.wangp_api_ready){
+    if(hasSource&&health.blender){
+      setStatus('WanGP ещё не готов — временно переключаю на Blender.','busy');
+      return 'blender';
+    }
+    throw new Error('WanGP API не готов. Перезапусти Colab notebook с Run all.');
+  }
+  if(engine==='blender'&&!health.blender){
+    if(hasSource&&health.ffmpeg){
+      setStatus('Blender недоступен — временно переключаю на FFmpeg.','busy');
+      return 'ffmpeg';
+    }
+    throw new Error('Blender не готов в Colab.');
+  }
+  if(engine==='ffmpeg'&&!health.ffmpeg)throw new Error('FFmpeg не готов в Colab.');
+  return engine;
+}
+async function testRender(){
+  const health=await connect();
+  if(!health)return;
+  if(!health.blender){setStatus('Для теста нужен Blender. Перезапусти Colab notebook.','error');return}
+  await holdWakeLock();
+  const fd=new FormData();
+  fd.append('job_json',JSON.stringify({
+    schema:'nova.remote-job.v1',
+    source_prompt:'NOVA Remote GPU self test, clean blocking scene',
+    engine:'blender',
+    quality:'preview',
+    duration:1,
+    ratio:'9:16',
+    fps:24,
+    mirror_drive:false
+  }));
+  setProgress(1);setStatus('Запускаю тестовый Blender-рендер 1 сек…','busy');
+  try{
+    const data=await jsonFetch(endpoint()+'/jobs',{method:'POST',headers:authHeaders(),body:fd});
+    lastJobId=data.job_id;localStorage.setItem(LS_JOB,lastJobId);
+    poll(lastJobId);
+  }catch(error){
+    await releaseWakeLock();setStatus('Тест не запустился: '+error.message,'error');
+  }
+}
 async function send(){
   const url=endpoint(),tok=token();
   if(!url||!tok){setStatus('Сначала подключи Colab worker.','error');return}
   saveConnection();await holdWakeLock();
   const job=buildJob();
   const source=$('remoteSource')?.files?.[0]||null;
-  if(job.engine==='ffmpeg'&&!source){setStatus('Для FFmpeg выбери исходное видео.','error');return}
+  try{job.engine=await preflight(job.engine,Boolean(source))}catch(error){await releaseWakeLock();setStatus(error.message,'error');return}
+  if(job.engine==='ffmpeg'&&!source){await releaseWakeLock();setStatus('Для FFmpeg выбери исходное видео.','error');return}
   if(source)job.defer_start=true;
   const fd=new FormData();
   fd.append('job_json',JSON.stringify(job));
@@ -211,6 +292,8 @@ function restore(){
   if(saved&&endpoint()&&token()){lastJobId=saved;poll(saved)}
 }
 
+$('remoteAutoStart')?.addEventListener('click',autoStart);
+$('remoteTest')?.addEventListener('click',testRender);
 $('remoteConnect')?.addEventListener('click',connect);
 $('remotePasteCode')?.addEventListener('click',async()=>{
   try{
