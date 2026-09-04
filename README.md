@@ -27,6 +27,14 @@ NOVA — бесплатный браузерный ИИ-агент Тумсое�
 
 ### БЕЗ COLAB ПО УМОЛЧАНИЮ
 
+### ПОСТОЯННЫЙ GPU — БЕЗ RUN ALL
+
+Для тяжёлого WanGP/Blender режима добавлен постоянный NOVA GPU Worker. Он использует тот же защищённый Remote GPU API, но запускается как долгоживущий supervisor и автоматически перезапускает worker после сбоя. На Windows есть `automation/NOVA_GPU_INSTALL_WINDOWS.cmd`: один запуск создаёт Python environment, ставит базовые зависимости, регистрирует автозапуск при входе в Windows и запускает worker сразу. Для Linux добавлен systemd-user installer `automation/install_permanent_gpu_worker.sh`.
+
+Для стабильного HTTPS worker умеет использовать Tailscale Funnel. После однократного входа в Tailscale и включения Funnel URL остаётся стабильным, конфигурация с `--bg` переживает перезапуск Tailscale/компьютера. Installer сохраняет постоянный token и `NOVA_CONNECT_CODE.txt`; этот Connect Code достаточно один раз вставить в NOVA. После этого тяжёлые AI jobs идут без Colab и без `Run all`.
+
+Важно: supervisor/installer не создаёт GPU из воздуха — он использует NVIDIA GPU машины, на которой установлен. Если это домашний ноутбук/ПК, он должен быть включён. Если это постоянная GPU VM, она должна быть запущена у провайдера.
+
 Обычный сценарий Video Auto больше не зависит от Google Colab. Команда **«сделай видео…»** открывает локальный режим и запускает рендер прямо на iPhone через Canvas + MediaRecorder. Если выбран исходный ролик, NOVA использует его как фон/видеослой, накладывает Motion/VFX/текст и по возможности сохраняет исходный звук через Web Audio. Никакого `Run all`, Connect Code или GPU-подключения для этого режима нет.
 
 Самый простой запуск теперь такой:
