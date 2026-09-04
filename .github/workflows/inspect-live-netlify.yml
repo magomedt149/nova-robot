@@ -1,0 +1,30 @@
+name: Inspect Live Netlify
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/inspect-live-netlify.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Inspect current production
+        shell: bash
+        run: |
+          set +e
+          BASE="https://dashing-otter-990b47.netlify.app"
+          echo "=== HEAD ==="
+          curl -sSIL --max-time 15 "$BASE/" | head -40
+          echo "=== VERSION MARKERS ==="
+          curl -fsSL --max-time 15 "$BASE/?t=$(date +%s)" | grep -Eo 'v[0-9]+\.[0-9]+(\.[0-9]+)?|Motion \+ VFX|Сделать видео' | head -30
+          echo "=== VERSION.JSON ==="
+          curl -sS -w "\nHTTP=%{http_code}\n" --max-time 15 "$BASE/version.json?t=$(date +%s)" | head -40
+          echo "=== NETLIFY PUBLIC SITE META ==="
+          curl -sS -w "\nHTTP=%{http_code}\n" --max-time 15 "https://api.netlify.com/api/v1/sites/dashing-otter-990b47.netlify.app" | head -c 5000
+          echo
