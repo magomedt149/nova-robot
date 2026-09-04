@@ -49,6 +49,8 @@ WANGP_SESSION_LOCK = threading.Lock()
 WANGP_JOBS: dict[str, Any] = {}
 DOWNLOAD_TICKETS: dict[str, dict[str, Any]] = {}
 DOWNLOAD_TICKET_TTL = int(os.environ.get("NOVA_REMOTE_DOWNLOAD_TTL", "600"))
+WORKER_VERSION = "1.2.0"
+PROTOCOL_VERSION = 2
 
 app = FastAPI(title="NOVA Remote GPU Worker", version="1.0")
 app.add_middleware(
@@ -706,10 +708,19 @@ async def health(request: Request):
     disk = shutil.disk_usage(JOB_ROOT)
     return {
         "ok": True,
+        "worker_version": WORKER_VERSION,
+        "protocol_version": PROTOCOL_VERSION,
         "gpu": gpu_info(),
         "blender": command_exists("blender"),
         "ffmpeg": command_exists("ffmpeg"),
         "wangp_api_ready": (WANGP_ROOT / "shared" / "api.py").is_file(),
+        "capabilities": {
+            "chunked_upload": True,
+            "download_ticket": True,
+            "blender": command_exists("blender"),
+            "ffmpeg": command_exists("ffmpeg"),
+            "wangp": (WANGP_ROOT / "shared" / "api.py").is_file(),
+        },
         "wangp_root": str(WANGP_ROOT),
         "job_root": str(JOB_ROOT),
         "drive_mounted": Path("/content/drive/MyDrive").exists(),
