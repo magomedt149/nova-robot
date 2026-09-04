@@ -293,7 +293,12 @@ function chosenEngine(){
   if(raw!=='auto')return raw;
   const q=($('prompt')?.value||'').toLowerCase();
   const hasSource=Boolean($('remoteSource')?.files?.[0]||currentSourceFile);
+  const orbitIntent=/orbit|обл[её]т|вокруг|fly.?around|camera.*around/.test(q);
+  const fullOrbit=/360|полный круг|full circle|full orbit/.test(q);
   if(/ffmpeg|конверт|перекод|encode|transcod|upscale|апскейл/.test(q)&&hasSource)return 'ffmpeg';
+  // True camera orbit must be created in Blender first. When the resulting
+  // control MP4 is supplied on a second pass, realistic AI refinement may use WanGP.
+  if(!hasSource&&orbitIntent&&(fullOrbit||/blender|3d|блокинг|blocking/.test(q)))return 'blender';
   if(/wang|wan2|ai video|генер.*видео|сгенер.*видео|реалистичн.*генер|замен.*персонаж|video.?to.?video/.test(q))return 'wangp';
   if(!hasSource&&!/blender|3d|блокинг|blocking/.test(q))return 'wangp';
   return 'blender';
@@ -307,7 +312,7 @@ function buildJob(){
   const quality=$('remoteQuality')?.value||'preview';
   const prompt=($('prompt')?.value||'').trim();
   const pack={
-    schema:'nova.scene-pack.v1',project:'NOVA Remote GPU',source_prompt:prompt,
+    schema:'nova.scene-pack.v2',project:'NOVA Remote GPU',source_prompt:prompt,
     duration:Number(c.duration||$('duration')?.value||5),format:c.ratio||$('ratio')?.value||'9:16',
     style:c.style||$('style')?.value||'neon',motion:c.motion||$('motion')?.value||'slide',
     camera:c.camera||$('camera')?.value||'static',vfx:c.vfx||$('vfx')?.value||'none',
