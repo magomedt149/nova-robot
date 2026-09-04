@@ -646,6 +646,7 @@
 
   function patchedSpeak(utterance) {
     if (!nativeSpeak || !isRussianUtterance(utterance)) return nativeSpeak?.(utterance);
+    if (utterance?.__novaForceSystemVoice === true) return nativeSpeak(utterance);
     if (utterance?.voice) return nativeSpeak(utterance);
     enqueueSpeak(utterance?.text || '', getDefaultVoice()).catch(() => {});
   }
