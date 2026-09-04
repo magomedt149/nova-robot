@@ -120,6 +120,49 @@
         <div id="presetInfo" class="preset-info">Выбери пресет. После этого силу, длительность, камеру и эффект можно изменить вручную.</div>
       </section>
 
+      <section class="remote-gpu-panel" aria-label="Удалённый GPU Google Colab">
+        <div class="remote-gpu-head"><strong>☁️ Remote GPU / Google Colab</strong><span>FREE</span></div>
+        <p>Если iPhone слабый, отправь видео и Scene Pack на временный GPU Colab. Blender и FFmpeg работают автоматически; WanGP получает подготовленный handoff.</p>
+        <a class="remote-colab-link" href="https://colab.research.google.com/github/magomedt149/nova-robot/blob/main/blender-colab/NOVA_Remote_GPU_Worker.ipynb" target="_blank" rel="noopener">🚀 Открыть NOVA Colab Worker</a>
+        <div class="grid2 remote-connection-grid">
+          <label>Worker URL
+            <input id="remoteUrl" inputmode="url" autocomplete="off" placeholder="https://…trycloudflare.com">
+          </label>
+          <label>Token
+            <input id="remoteToken" type="password" autocomplete="off" placeholder="NOVA token из Colab">
+          </label>
+        </div>
+        <div class="grid2">
+          <label>Движок
+            <select id="remoteEngine">
+              <option value="auto" selected>Auto</option>
+              <option value="blender">Blender GPU</option>
+              <option value="wangp">WanGP</option>
+              <option value="ffmpeg">FFmpeg</option>
+            </select>
+          </label>
+          <label>Качество
+            <select id="remoteQuality">
+              <option value="preview" selected>Preview — быстро</option>
+              <option value="final">Final — 1080p</option>
+            </select>
+          </label>
+        </div>
+        <label>Исходное видео
+          <input id="remoteSource" type="file" accept="video/mp4,video/quicktime,video/webm,video/x-matroska,video/*">
+        </label>
+        <label class="remote-check"><input id="remoteMirrorDrive" type="checkbox"> <span>Сохранить копию результата в Google Drive, если Drive смонтирован в Colab</span></label>
+        <div class="remote-actions">
+          <button id="remoteConnect" class="secondary" type="button">Проверить GPU</button>
+          <button id="remoteSend" type="button">☁️ Отправить в Colab</button>
+          <button id="remoteCancel" class="secondary" type="button">Стоп</button>
+        </div>
+        <div class="remote-progress"><i id="remoteProgressBar"></i><span id="remoteProgressText">0%</span></div>
+        <div id="remoteStatus" class="remote-status">Открой Colab Worker, запусти клетки и вставь сюда URL + Token.</div>
+        <div id="remoteHint" class="remote-hint">Preview сначала, Final только после проверки — так GPU расходуется экономнее.</div>
+        <a id="remoteResult" class="download hidden">Открыть готовый MP4</a>
+      </section>
+
       <div class="actions">
         <button id="preview" class="secondary">▶ Предпросмотр</button>
         <button id="render">Сгенерировать видео</button>
@@ -138,6 +181,7 @@
   </main>
   <script src="./app.js"></script>
   <script src="./director.js"></script>
+  <script src="./remote-gpu.js"></script>
   <script>
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => navigator.serviceWorker.register('./service-worker.js').catch(() => {}));
