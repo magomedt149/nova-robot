@@ -7,12 +7,13 @@
 [context.production]
   ignore = "git diff --quiet $CACHED_COMMIT_REF $COMMIT_REF -- .netlify-release"
 
-# Deploy Previews and branch deploys remain available for free testing.
+# FREE LOCK: previews and branch deploys are skipped automatically.
+# Ordinary GitHub work must not create Netlify deploy activity.
 [context.deploy-preview]
-  ignore = "exit 1"
+  ignore = "exit 0"
 
 [context.branch-deploy]
-  ignore = "exit 1"
+  ignore = "exit 0"
 
 [[headers]]
   for = "/*"
