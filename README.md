@@ -32,14 +32,17 @@ NOVA — бесплатный браузерный ИИ-агент Тумсое�
 Поток работы:
 
 ```
-NOVA on iPhone → chunked HTTPS upload → Colab GPU → Blender / FFmpeg / WanGP handoff → MP4 → NOVA
+NOVA on iPhone → chunked HTTPS upload → Colab GPU → Blender / FFmpeg / WanGP Python API → MP4 → NOVA
 ```
 
-- Blender jobs и FFmpeg jobs выполняются автоматически.
-- Preview по умолчанию облегчённый; Final — 1080p после проверки.
+- Blender, FFmpeg и WanGP jobs выполняются автоматически без ручной Gradio-генерации.
+- WanGP подключён через официальный in-process Python API из `shared/api.py`; в интерфейсе и документации явно указано, что используется WanGP.
+- На бесплатной T4 NOVA отдаёт приоритет облегчённым video-моделям (FastWan), генерирует экономно и только затем делает iPhone-совместимый H.264.
+- Если у модели нет video-input, NOVA автоматически извлекает первый кадр и использует image-to-video вместо падения с ошибкой.
+- Preview по умолчанию облегчённый; Final — 1080p H.264 после проверки preview.
 - Большие исходники передаются частями по 8 MB, чтобы не зависеть от лимита одного HTTP-запроса.
 - При включённом Drive mirror completed job копируется в `MyDrive/NOVA_RENDER_QUEUE/completed/`.
-- WanGP автоматически получает подготовленный input/prompt; полностью автоматический запуск возможен только при настроенном совместимом Gradio API. Иначе worker честно оставляет job в статусе `waiting_wangp` для проверенного WanGP UI.
+- WanGP model/settings для каждого задания сохраняются в `WANGP_SETTINGS.json`, а прогресс и отмена передаются обратно в Motion Studio.
 - URL и Token действуют только пока живёт Colab runtime. После перезапуска Colab подключение нужно вставить заново.
 
 ## NOVA Auto Director / Blender
