@@ -1,0 +1,136 @@
+name: Render All Irina Lessons
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/render-all-irina-lessons.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  render:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Piper
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install piper-tts
+
+      - name: Download locked Irina
+        run: |
+          python -m piper.download_voices ru_RU-irina-medium
+
+      - name: Render fresh lesson audio
+        shell: bash
+        run: |
+          cat > render_all.py <<'PY'
+          import io
+          import wave
+          from piper import PiperVoice, SynthesisConfig
+
+          VOICE_ID = "ru_RU-irina-medium"
+          voice = PiperVoice.load(
+              f"{VOICE_ID}.onnx",
+              config_path=f"{VOICE_ID}.onnx.json"
+          )
+          syn = SynthesisConfig(
+              length_scale=1.04,
+              noise_scale=0.667,
+              noise_w_scale=0.8,
+              normalize_audio=True
+          )
+
+          def synth_bytes(text):
+              buf = io.BytesIO()
+              with wave.open(buf, "wb") as w:
+                  voice.synthesize_wav(text, w, syn_config=syn)
+              return buf.getvalue()
+
+          def wav_info(data):
+              with wave.open(io.BytesIO(data), "rb") as w:
+                  return {
+                      "channels": w.getnchannels(),
+                      "width": w.getsampwidth(),
+                      "rate": w.getframerate(),
+                      "frames": w.readframes(w.getnframes()),
+                      "duration": w.getnframes() / w.getframerate()
+                  }
+
+          def write_padded_segments(path, segments, total_duration):
+              rendered = [wav_info(synth_bytes(text)) for _, _, text in segments]
+              ch = rendered[0]["channels"]
+              width = rendered[0]["width"]
+              rate = rendered[0]["rate"]
+              silence_frame = b"\x00" * (ch * width)
+
+              with wave.open(path, "wb") as out:
+                  out.setnchannels(ch)
+                  out.setsampwidth(width)
+                  out.setframerate(rate)
+                  cursor = 0
+
+                  for (start, end, text), audio in zip(segments, rendered):
+                      start_frame = round(start * rate)
+                      end_frame = round(end * rate)
+                      if cursor < start_frame:
+                          out.writeframes(silence_frame * (start_frame - cursor))
+                          cursor = start_frame
+
+                      slot_frames = max(0, end_frame - start_frame)
+                      frames = audio["frames"]
+                      bytes_per_frame = ch * width
+                      max_bytes = slot_frames * bytes_per_frame
+                      if len(frames) > max_bytes:
+                          # Never change pitch/formants: truncate only trailing overflow.
+                          frames = frames[:max_bytes]
+                      out.writeframes(frames)
+                      written = len(frames) // bytes_per_frame
+                      cursor += written
+
+                      if cursor < end_frame:
+                          out.writeframes(silence_frame * (end_frame - cursor))
+                          cursor = end_frame
+
+                  total_frames = round(total_duration * rate)
+                  if cursor < total_frames:
+                      out.writeframes(silence_frame * (total_frames - cursor))
+
+              print(path)
+              for (start, end, text), audio in zip(segments, rendered):
+                  print(f"{start:06.3f}-{end:06.3f} | {audio['duration']:.3f}s | {text}")
+
+          lesson4 = [
+              (0.0, 10.0, "Урок четвёртый. Опиши сцену, выбери стиль, движение камеры и эффекты. Нова соберёт всё и создаст готовый ролик.")
+          ]
+          write_padded_segments("lesson4_irina.wav", lesson4, 10.0)
+
+          tutorial = [
+              (0.000, 6.262, "Это Нова. Показываю путь от сайта до готового видео."),
+              (6.262, 14.161, "Шаг первый. Скажи или напиши, какое видео нужно."),
+              (14.161, 21.492, "Шаг второй. Нажми Сделать видео. Нова откроет видеостудию."),
+              (21.492, 32.466, "Шаг третий. Простое видео создаётся на айфоне. Тяжёлое — на постоянном графическом компьютере."),
+              (32.466, 42.952, "Шаг четвёртый. Выбери исходник, движение камеры и эффекты: дождь, дым, искры или молнию."),
+              (42.952, 52.539, "Шаг пятый. Нова создаёт превью и финальный ролик. Готовое видео можно сохранить на айфоне.")
+          ]
+          write_padded_segments("tutorial52_irina.wav", tutorial, 52.539)
+          PY
+          python render_all.py
+
+      - name: Upload Irina lesson audio
+        uses: actions/upload-artifact@v4
+        with:
+          name: nova-all-lessons-irina-audio
+          path: |
+            lesson4_irina.wav
+            tutorial52_irina.wav
+          if-no-files-found: error
+          retention-days: 1
