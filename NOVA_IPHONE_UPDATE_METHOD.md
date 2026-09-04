@@ -26,13 +26,13 @@ GitHub repository:
 
 **https://github.com/magomedt149/nova-robot**
 
-Для постоянного автоматического обновления один раз связать существующий Netlify project с этим GitHub repository:
+Netlify у пользователя уже настроен на **автоматическую публикацию** из GitHub. Ручную привязку репозитория и ручной Deploy не просить.
 
-Project configuration → Build & deploy → Continuous deployment → Repository → Link repository → GitHub → magomedt149/nova-robot → branch main.
+Постоянная схема:
 
-Publish directory: **.**
+**GitHub main → автоматический Netlify production deploy → iPhone PWA → update.html при необходимости**
 
-После этой привязки каждый push в main должен публиковать свежую NOVA, а iPhone обновляется через update.html без удаления памяти.
+Если production временно показывает старую версию, сначала дать автоматическому deploy завершиться и проверить version.json. Не менять существующую связь Netlify/GitHub без явной просьбы пользователя.
 
 ## Главное правило
 
