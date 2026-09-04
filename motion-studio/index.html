@@ -129,6 +129,7 @@
           <button id="remoteTest" class="secondary" type="button">🧪 Тест рендера 1 сек</button>
         </div>
         <label class="remote-check"><input id="remoteAutoFinal" type="checkbox"> <span><b>Full Auto:</b> после preview автоматически запустить Final без повторной загрузки исходника.</span></label>
+        <label class="remote-check"><input id="remoteAutoRecover" type="checkbox" checked> <span><b>Auto Recovery:</b> автоматически переподключаться после краткого обрыва, восстанавливать job и повторно отправлять его в новую Colab-сессию после подключения.</span></label>
         <label>Быстрое подключение
           <input id="remoteConnectCode" autocomplete="off" placeholder="Вставь NOVA CONNECT CODE из Colab">
         </label>
@@ -169,6 +170,8 @@
         <div class="remote-progress"><i id="remoteProgressBar"></i><span id="remoteProgressText">0%</span></div>
         <div id="remoteStatus" class="remote-status">Открой Colab Worker → Run all → нажми «Copy NOVA CONNECT CODE» → здесь нажми «Вставить код».</div>
         <div id="remoteHint" class="remote-hint">Обычный режим: Preview сначала. FULL AUTO может автоматически перейти к Final.</div>
+        <div id="remoteRecoveryStatus" class="remote-recovery-status">Auto Recovery: готов.</div>
+        <button id="remoteRecoverNow" class="secondary remote-recover-now" type="button">♻️ Восстановить сейчас</button>
         <a id="remoteResult" class="download hidden">Открыть готовый MP4</a>
       </section>
 
