@@ -1441,17 +1441,15 @@
     }, 7600, token);
   }
 
-  function performRemoteGpu() {
+  function performRemoteGpu(pendingPrompt = '') {
     resetPerformance();
     markAction('remoteGpu');
-    const hasConnection = Boolean(localStorage.getItem('nova.remoteGpu.url') && localStorage.getItem('nova.remoteGpu.token'));
-    const hasJob = Boolean(localStorage.getItem('nova.remoteGpu.job'));
-    const message = language === 'en'
-      ? (hasJob ? 'Opening the active Remote GPU render.' : hasConnection ? 'Opening Remote GPU. Your Colab connection is saved.' : 'Opening the Remote GPU setup. Start Colab, then paste the NOVA CONNECT CODE.')
-      : (hasJob ? 'Открываю активный удалённый GPU-рендер.' : hasConnection ? 'Открываю Remote GPU. Подключение Colab уже сохранено.' : 'Открываю запуск Remote GPU. Запусти Colab и вставь NOVA CONNECT CODE.');
-    respond(message, {
-      onEnd: () => window.location.assign('./motion-studio/#remoteGpu')
-    });
+    const prompt = String(pendingPrompt || '').trim();
+    if (prompt && !/^(remote gpu|gpu render|google colab|colab|колаб|gpu рендер)$/i.test(prompt)) {
+      localStorage.setItem('nova.remoteGpu.pendingPrompt', prompt);
+    }
+    localStorage.setItem('nova.remoteGpu.fullAuto', '1');
+    window.location.assign('./motion-studio/?auto=1#remoteGpu');
   }
 
   function performCatScene() {
@@ -1984,7 +1982,7 @@
     }
     if (/motion\s*\+?\s*vfx|motion studio|remote gpu|gpu render|google colab|colab|колаб|удал[её]нн.*gpu|рендер.*gpu|gpu.*рендер|запусти.*gpu|gpu.*запусти/.test(lower)) {
       const remote = /remote gpu|gpu render|google colab|colab|колаб|удал[её]нн.*gpu|рендер.*gpu|gpu.*рендер|запусти.*gpu|gpu.*запусти/.test(lower);
-      if (remote) performRemoteGpu();
+      if (remote) performRemoteGpu(text);
       else respond(language === 'en' ? 'Opening Motion and VFX Studio.' : 'Открываю Motion + VFX Studio.', { onEnd: () => window.location.assign('./motion-studio/') });
       return;
     }
