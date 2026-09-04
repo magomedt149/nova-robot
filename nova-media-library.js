@@ -71,18 +71,48 @@
   }
 
   async function loadStored() {
+    const duplicateIds = [];
     try {
       const db = await openDb();
       const tx = db.transaction(STORE, 'readonly');
       const done = txDone(tx);
       const stored = await requestResult(tx.objectStore(STORE).getAll());
       await done;
-      (stored || []).forEach((storedRecord) => {
-        const blob = restoreBlob(storedRecord);
-        if (!storedRecord?.id || !blob) return;
-        const { bytes, ...meta } = storedRecord;
-        records.set(storedRecord.id, { ...meta, blob, size: Number(storedRecord.size || blob.size), persisted: true });
-      });
+
+      const seen = new Map();
+      (stored || [])
+        .slice()
+        .sort((a, b) => Number(a?.createdAt || 0) - Number(b?.createdAt || 0))
+        .forEach((storedRecord) => {
+          const blob = restoreBlob(storedRecord);
+          if (!storedRecord?.id || !blob) return;
+          const filename = safeName(storedRecord.name);
+          const size = Number(storedRecord.size || blob.size);
+          const key = duplicateKey(filename, size);
+          if (seen.has(key)) {
+            duplicateIds.push(storedRecord.id);
+            return;
+          }
+          seen.set(key, storedRecord.id);
+          const { bytes, ...meta } = storedRecord;
+          records.set(storedRecord.id, {
+            ...meta,
+            name: filename,
+            blob,
+            size,
+            fingerprint: makeFingerprint(filename, blob),
+            persisted: true
+          });
+        });
+
+      if (duplicateIds.length) {
+        const cleanTx = db.transaction(STORE, 'readwrite');
+        const cleanDone = txDone(cleanTx);
+        const store = cleanTx.objectStore(STORE);
+        duplicateIds.forEach((id) => store.delete(id));
+        await cleanDone;
+        console.info(`[NOVA Media Library] removed duplicate records: ${duplicateIds.length}`);
+      }
     } catch (error) {
       console.warn('[NOVA Media Library] load failed:', error);
     }
@@ -173,19 +203,27 @@
     return `${(bytes / 1024 ** 3).toFixed(2)} GB`;
   }
 
-  function makeFingerprint(name, blob) {
-    return `${safeName(name)}|${blob?.size || 0}|${blob?.type || ''}`;
+  function duplicateKey(name, size) {
+    return `${safeName(name).toLocaleLowerCase('en-US')}|${Number(size || 0)}`;
   }
 
-  function existingByFingerprint(fingerprint) {
-    return [...records.values()].find((record) => record.fingerprint === fingerprint) || null;
+  function makeFingerprint(name, blob) {
+    return duplicateKey(name, blob?.size || 0);
+  }
+
+  function existingByFingerprint(fingerprint, filename, size) {
+    const key = duplicateKey(filename, size);
+    return [...records.values()].find((record) =>
+      record.fingerprint === fingerprint ||
+      duplicateKey(record.name, record.size) === key
+    ) || null;
   }
 
   async function registerBlob(blob, name, source = 'NOVA') {
     if (!(blob instanceof Blob) || !blob.size) return null;
     const filename = safeName(name);
     const fingerprint = makeFingerprint(filename, blob);
-    const existing = existingByFingerprint(fingerprint);
+    const existing = existingByFingerprint(fingerprint, filename, blob.size);
     if (existing) return existing;
     const record = {
       id: `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
