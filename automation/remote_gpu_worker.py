@@ -488,6 +488,9 @@ def pick_wangp_model(session, job: dict[str, Any], has_source: bool) -> dict[str
                     return record
                 if not low_vram and ("animate" in blob or "vace" in blob or "scail" in blob):
                     return record
+                # Never silently downgrade a requested body-motion transfer to a
+                # generic image/video model; that is the old "person stays still" bug.
+                continue
 
             if has_source and "video" in inputs and (not low_vram or "fast" in blob):
                 return record
@@ -495,6 +498,22 @@ def pick_wangp_model(session, job: dict[str, Any], has_source: bool) -> dict[str
                 return record
             if not has_source and ("text" in inputs or not inputs):
                 return record
+
+    if has_source and motion["enabled"]:
+        try:
+            records = session.list_model_metadata(main_output="video", limit=100)
+        except Exception:
+            records = []
+        for record in records:
+            blob = _model_blob(record)
+            if low_vram and "vace" in blob and ("1.3" in blob or "1_3" in blob or "1-3" in blob):
+                return record
+            if not low_vram and ("animate" in blob or "vace" in blob or "scail" in blob):
+                return record
+        raise RuntimeError(
+            "WanGP human-motion control model is unavailable. On T4 install/enable VACE 1.3B; "
+            "NOVA will not replace it with a static FastWan/Blender preview."
+        )
 
     if best_fallback is not None:
         return best_fallback
@@ -864,6 +883,8 @@ async def health(request: Request):
             "blender": command_exists("blender"),
             "ffmpeg": command_exists("ffmpeg"),
             "wangp": (WANGP_ROOT / "shared" / "api.py").is_file(),
+            "human_motion_control": True,
+            "human_motion_preferred_t4": "VACE 1.3B",
         },
         "wangp_root": str(WANGP_ROOT),
         "job_root": str(JOB_ROOT),
