@@ -43,5 +43,11 @@
   "novaFreeInternetCallsTurnUrl": "turn.call.tumsoev.com",
   "novaFreeInternetCallsAutomaticCutover": true,
   "novaFreeInternetCallsPublicFallbackDisablesAfterSelfHostedSuccess": true,
-  "novaFreeInternetCallsModuleVersion": "1.1.1"
+  "novaFreeInternetCallsModuleVersion": "1.1.1",
+  "novaCallEasyMode": true,
+  "novaCallEasyModeVersion": "1.0.0",
+  "novaCallLaunchCheck": "./nova-call-check.html",
+  "novaCallRequiresVpsForBasicFreeCalls": false,
+  "novaCallBasicFreeMode": "public WebRTC fallback; self-hosted optional",
+  "novaCallLaunchCheckPaidActions": false
 }
