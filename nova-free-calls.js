@@ -1,7 +1,7 @@
 (() => {
   'use strict';
 
-  const VERSION = '1.1.0';
+  const VERSION = '1.1.1';
   const ROOM_PREFIX = 'NOVA-TUMSOEV';
   const SELF_HOSTED_BASE = 'https://call.tumsoev.com/';
   const TEMP_PUBLIC_FALLBACK_BASE = 'https://meet.jit.si/';
@@ -131,19 +131,46 @@
     return room;
   }
 
+  let activeProvider = hasSelfHostedEverWorked()
+    ? {
+        base: SELF_HOSTED_BASE,
+        provider: 'NOVA Call self-hosted',
+        selfHosted: true,
+        temporaryFallback: false
+      }
+    : {
+        base: TEMP_PUBLIC_FALLBACK_BASE,
+        provider: 'Jitsi public temporary fallback',
+        selfHosted: false,
+        temporaryFallback: true
+      };
+
+  async function refreshActiveProvider() {
+    try {
+      activeProvider = await resolveProvider();
+    } catch (_) {
+      if (hasSelfHostedEverWorked()) {
+        activeProvider = {
+          base: SELF_HOSTED_BASE,
+          provider: 'NOVA Call self-hosted',
+          selfHosted: true,
+          temporaryFallback: false
+        };
+      }
+    }
+    return activeProvider;
+  }
+
   function createRoom() {
-    return createRoomWithProvider({
-      base: SELF_HOSTED_BASE,
-      provider: 'NOVA Call self-hosted',
-      selfHosted: true,
-      temporaryFallback: false
-    });
+    return createRoomWithProvider(activeProvider);
   }
 
   async function createBestRoom() {
-    const provider = await resolveProvider();
+    const provider = await refreshActiveProvider();
     return createRoomWithProvider(provider);
   }
+
+  refreshActiveProvider();
 
   async function diagnose() {
     const [selfHosted, publicFallback] = await Promise.all([
