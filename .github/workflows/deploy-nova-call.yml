@@ -1,0 +1,45 @@
+name: Deploy NOVA Call on self-hosted Ubuntu
+
+on:
+  workflow_dispatch:
+    inputs:
+      letsencrypt_email:
+        description: "Email for Let's Encrypt"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nova-call-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: [self-hosted, linux, x64, nova-call]
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate deployment files
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash -n infra/nova-call/install.sh
+          bash -n infra/nova-call/healthcheck.sh
+
+      - name: Install or update NOVA Call locally
+        shell: bash
+        env:
+          NOVA_CALL_EMAIL: ${{ inputs.letsencrypt_email }}
+        run: |
+          set -euo pipefail
+          sudo -E bash infra/nova-call/install.sh
+
+      - name: Health check
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo bash infra/nova-call/healthcheck.sh
