@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <title>NOVA Call — проверка запуска</title>
+  <style>
+    body{margin:0;background:#0b0b0c;color:#fff;font:17px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+    main{max-width:720px;margin:auto;padding:28px 18px 60px}
+    .card{background:#171719;border:1px solid #333;border-radius:18px;padding:18px;margin:14px 0}
+    button,a.action{display:block;box-sizing:border-box;width:100%;padding:14px 16px;border-radius:14px;border:0;text-align:center;font-weight:750;font-size:17px;margin:10px 0;text-decoration:none}
+    button{background:#fff;color:#111}
+    a.action{background:#29292c;color:#fff;border:1px solid #555}
+    .ok{color:#7CFC9A}.warn{color:#ffd666}.bad{color:#ff8a8a}
+    #room{word-break:break-all}
+  </style>
+</head>
+<body>
+<main>
+  <h1>NOVA Call</h1>
+  <p>Бесплатная проверка запуска. Никакой обычный телефонный номер не набирается.</p>
+  <div class="card" id="status">Проверяю…</div>
+  <button id="test">Создать тестовую комнату</button>
+  <a class="action" href="./">Вернуться в NOVA</a>
+  <div class="card" id="room" hidden></div>
+</main>
+<script src="./nova-free-calls.js?v=1.1.1"></script>
+<script>
+(async()=>{
+  const status=document.getElementById('status');
+  async function check(){
+    status.textContent='Проверяю…';
+    try{
+      const d=await window.NOVA_FREE_CALLS.diagnose();
+      const ready=d.selfHostedOnline || (d.publicFallbackAllowed && d.publicFallbackOnline);
+      status.innerHTML=ready
+        ? '<b class="ok">🟢 NOVA CALL ГОТОВ</b><br>'+ (d.selfHostedOnline ? 'Работает свой сервер.' : 'Работает бесплатный резервный маршрут без VPS.')
+        : '<b class="bad">🔴 Маршрут недоступен</b>';
+    }catch(e){ status.innerHTML='<b class="bad">🔴 '+String(e.message||e)+'</b>'; }
+  }
+  document.getElementById('test').onclick=async()=>{
+    const box=document.getElementById('room'); box.hidden=false; box.textContent='Создаю…';
+    try{
+      const r=await window.NOVA_FREE_CALLS.createBestRoom();
+      box.innerHTML='<b class="ok">Комната готова.</b><br><a class="action" target="_blank" rel="noopener" href="'+r.url+'">Открыть бесплатный тестовый звонок</a><small>'+r.url+'</small>';
+    }catch(e){box.innerHTML='<b class="bad">'+String(e.message||e)+'</b>'}
+  };
+  await check();
+})();
+</script>
+</body>
+</html>
