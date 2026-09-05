@@ -15,6 +15,7 @@ NOVA 27.2 uses a free-only default policy.
 - GitHub Actions workflows are manual-only; ordinary pushes do not start runners.
 - A paid deploy, paid API, credit-consuming render, or other billable action must not be started without the owner's explicit permission.
 - Autocalls real phone calls are disabled until a specific number is requested and the owner explicitly confirms the pending call; the browser never receives the Autocalls API key.
+- Saved Autocalls caller-number selection is non-spending by itself and is applied to the outbound assistant only inside the separately confirmed real-call path.
 
 Current policy version: **NOVA 27.2.1**
 
