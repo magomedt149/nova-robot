@@ -1,4 +1,4 @@
-const CACHE = 'nova-v69-selfhosted-call-cutover-v1-20260904';
+const CACHE = 'nova-v70-free-call-easy-check-v1-20260904';
 const API_CACHE = 'nova-api-economy-v2';
 const METERED_NETLIFY_HOST = /(^|\\.)netlify\\.app$/i.test(self.location.hostname);
 const YOUTUBE_TTL_MS = 24 * 60 * 60 * 1000;
@@ -44,6 +44,8 @@ const CORE = [
   './local-ai-worker.js',
   './nova-free-runtime.js',
   './nova-free-calls.js',
+  './nova-call-diagnostics.js',
+  './nova-call-check.html',
   './manifest.webmanifest',
   './icon-192.png',
   './icon-512.png'
