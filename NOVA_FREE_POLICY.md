@@ -14,8 +14,9 @@ NOVA 27.2 uses a free-only default policy.
 - Netlify Deploy Preview and branch deploys are skipped automatically.
 - GitHub Actions workflows are manual-only; ordinary pushes do not start runners.
 - A paid deploy, paid API, credit-consuming render, or other billable action must not be started without the owner's explicit permission.
-- Autocalls real phone calls are disabled until a specific number is requested and the owner explicitly confirms the pending call; the browser never receives the Autocalls API key.
-- Saved Autocalls caller-number selection is non-spending by itself and is applied to the outbound assistant only inside the separately confirmed real-call path.
+- Autocalls real phone calls are hard-disabled by NOVA FREE CALL LOCK because Autocalls telephony is usage-billed; no confirmation phrase can override this lock.
+- NOVA may use Autocalls development conversations with `type: "test"`, which Autocalls documents as free, but NOVA must never describe those as real telephone calls.
+- Saved Autocalls caller-number selection is non-spending configuration only and does not change the assistant or start a phone call while FREE CALL LOCK is active.
 
 Current policy version: **NOVA 27.2.1**
 
