@@ -16,7 +16,7 @@ const MAX_SOURCE_CACHE=1536*1024*1024;
 const FREE_LOCK=true;
 
 let pollTimer=0,recoveryTimer=0,lastJobId='',wakeLock=null,lastHealth=null,sendBusy=false,localRenderBusy=false;
-let pollFailures=0,recoveryAttempt=0,currentSourceFile=null;
+let pollFailures=0,recoveryAttempt=0,currentSourceFile=null,currentCharacterRef=null;
 
 function endpoint(){return ($('remoteUrl')?.value||'').trim().replace(/\/+$/,'')}
 function token(){return ($('remoteToken')?.value||'').trim()}
@@ -198,10 +198,12 @@ async function canCacheSource(source){
   }catch(_){}
   return true;
 }
-async function beginRecovery(job,source,sourceName){
+async function beginRecovery(job,source,sourceName,characterRef=null){
   const name=sourceName||source?.name||'source.mp4';
+  const ref=characterRef||currentCharacterRef||$('remoteCharacterRef')?.files?.[0]||null;
+  const refName=ref?.name||'character-reference.png';
   const meta={
-    version:1,
+    version:2,
     phase:'prepared',
     job:{...job,defer_start:false},
     remoteJobId:'',
@@ -211,20 +213,30 @@ async function beginRecovery(job,source,sourceName){
     sourceType:source?.type||'video/mp4',
     sourceSize:Number(source?.size||0),
     sourceCached:false,
+    referenceName:refName,
+    referenceType:ref?.type||'image/png',
+    referenceSize:Number(ref?.size||0),
+    referenceCached:false,
     updatedAt:Date.now()
   };
   saveRecoveryMeta(meta);
-  let cachedSource=null;
+  let cachedSource=null,cachedReference=null;
   if(source&&await canCacheSource(source))cachedSource=source;
+  if(ref&&await canCacheSource(ref))cachedReference=ref;
   try{
-    await dbPut({id:DB_KEY,job:meta.job,source:cachedSource,sourceName:name,sourceType:meta.sourceType,meta});
-    if(cachedSource){
-      meta.sourceCached=true;saveRecoveryMeta(meta);
-      await dbPut({id:DB_KEY,job:meta.job,source:cachedSource,sourceName:name,sourceType:meta.sourceType,meta});
+    await dbPut({id:DB_KEY,job:meta.job,source:cachedSource,sourceName:name,sourceType:meta.sourceType,reference:cachedReference,referenceName:refName,referenceType:meta.referenceType,meta});
+    if(cachedSource||cachedReference){
+      meta.sourceCached=Boolean(cachedSource);
+      meta.referenceCached=Boolean(cachedReference);
+      saveRecoveryMeta(meta);
+      await dbPut({id:DB_KEY,job:meta.job,source:cachedSource,sourceName:name,sourceType:meta.sourceType,reference:cachedReference,referenceName:refName,referenceType:meta.referenceType,meta});
     }
-    setRecoveryStatus(meta.sourceSize?(meta.sourceCached?'Auto Recovery: исходник сохранён на iPhone.':'Auto Recovery: job сохранён; большой исходник держится пока страница открыта.'):'Auto Recovery: Scene Pack сохранён.','ok');
+    const parts=[];
+    if(meta.sourceSize)parts.push(meta.sourceCached?'видео сохранено':'видео держится пока страница открыта');
+    if(meta.referenceSize)parts.push(meta.referenceCached?'фото персонажа сохранено':'фото персонажа держится пока страница открыта');
+    setRecoveryStatus(parts.length?'Auto Recovery: '+parts.join(' • ')+'.':'Auto Recovery: Scene Pack сохранён.','ok');
   }catch(_){
-    meta.sourceCached=false;saveRecoveryMeta(meta);
+    meta.sourceCached=false;meta.referenceCached=false;saveRecoveryMeta(meta);
     setRecoveryStatus('Auto Recovery: сохранены параметры job; локальный файл-кэш недоступен.','');
   }
   return meta;
@@ -246,12 +258,20 @@ async function getRecoveryBundle(){
   if(!meta)return null;
   let record=null;
   try{record=await dbGet()}catch(_){}
-  return {meta,job:{...(record?.job||meta.job||{})},source:currentSourceFile||record?.source||null,sourceName:record?.sourceName||meta.sourceName||'source.mp4'};
+  return {
+    meta,
+    job:{...(record?.job||meta.job||{})},
+    source:currentSourceFile||record?.source||null,
+    sourceName:record?.sourceName||meta.sourceName||'source.mp4',
+    reference:currentCharacterRef||record?.reference||null,
+    referenceName:record?.referenceName||meta.referenceName||'character-reference.png'
+  };
 }
 async function clearRecovery(){
   saveRecoveryMeta(null);
   await dbDelete();
   currentSourceFile=null;
+  currentCharacterRef=null;
   setRecoveryStatus('Auto Recovery: готов.','ok');
 }
 async function readClipboardCode(){
@@ -443,7 +463,7 @@ async function uploadVideoChunks(jobId,file,filename,startIndex=0){
     await patchRecovery({phase:'uploading',uploadPart:index+1,uploadTotal:total});
   }
 }
-async function submitPreparedJob(inputJob,source,sourceName,{recovery=false}={}){
+async function submitPreparedJob(inputJob,source,sourceName,{recovery=false,reference=null,referenceName=''}={}){
   if(sendBusy)return false;
   if(!endpoint()||!token())throw new Error('Colab worker не подключён');
   sendBusy=true;await holdWakeLock();
@@ -455,7 +475,10 @@ async function submitPreparedJob(inputJob,source,sourceName,{recovery=false}={})
     if(job.engine==='ffmpeg'&&!source)throw new Error('Для FFmpeg нужен исходный файл.');
     if(source)job.defer_start=true;
     await patchRecovery({workerUrl:endpoint(),workerSessionId:lastHealth?.session_id||'',phase:'submitting'},job);
+    const characterRef=reference||currentCharacterRef||$('remoteCharacterRef')?.files?.[0]||null;
+    if(characterRef)currentCharacterRef=characterRef;
     const fd=new FormData();fd.append('job_json',JSON.stringify(job));
+    if(characterRef)fd.append('reference',characterRef,referenceName||characterRef.name||'character-reference.png');
     setProgress(1);setStatus(recovery?'Auto Recovery: создаю job в новой Colab-сессии…':'Создаю задачу на Colab GPU…','busy');
     const data=await jsonFetch(endpoint()+'/jobs',{method:'POST',headers:authHeaders(),body:fd});
     lastJobId=data.job_id;localStorage.setItem(LS_JOB,lastJobId);
@@ -576,7 +599,7 @@ async function resubmitRecovery(){
   }
   localStorage.removeItem(LS_JOB);lastJobId='';
   setRecoveryStatus('Auto Recovery: пересоздаю '+String(bundle.job.quality||'preview')+' job в новой Colab-сессии…','busy');
-  return submitPreparedJob({...bundle.job,job_id:undefined,defer_start:false},source,bundle.sourceName,{recovery:true});
+  return submitPreparedJob({...bundle.job,job_id:undefined,defer_start:false},source,bundle.sourceName,{recovery:true,reference:bundle.reference,referenceName:bundle.referenceName});
 }
 async function resumeOrRecover(){
   if(!autoRecoverEnabled())return false;
@@ -715,9 +738,11 @@ async function send(approved=false){
   saveConnection();
   const job=buildJob();
   const source=$('remoteSource')?.files?.[0]||currentSourceFile||null;
+  const reference=$('remoteCharacterRef')?.files?.[0]||currentCharacterRef||null;
   currentSourceFile=source;
-  await beginRecovery(job,source,source?.name||'source.mp4');
-  await submitPreparedJob(job,source,source?.name||'source.mp4',{recovery:false});
+  currentCharacterRef=reference;
+  await beginRecovery(job,source,source?.name||'source.mp4',reference);
+  await submitPreparedJob(job,source,source?.name||'source.mp4',{recovery:false,reference,referenceName:reference?.name||''});
 }
 async function cancel(){
   const jobId=lastJobId||localStorage.getItem(LS_JOB);
@@ -765,6 +790,14 @@ $('remoteAutoFinal')?.addEventListener('change',e=>setFullAuto(e.target.checked)
 $('remoteAutoRecover')?.addEventListener('change',e=>setAutoRecover(e.target.checked));
 $('remoteRecoverNow')?.addEventListener('click',recoverNow);
 $('remoteTest')?.addEventListener('click',testRender);
+$('remoteCharacterRef')?.addEventListener('change',async e=>{
+  currentCharacterRef=e.target.files?.[0]||null;
+  const meta=recoveryMeta();
+  if(meta&&currentCharacterRef){
+    await beginRecovery(meta.job||buildJob(),currentSourceFile,currentSourceFile?.name||meta.sourceName||'source.mp4',currentCharacterRef);
+    setRecoveryStatus('Фото персонажа сохранено для identity lock. FREE LOCK: GPU не запускается автоматически.','ok');
+  }
+});
 $('remoteSource')?.addEventListener('change',async e=>{
   currentSourceFile=e.target.files?.[0]||null;
   refreshEasyState();
