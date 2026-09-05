@@ -1,68 +1,53 @@
-# NOVA → Autocalls phone calls
+# NOVA → Autocalls: FREE CALL LOCK
 
-NOVA supports the voice/text command **«позвони»** with a mandatory two-step confirmation and a saved choice of the caller number.
+NOVA is configured so **no Autocalls phone call can create a charge**.
 
-## Choose the number to call from
+## Important limitation
 
-The saved caller number is stored on the current device and reused for later calls.
+Autocalls real phone calls are usage-billed. The official Autocalls documentation also states that Caller ID has per-minute charges and SIP has AI-bridge/carrier costs. Therefore NOVA cannot honestly turn a real PSTN/telephone call into a guaranteed free call.
 
-Useful commands:
+To satisfy NOVA FREE LOCK, the protected backend now hard-blocks every `make_call` action. It does **not** send `POST /user/make_call`.
 
-- `Нова, покажи номера для звонка`
-- `Нова, звони с +19165551234`
-- `Нова, какой номер выбран`
-- `Нова, сбрось исходящий номер`
+## Commands
 
-NOVA asks the protected backend to verify that the selected number really belongs to the authenticated Autocalls account before saving it locally.
+- `Нова, позвони +19165551234` → NOVA explains that the real phone call is blocked by FREE CALL LOCK. Nothing is charged.
+- `подтверждаю звонок` → still cannot override FREE CALL LOCK; nothing is charged.
+- `Нова, бесплатный тест Autocalls` → runs an Autocalls `type: "test"` development conversation. This is free according to Autocalls documentation, but **it is not a telephone call and does not dial a phone number**.
+- Number-list and caller-number selection commands remain available for configuration, but they do not initiate a call and do not change the assistant's caller number while FREE CALL LOCK is active.
 
-Autocalls' documented `POST /user/make_call` endpoint accepts the destination number and assistant ID, not a separate caller-number field. Therefore, only after the user confirms a real call, the protected backend assigns the saved number to the outbound assistant using:
+## Backend guarantee
 
-`PUT /user/assistant/{id}`
+`netlify/functions/autocalls-call.js` contains:
 
-with:
+```js
+const FREE_CALL_LOCK = true;
+```
+
+For `action: "make_call"`, it returns a blocked response before any telephony endpoint can be called.
+
+The only Autocalls interaction that represents a free conversation is:
 
 ```json
 {
-  "phone_number_id": 123
+  "assistant_id": "<assistant-uuid>",
+  "type": "test"
 }
 ```
 
-Then it starts the call through:
+## Secrets
 
-`POST /user/make_call`.
+The backend still uses:
 
-This follows Autocalls' documented model where a number assigned to an assistant is used as the outbound Caller ID.
+- `AUTOCALLS_API_KEY`
+- `NOVA_AUTOCALLS_CALL_KEY`
 
-## User flow
+These remain server-side and are never embedded in the public NOVA client.
 
-1. Optionally choose and save the caller number: `Нова, звони с +19165551234`.
-2. Say or type: `Нова, позвони +19165559876`.
-3. NOVA repeats both the destination and the saved caller number.
-4. No call is started yet and the assistant number is not changed yet.
-5. Say or type: `подтверждаю звонок`.
-6. Only then the protected backend validates the confirmation, validates the selected caller number, assigns it to the outbound assistant, and calls `POST /user/make_call`.
+## Safety
 
-Commands `отмена` / `отмени звонок` clear the pending call without starting it.
-
-## Required server-side environment variables
-
-Configure these only in the server host. Never commit them to GitHub:
-
-- `AUTOCALLS_API_KEY` — Autocalls API credential.
-- `NOVA_AUTOCALLS_CALL_KEY` — a separate long random owner key used only to protect NOVA's call bridge.
-- Optional: `AUTOCALLS_ASSISTANT_ID` — fixed outbound assistant integer ID.
-- Optional: `AUTOCALLS_ASSISTANT_NAME`.
-- Optional: `NOVA_AUTOCALLS_ALLOWED_ORIGINS` — comma-separated extra web origins.
-
-The client stores only the separate NOVA owner key and the selected non-secret caller number metadata on the user's device. It never receives the Autocalls API key.
-
-## Safety / billing lock
-
-- Selecting a caller number does not start a call.
-- A call is impossible from the normal `позвони` command alone.
-- The second explicit confirmation is required for every real call.
-- Confirmation expires after 90 seconds at the backend.
-- The selected caller number is revalidated against `GET /user/phone-numbers/all` before use.
-- The assistant's phone-number assignment is changed only inside the confirmed-call path.
-- The bridge exposes no SMS, WhatsApp, phone-number purchase, or campaign-start endpoint.
-- No real call is made if the backend secrets are not configured.
+- No `/user/make_call` execution.
+- No SMS.
+- No WhatsApp send.
+- No phone-number purchase.
+- No paid campaign start.
+- No override phrase can bypass FREE CALL LOCK.
