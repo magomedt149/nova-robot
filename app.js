@@ -1,7 +1,7 @@
 (() => {
   'use strict';
 
-  const VERSION = '27.5.0';
+  const VERSION = '27.5.1';
   const $ = (selector) => document.querySelector(selector);
   const $$ = (selector) => [...document.querySelectorAll(selector)];
 
@@ -226,7 +226,7 @@
       'howAreYou': 'У меня всё отлично: батарея заряжена, глаза светятся, а кошка снова уснула.',
       'who': 'Меня зовут NOVA. Я умный лунный робот. Меня создал мой хозяин Тумсоев, чтобы я общалась с людьми, отвечала на вопросы, шутила и пела.',
       'creator': 'Меня создал мой хозяин Тумсоев. Он придумал NOVA и продолжает делать меня умнее.',
-      'help': 'Я бесплатный мини‑агент. Могу хранить заметки и задачи, ставить таймеры, считать, узнавать погоду, искать в Википедии, открывать карты и YouTube. Ещё я учу английскому: 10 слов и фраз в день, транскрипция, произношение и проверка голосом. Скажи: «Учим английский».',
+      'help': 'Я бесплатный мини‑агент. Могу хранить заметки и задачи, ставить таймеры, считать, узнавать погоду, искать в Википедии, открывать карты и YouTube. По отдельному подтверждению могу запускать реальный звонок через Autocalls: скажи «Нова, позвони +1…». Ещё я учу английскому: 10 слов и фраз в день, транскрипция, произношение и проверка голосом. Скажи: «Учим английский».',
       'name.saved': 'Очень приятно, {name}! Я запомнила твоё имя.',
       'name.known': 'Конечно, тебя зовут {name}.',
       'name.unknown': 'Я пока не знаю твоё имя. Скажи: «Меня зовут Магомед».',
@@ -347,7 +347,7 @@
       'howAreYou': 'I’m doing great: my battery is full, my eyes are glowing, and the cat is asleep again.',
       'who': 'My name is NOVA. I’m a smart Moon robot. My owner Tumsoev created me to chat with people, answer questions, tell jokes, and sing.',
       'creator': 'My owner Tumsoev created me. He invented NOVA and keeps making me smarter.',
-      'help': 'I am a free mini-agent. I can store notes and tasks, set timers, calculate, check weather, search Wikipedia, and open maps or YouTube. I also teach 10 English words and phrases a day with pronunciation and a voice quiz. Say “Learn English”.',
+      'help': 'I am a free mini-agent. I can store notes and tasks, set timers, calculate, check weather, search Wikipedia, and open maps or YouTube. With separate confirmation I can start a real phone call through Autocalls: say “NOVA, call +1…”. I also teach 10 English words and phrases a day with pronunciation and a voice quiz. Say “Learn English”.',
       'name.saved': 'Nice to meet you, {name}! I’ll remember your name.',
       'name.known': 'Of course, your name is {name}.',
       'name.unknown': 'I don’t know your name yet. Say: “My name is Alex.”',
@@ -2109,6 +2109,206 @@
     }
   }
 
+  const AUTOCALLS_CONFIRM_TTL_MS = 2 * 60 * 1000;
+  const AUTOCALLS_CALL_KEY_STORAGE = 'nova.autocalls.callKey.v1';
+  const AUTOCALLS_ENDPOINT_STORAGE = 'nova.autocalls.endpoint.v1';
+  const AUTOCALLS_DEFAULT_REMOTE_ENDPOINT = 'https://dashing-otter-990b47.netlify.app/.netlify/functions/autocalls-call';
+  let pendingAutocall = null;
+  let autocallsCallBusy = false;
+
+  function stripNovaCallPrefix(value) {
+    return String(value || '')
+      .trim()
+      .replace(/^(?:нова|nova)[,;:\s-]*/i, '')
+      .trim();
+  }
+
+  function isAutocallsStartCommand(value) {
+    const clean = stripNovaCallPrefix(value);
+    return /^(?:позвони|позвонить|набери(?:\s+номер)?|call)\b/i.test(clean);
+  }
+
+  function isAutocallsConfirmCommand(value) {
+    const clean = stripNovaCallPrefix(value).toLocaleLowerCase(language === 'ru' ? 'ru-RU' : 'en-US');
+    return /^(?:подтверждаю\s+звонок|подтвердить\s+звонок|да[,\s]+звони|да\s+звони|confirm\s+(?:the\s+)?call|yes[,\s]+call)\s*[.!]?$/i.test(clean);
+  }
+
+  function isAutocallsCancelCommand(value) {
+    const clean = stripNovaCallPrefix(value).toLocaleLowerCase(language === 'ru' ? 'ru-RU' : 'en-US');
+    return /^(?:отмена|отмени\s+звонок|не\s+звони|cancel\s+(?:the\s+)?call|cancel)\s*[.!]?$/i.test(clean);
+  }
+
+  function normalizeAutocallsPhone(value) {
+    const source = String(value || '');
+    const match = source.match(/\+?\d[\d\s().-]{7,22}\d/);
+    if (!match) return null;
+    const raw = match[0].trim();
+    let digits = raw.replace(/\D/g, '');
+    if (!digits) return null;
+
+    if (raw.startsWith('+')) {
+      return digits.length >= 8 && digits.length <= 15 ? `+${digits}` : null;
+    }
+    if (digits.length === 10) digits = `1${digits}`;
+    if (digits.length === 11 && digits.startsWith('1')) return `+${digits}`;
+    return null;
+  }
+
+  function autocallsCallEndpoint() {
+    try {
+      const saved = String(localStorage.getItem(AUTOCALLS_ENDPOINT_STORAGE) || '').trim();
+      if (/^https:\/\//i.test(saved)) return saved;
+    } catch (_) {}
+    if (/(^|\.)netlify\.app$/i.test(location.hostname)) {
+      return '/.netlify/functions/autocalls-call';
+    }
+    return AUTOCALLS_DEFAULT_REMOTE_ENDPOINT;
+  }
+
+  function getAutocallsCallKey() {
+    try {
+      return String(localStorage.getItem(AUTOCALLS_CALL_KEY_STORAGE) || '').trim();
+    } catch (_) {
+      return '';
+    }
+  }
+
+  function requestAutocallsCallKey() {
+    let key = getAutocallsCallKey();
+    if (key) return key;
+    pauseRecognitionForOutput();
+    key = String(window.prompt(
+      language === 'en'
+        ? 'Enter your private NOVA Call Key. This is NOT your Autocalls API key. It stays on this device.'
+        : 'Введите приватный NOVA Call Key. Это НЕ API-ключ Autocalls. Он сохраняется только на этом устройстве.'
+    ) || '').trim();
+    if (key.length < 12) return '';
+    try { localStorage.setItem(AUTOCALLS_CALL_KEY_STORAGE, key); } catch (_) {}
+    return key;
+  }
+
+  function clearAutocallsCallKey() {
+    try { localStorage.removeItem(AUTOCALLS_CALL_KEY_STORAGE); } catch (_) {}
+  }
+
+  async function performConfirmedAutocall() {
+    if (!pendingAutocall || autocallsCallBusy) return;
+    const age = Date.now() - pendingAutocall.createdAt;
+    if (age < 0 || age > AUTOCALLS_CONFIRM_TTL_MS) {
+      pendingAutocall = null;
+      respond(language === 'en'
+        ? 'The call confirmation expired. Say the call command again.'
+        : 'Подтверждение звонка истекло. Скажи команду «позвони» ещё раз.');
+      return;
+    }
+
+    const call = { ...pendingAutocall };
+    pendingAutocall = null;
+    const callKey = requestAutocallsCallKey();
+    if (!callKey) {
+      respond(language === 'en'
+        ? 'The call was not started. The protected NOVA Call Key is not configured on this device.'
+        : 'Звонок не запущен. На этом устройстве не настроен защищённый NOVA Call Key.');
+      return;
+    }
+
+    autocallsCallBusy = true;
+    pauseRecognitionForOutput();
+    setStatus(language === 'en' ? 'Starting Autocalls…' : 'Запускаю Autocalls…', 'speaking');
+
+    try {
+      const response = await fetch(autocallsCallEndpoint(), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-NOVA-Call-Key': callKey
+        },
+        cache: 'no-store',
+        body: JSON.stringify({
+          phone_number: call.phone,
+          confirmed: true,
+          confirmed_at: Date.now()
+        })
+      });
+
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || data?.ok !== true) {
+        const detail = String(data?.error || `HTTP ${response.status}`);
+        if (response.status === 401) clearAutocallsCallKey();
+        throw new Error(detail);
+      }
+
+      const assistantName = String(data?.assistant?.name || '').trim();
+      respond(language === 'en'
+        ? `Autocalls started the call to ${call.phone}${assistantName ? ` with ${assistantName}` : ''}.`
+        : `Autocalls запустил звонок на ${call.phone}${assistantName ? ` через ассистента «${assistantName}»` : ''}.`);
+    } catch (error) {
+      const detail = String(error?.message || '').trim();
+      respond(language === 'en'
+        ? `The call was not started. ${detail || 'Autocalls is unavailable.'}`
+        : `Звонок не запущен. ${detail || 'Autocalls сейчас недоступен.'}`);
+    } finally {
+      autocallsCallBusy = false;
+    }
+  }
+
+  async function handleAutocallsCommand(text) {
+    const lowerText = String(text || '').toLocaleLowerCase(language === 'ru' ? 'ru-RU' : 'en-US');
+
+    if (/^(?:сбрось|удали|очисти)\s+(?:ключ|код)\s+звонк|reset\s+(?:call|calling)\s+key/.test(stripNovaCallPrefix(lowerText))) {
+      pendingAutocall = null;
+      clearAutocallsCallKey();
+      respond(language === 'en'
+        ? 'The local NOVA Call Key has been cleared.'
+        : 'Локальный NOVA Call Key удалён с этого устройства.');
+      return true;
+    }
+
+    if (pendingAutocall && isAutocallsCancelCommand(text)) {
+      pendingAutocall = null;
+      respond(language === 'en' ? 'The call was cancelled.' : 'Звонок отменён.');
+      return true;
+    }
+
+    if (isAutocallsConfirmCommand(text)) {
+      if (!pendingAutocall) {
+        respond(language === 'en'
+          ? 'There is no call waiting for confirmation.'
+          : 'Сейчас нет звонка, ожидающего подтверждения.');
+        return true;
+      }
+      await performConfirmedAutocall();
+      return true;
+    }
+
+    if (!isAutocallsStartCommand(text)) return false;
+
+    if (autocallsCallBusy) {
+      respond(language === 'en'
+        ? 'A call request is already being processed.'
+        : 'Предыдущий запрос звонка ещё выполняется.');
+      return true;
+    }
+
+    const phone = normalizeAutocallsPhone(text);
+    if (!phone) {
+      respond(language === 'en'
+        ? 'Tell me the phone number. Use +country code, for example: “NOVA, call +19165551234”.'
+        : 'Назови номер телефона. Например: «Нова, позвони +19165551234».');
+      return true;
+    }
+
+    pendingAutocall = {
+      phone,
+      createdAt: Date.now()
+    };
+
+    respond(language === 'en'
+      ? `Ready to call ${phone} through Autocalls. This can use your Autocalls balance. The call has NOT started. Say “confirm call” to place it, or “cancel call”.`
+      : `Готов звонок через Autocalls на ${phone}. Он может расходовать баланс Autocalls. Звонок ЕЩЁ НЕ запущен. Скажи «подтверждаю звонок», чтобы позвонить, или «отмена».`);
+    return true;
+  }
+
   async function handleUserText(raw) {
     const text = String(raw || '').trim();
     if (!text) return;
@@ -2120,6 +2320,8 @@
       launchHomeNavigation();
       return;
     }
+
+    if (await handleAutocallsCommand(text)) return;
 
     if (isNovaWakePhrase(text)) {
       resetPerformance();
@@ -2571,6 +2773,8 @@
     get lessonIndex() { return lessonState.index; },
     get lessonScore() { return lessonState.correct.size; },
     get lessonItem() { return currentEnglishLessonItem(); },
+    get pendingAutocall() { return pendingAutocall ? { ...pendingAutocall } : null; },
+    get autocallsCallBusy() { return autocallsCallBusy; },
     get lastBotMessage() {
       const messages = chat.querySelectorAll('.message.bot .bubble');
       return messages.length ? messages[messages.length - 1].textContent : '';
@@ -2581,6 +2785,8 @@
     enableCompass,
     handleCompassOrientation,
     handleUserText,
+    handleAutocallsCommand,
+    normalizeAutocallsPhone,
     activateNovaWakeOrb,
     deactivateNovaWakeOrb,
     isNovaWakePhrase,
