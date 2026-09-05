@@ -1,4 +1,4 @@
-const CACHE = 'nova-v67-autocalls-free-call-lock-v1-20260904';
+const CACHE = 'nova-v68-free-internet-calls-v1-20260904';
 const API_CACHE = 'nova-api-economy-v2';
 const METERED_NETLIFY_HOST = /(^|\\.)netlify\\.app$/i.test(self.location.hostname);
 const YOUTUBE_TTL_MS = 24 * 60 * 60 * 1000;
@@ -43,6 +43,7 @@ const CORE = [
   './notebook-tools.js',
   './local-ai-worker.js',
   './nova-free-runtime.js',
+  './nova-free-calls.js',
   './manifest.webmanifest',
   './icon-192.png',
   './icon-512.png'
