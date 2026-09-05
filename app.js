@@ -1,7 +1,7 @@
 (() => {
   'use strict';
 
-  const VERSION = '27.5.3';
+  const VERSION = '27.6.0';
   const $ = (selector) => document.querySelector(selector);
   const $$ = (selector) => [...document.querySelectorAll(selector)];
 
@@ -142,6 +142,7 @@
       'action.cat': 'Кошка',
       'action.english': 'Английский',
       'action.remoteGpu': 'Сделать видео',
+      'action.freeCall': 'FREE CALL',
       'lesson.title': 'Учим английский',
       'lesson.listen': 'Слушать',
       'lesson.quiz': 'Проверка',
@@ -226,7 +227,7 @@
       'howAreYou': 'У меня всё отлично: батарея заряжена, глаза светятся, а кошка снова уснула.',
       'who': 'Меня зовут NOVA. Я умный лунный робот. Меня создал мой хозяин Тумсоев, чтобы я общалась с людьми, отвечала на вопросы, шутила и пела.',
       'creator': 'Меня создал мой хозяин Тумсоев. Он придумал NOVA и продолжает делать меня умнее.',
-      'help': 'Я бесплатный мини‑агент. Могу хранить заметки и задачи, ставить таймеры, считать, узнавать погоду, искать в Википедии, открывать карты и YouTube. NOVA FREE CALL LOCK не позволяет платным телефонным звонкам Autocalls списывать деньги; доступен бесплатный test-режим Autocalls. Ещё я учу английскому: 10 слов и фраз в день, транскрипция, произношение и проверка голосом. Скажи: «Учим английский».',
+      'help': 'Я бесплатный мини‑агент. Могу хранить заметки и задачи, ставить таймеры, считать, узнавать погоду, искать в Википедии, открывать карты и YouTube. У меня есть NOVA FREE CALL — бесплатные интернет-звонки по ссылке без Autocalls и без платного API. Скажи: «Нова, бесплатный звонок». Обычные телефонные номера остаются заблокированы FREE CALL LOCK, чтобы не было списаний. Ещё я учу английскому: 10 слов и фраз в день, транскрипция, произношение и проверка голосом. Скажи: «Учим английский».',
       'name.saved': 'Очень приятно, {name}! Я запомнила твоё имя.',
       'name.known': 'Конечно, тебя зовут {name}.',
       'name.unknown': 'Я пока не знаю твоё имя. Скажи: «Меня зовут Магомед».',
@@ -263,6 +264,7 @@
       'action.cat': 'Cat',
       'action.english': 'English',
       'action.remoteGpu': 'Make Video',
+      'action.freeCall': 'FREE CALL',
       'lesson.title': 'Learn English',
       'lesson.listen': 'Listen',
       'lesson.quiz': 'Quiz',
@@ -347,7 +349,7 @@
       'howAreYou': 'I’m doing great: my battery is full, my eyes are glowing, and the cat is asleep again.',
       'who': 'My name is NOVA. I’m a smart Moon robot. My owner Tumsoev created me to chat with people, answer questions, tell jokes, and sing.',
       'creator': 'My owner Tumsoev created me. He invented NOVA and keeps making me smarter.',
-      'help': 'I am a free mini-agent. I can store notes and tasks, set timers, calculate, check weather, search Wikipedia, and open maps or YouTube. NOVA FREE CALL LOCK blocks billable Autocalls phone calls; a free Autocalls development test mode is available. I also teach 10 English words and phrases a day with pronunciation and a voice quiz. Say “Learn English”.',
+      'help': 'I am a free mini-agent. I can store notes and tasks, set timers, calculate, check weather, search Wikipedia, and open maps or YouTube. NOVA FREE CALL provides free internet calls by link without Autocalls or a paid API. Say “NOVA free call”. Regular telephone-number calls stay blocked by FREE CALL LOCK so they cannot create charges. I also teach 10 English words and phrases a day with pronunciation and a voice quiz. Say “Learn English”.',
       'name.saved': 'Nice to meet you, {name}! I’ll remember your name.',
       'name.known': 'Of course, your name is {name}.',
       'name.unknown': 'I don’t know your name yet. Say: “My name is Alex.”',
@@ -1565,6 +1567,32 @@
     }, 4800, token);
   }
 
+  function performFreeInternetCall() {
+    resetPerformance();
+    const calls = window.NOVA_FREE_CALLS;
+    if (!calls?.createRoom) {
+      respond(language === 'en'
+        ? 'NOVA FREE CALL is not available in this build.'
+        : 'NOVA FREE CALL недоступен в этой версии.');
+      return;
+    }
+
+    const room = calls.createRoom();
+    addMessage('bot', language === 'en'
+      ? `FREE internet call room created: ${room.url}\nSend this link to the other person. It is an internet call, not a telephone-number call.`
+      : `Создана комната бесплатного интернет-звонка NOVA:\n${room.url}\nОтправь эту ссылку собеседнику. Это интернет-звонок, не звонок на обычный телефонный номер.`);
+    setStatus(language === 'en' ? 'NOVA FREE CALL ready' : 'NOVA FREE CALL готов', 'speaking');
+
+    window.setTimeout(() => {
+      try { calls.openRoom(room); } catch (_) {}
+    }, 900);
+  }
+
+  function isFreeInternetCallCommand(value) {
+    const clean = stripNovaCallPrefix(value).toLocaleLowerCase(language === 'ru' ? 'ru-RU' : 'en-US');
+    return /^(?:бесплатн(?:ый|ая)\s+(?:звонок|позвонить)|интернет[-\s]*звонок|позвони\s+бесплатно|создай\s+(?:бесплатн(?:ый|ую)\s+)?комнат(?:у|а)\s+(?:для\s+)?звонка|nova\s+free\s+call|free\s+internet\s+call)\b/i.test(clean);
+  }
+
   function runAction(action) {
     const actions = {
       joke: performJoke,
@@ -1574,7 +1602,8 @@
       laugh: performLaugh,
       cat: performCatScene,
       english: startEnglishLesson,
-      remoteGpu: performRemoteGpu
+      remoteGpu: performRemoteGpu,
+      freeCall: performFreeInternetCall
     };
     if (actions[action]) actions[action]();
   }
@@ -2493,6 +2522,11 @@
       return;
     }
 
+    if (isFreeInternetCallCommand(text)) {
+      performFreeInternetCall();
+      return;
+    }
+
     if (await handleAutocallsCommand(text)) return;
 
     if (isNovaWakePhrase(text)) {
@@ -2963,6 +2997,8 @@
     getSelectedAutocallsFromNumber,
     saveSelectedAutocallsFromNumber,
     clearSelectedAutocallsFromNumber,
+    performFreeInternetCall,
+    isFreeInternetCallCommand,
     activateNovaWakeOrb,
     deactivateNovaWakeOrb,
     isNovaWakePhrase,
