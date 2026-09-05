@@ -1,3 +1,4 @@
+const MOTION_VERSION = 'v24';
 const CACHE = 'tumsoev-motion-vfx-studio-v24-character-motion-lock';
 const ASSETS = [
   '/motion-studio/',
@@ -6,6 +7,7 @@ const ASSETS = [
   '/motion-studio/app.js',
   '/motion-studio/director.js',
   '/motion-studio/remote-gpu.js',
+  '/motion-studio/diagnostics.js',
   '/motion-studio/manifest.webmanifest',
   '/icon-192.png',
   '/icon-512.png'
@@ -47,6 +49,18 @@ self.addEventListener('activate', event => {
         .map(client => typeof client.navigate === 'function' ? client.navigate(client.url).catch(() => null) : null)
     );
   })());
+});
+
+self.addEventListener('message', event => {
+  if (event.data?.type !== 'NOVA_MOTION_DIAGNOSTICS') return;
+  const reply = event.ports?.[0];
+  if (!reply) return;
+  reply.postMessage({
+    ok: true,
+    version: MOTION_VERSION,
+    cache: CACHE,
+    scriptURL: self.location.href
+  });
 });
 
 self.addEventListener('fetch', event => {
