@@ -288,19 +288,37 @@ function parseConnectCode(value){
   return true;
 }
 function hasRenderableIntent(){return Boolean(($('remoteSource')?.files?.[0])||(($('prompt')?.value||'').trim()))}
+function humanMotionIntent(){
+  const q=($('prompt')?.value||'').toLowerCase();
+  const selected=$('humanMotionMode')?.value||'auto';
+  let mode=selected;
+  if(mode==='auto'){
+    if(/\b(run|running|sprint)\b|бег|беж|спринт/.test(q))mode='run';
+    else if(/\b(dance|dancing)\b|танц/.test(q))mode='dance';
+    else if(/\b(walk|walking|stride|gait)\b|ходьб|ид[её]т|идти|шага/.test(q))mode='walk';
+    else if(/motion.?transfer|openpose|skeleton|pose.?control|скелет|поз[аы]|движени[ея] человека/.test(q))mode='motion-reference';
+    else mode='none';
+  }
+  return {enabled:mode!=='none',mode};
+}
 function chosenEngine(){
   const raw=$('remoteEngine')?.value||'auto';
   if(raw!=='auto')return raw;
   const q=($('prompt')?.value||'').toLowerCase();
   const hasSource=Boolean($('remoteSource')?.files?.[0]||currentSourceFile);
+  const human=humanMotionIntent();
   const orbitIntent=/orbit|обл[её]т|вокруг|fly.?around|camera.*around/.test(q);
   const fullOrbit=/360|полный круг|full circle|full orbit/.test(q);
+  const explicit3d=/blender|true.?3d|3d.?block|блокинг|blocking/.test(q);
   if(/ffmpeg|конверт|перекод|encode|transcod|upscale|апскейл/.test(q)&&hasSource)return 'ffmpeg';
+  // Human locomotion is a generative motion-control task. A source clip is a
+  // driving/control video for WanGP, not a reason to stop at Blender pose preview.
+  if(hasSource&&human.enabled&&!explicit3d)return 'wangp';
   // True camera orbit must be created in Blender first. When the resulting
   // control MP4 is supplied on a second pass, realistic AI refinement may use WanGP.
-  if(!hasSource&&orbitIntent&&(fullOrbit||/blender|3d|блокинг|blocking/.test(q)))return 'blender';
+  if(!hasSource&&orbitIntent&&(fullOrbit||explicit3d))return 'blender';
   if(/wang|wan2|ai video|генер.*видео|сгенер.*видео|реалистичн.*генер|замен.*персонаж|video.?to.?video/.test(q))return 'wangp';
-  if(!hasSource&&!/blender|3d|блокинг|blocking/.test(q))return 'wangp';
+  if(!hasSource&&!explicit3d)return 'wangp';
   return 'blender';
 }
 function motionConfig(){
@@ -311,12 +329,20 @@ function buildJob(){
   const c=motionConfig();
   const quality=$('remoteQuality')?.value||'preview';
   const prompt=($('prompt')?.value||'').trim();
+  const human=humanMotionIntent();
+  const hasMotionSource=Boolean($('remoteSource')?.files?.[0]||currentSourceFile);
+  const humanMotion={
+    ...human,
+    control_source:hasMotionSource?'source_video':'prompt_only',
+    prefer_pose_control:true,
+    full_body:true
+  };
   const pack={
     schema:'nova.scene-pack.v2',project:'NOVA Remote GPU',source_prompt:prompt,
     duration:Number(c.duration||$('duration')?.value||5),format:c.ratio||$('ratio')?.value||'9:16',
     style:c.style||$('style')?.value||'neon',motion:c.motion||$('motion')?.value||'slide',
     camera:c.camera||$('camera')?.value||'static',vfx:c.vfx||$('vfx')?.value||'none',
-    vfx_intensity:Number(c.intensity||$('intensity')?.value||.65),
+    vfx_intensity:Number(c.intensity||$('intensity')?.value||.65),human_motion:humanMotion,
     render_policy:{preview_first:true,paid_generation:false,max_paid_tests:1}
   };
   return {
@@ -324,6 +350,7 @@ function buildJob(){
     source_prompt:prompt||'TUMSOEV cinematic scene',engine:chosenEngine(),quality,
     duration:Number(pack.duration||5),ratio:pack.format||'9:16',fps:quality==='preview'?24:30,
     style:pack.style,motion:pack.motion,camera:pack.camera,vfx:pack.vfx,
+    human_motion:humanMotion,
     intensity:Number(pack.vfx_intensity||.65),mirror_drive:Boolean($('remoteMirrorDrive')?.checked),
     scene_pack:pack
   };
@@ -370,6 +397,9 @@ async function preflight(engine,hasSource){
   const health=lastHealth||await connect({resume:false});
   if(!health)throw new Error('Colab worker не подключён');
   if(engine==='wangp'&&!health.wangp_api_ready){
+    if(humanMotionIntent().enabled){
+      throw new Error('WanGP motion-control не готов. Blender не подменяет генерацию человека: перезапусти актуальный GPU Worker.')
+    }
     if(hasSource&&health.blender){setStatus('WanGP ещё не готов — временно переключаю на Blender.','busy');return 'blender'}
     throw new Error('WanGP API не готов. Перезапусти Colab notebook с Run all.')
   }
@@ -591,6 +621,7 @@ async function resumeOrRecover(){
 }
 function isHeavyAiRequest(){
   const q=($('prompt')?.value||'').toLowerCase();
+  if(humanMotionIntent().enabled)return true;
   return /text[- ]?to[- ]?video|image[- ]?to[- ]?video|video[- ]?to[- ]?video|wan\b|wangp|seedance|kling|higgsfield|генер.*(?:человек|персонаж|сцену с нуля)|созд.*(?:человек|персонаж|сцену с нуля)|замен.*(?:лиц|персонаж)|фотореал|photoreal|реалистичн.*(?:человек|персонаж)/.test(q);
 }
 async function runLocalEasy(){

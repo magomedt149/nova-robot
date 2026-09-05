@@ -133,8 +133,19 @@
             <span data-step="render">2 · Рендер</span>
             <span data-step="final">3 · Готово</span>
           </div>
-          <label class="remote-source-easy">Видео, если оно нужно для задачи
+          <label class="remote-source-easy">Видео движения / исходник
             <input id="remoteSource" type="file" accept="video/mp4,video/quicktime,video/webm,video/x-matroska,video/*">
+          </label>
+          <label class="remote-source-easy">Движение человека
+            <select id="humanMotionMode">
+              <option value="auto" selected>Авто — NOVA определит по тексту</option>
+              <option value="walk">Ходьба</option>
+              <option value="run">Бег</option>
+              <option value="dance">Танец</option>
+              <option value="motion-reference">Повторить движение из видео</option>
+              <option value="none">Не управлять телом</option>
+            </select>
+            <small>Если загружено видео, NOVA использует его как driving/control reference для WanGP. Бесплатный Remote GPU запускается только после твоего подтверждения.</small>
           </label>
         </div>
 

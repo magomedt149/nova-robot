@@ -18,6 +18,7 @@ import argparse
 import asyncio
 import json
 import os
+import re
 import secrets
 import shutil
 import subprocess
@@ -49,7 +50,7 @@ WANGP_SESSION_LOCK = threading.Lock()
 WANGP_JOBS: dict[str, Any] = {}
 DOWNLOAD_TICKETS: dict[str, dict[str, Any]] = {}
 DOWNLOAD_TICKET_TTL = int(os.environ.get("NOVA_REMOTE_DOWNLOAD_TTL", "600"))
-WORKER_VERSION = "1.4.1"
+WORKER_VERSION = "1.5.0"
 PROTOCOL_VERSION = 3
 SESSION_ID = uuid.uuid4().hex[:12]
 
@@ -404,6 +405,46 @@ def _model_inputs(record: dict[str, Any]) -> set[str]:
     return set()
 
 
+def human_motion_options(job: dict[str, Any]) -> dict[str, Any]:
+    raw = job.get("human_motion")
+    if not isinstance(raw, dict):
+        scene_pack = job.get("scene_pack") if isinstance(job.get("scene_pack"), dict) else {}
+        raw = scene_pack.get("human_motion") if isinstance(scene_pack.get("human_motion"), dict) else {}
+    prompt = str(job.get("source_prompt") or job.get("prompt") or "").lower()
+    mode = str(raw.get("mode") or "auto").strip().lower()
+    if mode == "auto":
+        if re.search(r"\b(run|running|sprint)\b|бег|беж|спринт", prompt):
+            mode = "run"
+        elif re.search(r"\b(dance|dancing)\b|танц", prompt):
+            mode = "dance"
+        elif re.search(r"\b(walk|walking|stride|gait)\b|ходьб|ид[её]т|идти|шага", prompt):
+            mode = "walk"
+        elif re.search(r"motion.?transfer|openpose|skeleton|pose.?control|скелет|поз[аы]|движени[ея] человека", prompt):
+            mode = "motion-reference"
+        else:
+            mode = "none"
+    return {
+        "enabled": bool(raw.get("enabled", mode != "none")) and mode != "none",
+        "mode": mode,
+        "control_source": str(raw.get("control_source") or "source_video"),
+        "prefer_pose_control": bool(raw.get("prefer_pose_control", True)),
+        "full_body": bool(raw.get("full_body", True)),
+    }
+
+
+def _model_blob(record: dict[str, Any]) -> str:
+    metadata = record.get("metadata") if isinstance(record.get("metadata"), dict) else {}
+    return " ".join(
+        str(value or "")
+        for value in (
+            record.get("name"),
+            record.get("model_type"),
+            metadata.get("name"),
+            metadata.get("model_type"),
+        )
+    ).lower()
+
+
 def pick_wangp_model(session, job: dict[str, Any], has_source: bool) -> dict[str, Any]:
     options = job.get("wangp") if isinstance(job.get("wangp"), dict) else {}
     explicit = str(options.get("model_type") or "").strip()
@@ -415,11 +456,18 @@ def pick_wangp_model(session, job: dict[str, Any], has_source: bool) -> dict[str
 
     gpu = gpu_info()
     low_vram = not gpu.get("memory_mb") or int(gpu.get("memory_mb") or 0) < 18000
+    motion = human_motion_options(job)
 
-    # Free Colab T4: favor FastWan. With larger GPUs and a source video,
-    # first try control/animation-capable families.
+    # Human motion needs a control-aware model. On a free Colab T4, prefer
+    # VACE 1.3B (pose-control capable) before generic FastWan. Bigger GPUs can
+    # use Wan 2.2 Animate / VACE 14B families.
     queries: list[str] = []
-    if has_source and not low_vram:
+    if has_source and motion["enabled"]:
+        if low_vram:
+            queries += ["VACE 1.3B", "Vace 1.3B"]
+        else:
+            queries += ["Wan 2.2 Animate 2", "Wan 2.2 Animate", "VACE 14B", "Scail 2"]
+    elif has_source and not low_vram:
         queries += ["Scail 2", "Wan 2.2 Animate", "Bernini"]
     queries += ["FastWan", "Wan 2.2"]
 
@@ -433,12 +481,39 @@ def pick_wangp_model(session, job: dict[str, Any], has_source: bool) -> dict[str
             if best_fallback is None:
                 best_fallback = record
             inputs = _model_inputs(record)
-            if has_source and "video" in inputs and (not low_vram or "fast" in str(record).lower()):
+            blob = _model_blob(record)
+
+            if has_source and motion["enabled"]:
+                if low_vram and "vace" in blob and ("1.3" in blob or "1_3" in blob or "1-3" in blob):
+                    return record
+                if not low_vram and ("animate" in blob or "vace" in blob or "scail" in blob):
+                    return record
+                # Never silently downgrade a requested body-motion transfer to a
+                # generic image/video model; that is the old "person stays still" bug.
+                continue
+
+            if has_source and "video" in inputs and (not low_vram or "fast" in blob):
                 return record
-            if has_source and "image" in inputs and "fastwan" in str(record).lower():
+            if has_source and "image" in inputs and "fastwan" in blob:
                 return record
             if not has_source and ("text" in inputs or not inputs):
                 return record
+
+    if has_source and motion["enabled"]:
+        try:
+            records = session.list_model_metadata(main_output="video", limit=100)
+        except Exception:
+            records = []
+        for record in records:
+            blob = _model_blob(record)
+            if low_vram and "vace" in blob and ("1.3" in blob or "1_3" in blob or "1-3" in blob):
+                return record
+            if not low_vram and ("animate" in blob or "vace" in blob or "scail" in blob):
+                return record
+        raise RuntimeError(
+            "WanGP human-motion control model is unavailable. On T4 install/enable VACE 1.3B; "
+            "NOVA will not replace it with a static FastWan/Blender preview."
+        )
 
     if best_fallback is not None:
         return best_fallback
@@ -467,7 +542,20 @@ def build_wangp_settings(
     defaults = session.get_default_settings(model_type)
     settings = dict(defaults or {})
     settings["model_type"] = model_type
-    settings["prompt"] = str(job.get("source_prompt") or job.get("prompt") or "cinematic realistic motion")
+    motion = human_motion_options(job)
+    prompt = str(job.get("source_prompt") or job.get("prompt") or "cinematic realistic motion").strip()
+    motion_prompts = {
+        "walk": "Full-body natural walking cycle with clear forward locomotion, alternating heel-to-toe steps, visible weight transfer, stable hips, and opposite arm swing.",
+        "run": "Full-body natural running cycle with continuous forward locomotion, believable foot contacts, weight transfer, arm swing, and stable anatomy.",
+        "dance": "Full-body coordinated dance motion with continuous body movement, planted foot contacts when appropriate, stable limbs, and consistent rhythm.",
+        "motion-reference": "Follow the driving video's full-body motion and timing closely while preserving stable anatomy and continuous locomotion.",
+    }
+    if motion["enabled"] and motion["mode"] in motion_prompts:
+        prompt = (prompt + " " + motion_prompts[motion["mode"]]).strip()
+        negative = str(settings.get("negative_prompt") or "").strip()
+        motion_negative = "static pose, frozen body, no locomotion, foot sliding, skating feet, duplicated limbs, broken legs, unstable gait, body morphing"
+        settings["negative_prompt"] = (negative + ", " + motion_negative).strip(", ")
+    settings["prompt"] = prompt
     settings["video_length"] = f"{float(profile['duration']):g}s"
     settings["force_fps"] = int(profile["fps"])
 
@@ -489,11 +577,32 @@ def build_wangp_settings(
 
     inputs = _model_inputs(model_record)
     if prepared_video is not None:
-        if "video" in inputs:
+        if motion["enabled"] and "vace" in name_blob:
+            # VACE guide preprocessing explicitly supports PV = pose preprocessing
+            # + control video. This turns the driving clip into body-motion control
+            # instead of simply feeding its RGB frames as an ordinary video source.
+            settings["video_guide"] = str(prepared_video)
+            settings["video_prompt_type"] = "PV"
+            settings.pop("video_source", None)
+        elif motion["enabled"] and "animate" in name_blob:
+            # Wan 2.2 Animate 2 exposes UV as its driving-video process.
+            settings["video_guide"] = str(prepared_video)
+            settings["video_prompt_type"] = "UV"
+            settings.pop("video_source", None)
+            if "image" in inputs:
+                start_image = extract_first_frame(job["job_id"], prepared_video, job_dir / "WAN_GP_START.png")
+                settings["image_start"] = str(start_image)
+                settings["image_prompt_type"] = "S"
+        elif "video" in inputs:
             settings["video_source"] = str(prepared_video)
         elif "image" in inputs:
             start_image = extract_first_frame(job["job_id"], prepared_video, job_dir / "WAN_GP_START.png")
             settings["image_start"] = str(start_image)
+
+    (job_dir / "NOVA_MOTION_CONTROL.json").write_text(
+        json.dumps(motion, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
 
     overrides = job.get("wangp") if isinstance(job.get("wangp"), dict) else {}
     user_settings = overrides.get("settings")
@@ -536,13 +645,16 @@ def run_wangp_job(job_id: str, job: dict[str, Any], job_dir: Path) -> Path:
     model_record = pick_wangp_model(session, job, prepared is not None)
     model_type = str(model_record.get("model_type") or (model_record.get("metadata") or {}).get("model_type") or "")
     model_name = str(model_record.get("name") or model_type)
+    motion = human_motion_options(job)
+    motion_label = f" • motion={motion['mode']}" if motion["enabled"] else ""
     update_status(
         job_id,
         progress=26,
         stage="wangp_model",
-        message=f"WanGP: {model_name}. Подготавливаю модель.",
+        message=f"WanGP: {model_name}{motion_label}. Подготавливаю модель.",
         wangp_model=model_type,
         wangp_model_name=model_name,
+        human_motion=motion,
     )
 
     settings = build_wangp_settings(session, model_record, job, profile, prepared, job_dir)
@@ -771,6 +883,8 @@ async def health(request: Request):
             "blender": command_exists("blender"),
             "ffmpeg": command_exists("ffmpeg"),
             "wangp": (WANGP_ROOT / "shared" / "api.py").is_file(),
+            "human_motion_control": True,
+            "human_motion_preferred_t4": "VACE 1.3B",
         },
         "wangp_root": str(WANGP_ROOT),
         "job_root": str(JOB_ROOT),
