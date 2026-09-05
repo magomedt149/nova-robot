@@ -52,3 +52,27 @@
 .remote-advanced-note{margin:0 0 10px;padding:9px 10px;border-radius:10px;background:#0b1020;color:#9fb0cb;font-size:10px;line-height:1.45}.remote-colab-fallback{margin-top:10px;padding-top:8px;border-top:1px solid #26304a}.remote-colab-fallback>summary{cursor:pointer;color:#7f8ea8;font-size:10px;font-weight:800}.remote-colab-fallback small{display:block;margin-top:6px;color:#738198;font-size:9px;line-height:1.4}
 
 .permanent-gpu-setup{margin:10px 0 12px;padding:11px;border:1px solid rgba(94,219,255,.28);border-radius:12px;background:#0b1120}.permanent-gpu-setup>b{display:block;margin-bottom:5px;font-size:11px;color:#dcecff}.permanent-gpu-setup p{margin:0 0 8px;color:#93a3bc;font-size:10px;line-height:1.45}.permanent-gpu-download{display:block;margin:6px 0;text-align:center}.permanent-gpu-setup small{display:block;margin-top:8px;color:#7f8ea6;font-size:9px;line-height:1.4}
+
+/* Motion Studio v24 diagnostics */
+.nova-diag-open{margin:-10px 0 16px;background:#121a2a;color:#dcecff;border:1px solid #2e3a55;box-shadow:none}
+.nova-diag-open:hover{border-color:#69ddff}
+.nova-diag-opened{overflow:hidden}
+.nova-diag-overlay{position:fixed;inset:0;z-index:9999;display:grid;place-items:center;padding:18px;background:rgba(3,6,12,.82);backdrop-filter:blur(12px)}
+.nova-diag-screen{width:min(940px,100%);max-height:92vh;overflow:auto;border:1px solid #2f3d5b;border-radius:24px;background:linear-gradient(180deg,#101726,#090e18);box-shadow:0 30px 100px rgba(0,0,0,.62);padding:22px}
+.nova-diag-head{display:flex;justify-content:space-between;gap:18px;align-items:flex-start;margin-bottom:14px}
+.nova-diag-head h2{margin:3px 0 4px;font-size:28px}.nova-diag-head p{margin:0;color:#91a3bc;font-size:12px}
+.nova-diag-kicker{font-size:9px;font-weight:900;letter-spacing:.16em;color:#6de9ff}
+.nova-diag-close{width:42px;min-width:42px;height:42px;padding:0;border-radius:12px;background:#171f30;color:#dbe8ff;border:1px solid #34415b;font-size:25px;line-height:1;box-shadow:none}
+.nova-diag-overall{margin:12px 0 14px;padding:12px 14px;border-radius:13px;border:1px solid #303b55;background:#0b1120;color:#dce9ff;font-size:12px;font-weight:800}
+.nova-diag-overall[data-kind="ok"]{border-color:rgba(80,220,160,.35);color:#91ffd0}.nova-diag-overall[data-kind="error"]{border-color:rgba(255,97,133,.38);color:#ffabbc}.nova-diag-overall[data-kind="busy"]{border-color:rgba(84,200,255,.4);color:#9fe5ff}
+.nova-diag-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.nova-diag-card{min-width:0;padding:13px;border:1px solid #29364f;border-radius:14px;background:#0b111d}
+.nova-diag-card span{display:block;color:#8192aa;font-size:9px;font-weight:850;letter-spacing:.04em;text-transform:uppercase}
+.nova-diag-card b{display:block;margin:6px 0 4px;color:#edf5ff;font-size:13px;overflow-wrap:anywhere}
+.nova-diag-card small{display:block;color:#91a2b9;font-size:10px;line-height:1.4;overflow-wrap:anywhere}
+.nova-diag-details{margin:12px 0;border:1px solid #28344b;border-radius:12px;background:#090e17;padding:9px 11px}
+.nova-diag-details summary{cursor:pointer;color:#a9bad1;font-size:11px;font-weight:800}
+.nova-diag-details pre{max-height:260px;overflow:auto;white-space:pre-wrap;color:#8fa4bf;font-size:9px;line-height:1.45}
+.nova-diag-actions{display:grid;grid-template-columns:1fr 1.45fr;gap:9px}.nova-diag-actions button{margin:0}
+.nova-diag-action-status{margin-top:10px;color:#899ab0;font-size:10px;line-height:1.45}.nova-diag-action-status[data-kind="busy"]{color:#9fe5ff}.nova-diag-action-status[data-kind="error"]{color:#ffabbc}
+@media(max-width:620px){.nova-diag-overlay{padding:0}.nova-diag-screen{width:100%;height:100%;max-height:none;border-radius:0;padding:18px 14px 28px}.nova-diag-grid{grid-template-columns:1fr}.nova-diag-actions{grid-template-columns:1fr}.nova-diag-head h2{font-size:24px}}
