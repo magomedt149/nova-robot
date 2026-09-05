@@ -16,7 +16,7 @@ function ensureUi(){
   const button=document.createElement('button');
   button.id='novaDiagnosticsOpen';
   button.type='button';
-  button.className='nova-diag-open';
+  button.className='nova-diag-open nova-easy-visible';
   button.textContent='🩺 Диагностика';
   button.addEventListener('click',()=>openDiagnostics());
 
