@@ -17,6 +17,7 @@ NOVA 27.2 uses a free-only default policy.
 - Autocalls real phone calls are hard-disabled by NOVA FREE CALL LOCK because Autocalls telephony is usage-billed; no confirmation phrase can override this lock.
 - NOVA may use Autocalls development conversations with `type: "test"`, which Autocalls documents as free, but NOVA must never describe those as real telephone calls.
 - Saved Autocalls caller-number selection is non-spending configuration only and does not change the assistant or start a phone call while FREE CALL LOCK is active.
+- NOVA FREE CALL internet rooms may use a no-cost internet meeting provider and must never be represented as calls to ordinary telephone numbers.
 
 Current policy version: **NOVA 27.2.1**
 
