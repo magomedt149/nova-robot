@@ -1,7 +1,7 @@
 {
   "name": "NOVA",
-  "version": "27.5.3",
-  "pwa": "27.5.3",
+  "version": "27.6.0",
+  "pwa": "27.6.0",
   "mode": "free-only",
   "paidApis": false,
   "externalComputeRequiresConfirmation": true,
@@ -34,5 +34,9 @@
   "autocallsRealPhoneCallsEnabled": false,
   "autocallsFreeCallLock": true,
   "autocallsFreeTestMode": true,
-  "autocallsMakeCallBlocked": true
+  "autocallsMakeCallBlocked": true,
+  "novaFreeInternetCalls": true,
+  "novaFreeInternetCallsProvider": "Jitsi Meet public instance",
+  "novaFreeInternetCallsMode": "audio-only link room",
+  "novaFreeInternetCallsPaidApi": false
 }
