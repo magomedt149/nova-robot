@@ -1,4 +1,4 @@
-const CACHE = 'tumsoev-motion-vfx-studio-v23-human-motion-control';
+const CACHE = 'tumsoev-motion-vfx-studio-v24-character-motion-lock';
 const ASSETS = [
   '/motion-studio/',
   '/motion-studio/index.html',

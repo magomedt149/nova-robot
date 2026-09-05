@@ -50,7 +50,7 @@ WANGP_SESSION_LOCK = threading.Lock()
 WANGP_JOBS: dict[str, Any] = {}
 DOWNLOAD_TICKETS: dict[str, dict[str, Any]] = {}
 DOWNLOAD_TICKET_TTL = int(os.environ.get("NOVA_REMOTE_DOWNLOAD_TTL", "600"))
-WORKER_VERSION = "1.5.0"
+WORKER_VERSION = "1.6.0"
 PROTOCOL_VERSION = 3
 SESSION_ID = uuid.uuid4().hex[:12]
 
@@ -199,6 +199,11 @@ def run_command(job_id: str, args: list[str], *, cwd: Path | None = None) -> Non
 
 def source_file(job_dir: Path) -> Path | None:
     candidates = sorted(job_dir.glob("source.*"))
+    return candidates[0] if candidates else None
+
+
+def reference_file(job_dir: Path) -> Path | None:
+    candidates = sorted(job_dir.glob("reference.*"))
     return candidates[0] if candidates else None
 
 
@@ -576,20 +581,26 @@ def build_wangp_settings(
             settings["num_inference_steps"] = 8
 
     inputs = _model_inputs(model_record)
+    character_reference = reference_file(job_dir)
     if prepared_video is not None:
         if motion["enabled"] and "vace" in name_blob:
             # VACE guide preprocessing explicitly supports PV = pose preprocessing
             # + control video. This turns the driving clip into body-motion control
             # instead of simply feeding its RGB frames as an ordinary video source.
             settings["video_guide"] = str(prepared_video)
-            settings["video_prompt_type"] = "PV"
+            settings["video_prompt_type"] = "PVI" if character_reference is not None else "PV"
+            if character_reference is not None:
+                settings["image_refs"] = [str(character_reference)]
             settings.pop("video_source", None)
         elif motion["enabled"] and "animate" in name_blob:
-            # Wan 2.2 Animate 2 exposes UV as its driving-video process.
+            # Wan 2.2 Animate 2 exposes UV as its driving-video process; I adds
+            # a separate character reference instead of stealing identity from the driver.
             settings["video_guide"] = str(prepared_video)
-            settings["video_prompt_type"] = "UV"
+            settings["video_prompt_type"] = "UVI" if character_reference is not None else "UV"
+            if character_reference is not None:
+                settings["image_refs"] = [str(character_reference)]
             settings.pop("video_source", None)
-            if "image" in inputs:
+            if character_reference is None and "image" in inputs:
                 start_image = extract_first_frame(job["job_id"], prepared_video, job_dir / "WAN_GP_START.png")
                 settings["image_start"] = str(start_image)
                 settings["image_prompt_type"] = "S"
@@ -894,7 +905,12 @@ async def health(request: Request):
 
 
 @app.post("/jobs")
-async def create_job(request: Request, job_json: str = Form(...), source: UploadFile | None = File(None)):
+async def create_job(
+    request: Request,
+    job_json: str = Form(...),
+    source: UploadFile | None = File(None),
+    reference: UploadFile | None = File(None),
+):
     require_token(request)
     try:
         job = json.loads(job_json)
@@ -919,6 +935,14 @@ async def create_job(request: Request, job_json: str = Form(...), source: Upload
             raise HTTPException(status_code=400, detail="Unsupported video type")
         upload_bytes = await save_upload(source, job_dir / f"source{suffix}")
 
+    reference_bytes = 0
+    if reference is not None and reference.filename:
+        ref_suffix = Path(reference.filename).suffix.lower()
+        if ref_suffix not in {".jpg", ".jpeg", ".png", ".webp"}:
+            shutil.rmtree(job_dir, ignore_errors=True)
+            raise HTTPException(status_code=400, detail="Unsupported character reference image type")
+        reference_bytes = await save_upload(reference, job_dir / f"reference{ref_suffix}")
+
     deferred = bool(job.get("defer_start"))
     update_status(
         job_id,
@@ -928,6 +952,8 @@ async def create_job(request: Request, job_json: str = Form(...), source: Upload
         stage="uploading" if deferred else "queued",
         message="Задание создано. Жду видео по частям." if deferred else "Задание принято Colab worker.",
         upload_bytes=upload_bytes,
+        reference_bytes=reference_bytes,
+        has_character_reference=reference_file(job_dir) is not None,
         quality=str(job.get("quality") or "preview").lower(),
         created_at=time.time(),
     )
@@ -1050,7 +1076,7 @@ async def promote_job(job_id: str, request: Request):
     for source in source_dir.iterdir():
         if not source.is_file():
             continue
-        if source.name.startswith("source.") or source.name in {
+        if source.name.startswith("source.") or source.name.startswith("reference.") or source.name in {
             "NOVA_scene_pack.json",
             "WAN_GP_INPUT.mp4",
             "WAN_GP_START.png",
