@@ -1,4 +1,4 @@
-const CACHE = 'nova-v63-blender-camera-bridge-20260904';
+const CACHE = 'nova-v64-motion-diagnostics-v24-20260904';
 const API_CACHE = 'nova-api-economy-v2';
 const METERED_NETLIFY_HOST = /(^|\\.)netlify\\.app$/i.test(self.location.hostname);
 const YOUTUBE_TTL_MS = 24 * 60 * 60 * 1000;
@@ -39,6 +39,7 @@ const CORE = [
   './motion-studio/app.js',
   './motion-studio/director.js',
   './motion-studio/remote-gpu.js',
+  './motion-studio/diagnostics.js',
   './notebook-tools.js',
   './local-ai-worker.js',
   './nova-free-runtime.js',
