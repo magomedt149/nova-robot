@@ -1,7 +1,7 @@
 (() => {
   'use strict';
 
-  const VERSION = '27.5.1';
+  const VERSION = '27.5.2';
   const $ = (selector) => document.querySelector(selector);
   const $$ = (selector) => [...document.querySelectorAll(selector)];
 
@@ -2112,6 +2112,7 @@
   const AUTOCALLS_CONFIRM_TTL_MS = 2 * 60 * 1000;
   const AUTOCALLS_CALL_KEY_STORAGE = 'nova.autocalls.callKey.v1';
   const AUTOCALLS_ENDPOINT_STORAGE = 'nova.autocalls.endpoint.v1';
+  const AUTOCALLS_FROM_NUMBER_STORAGE = 'nova.autocalls.fromNumber.v1';
   const AUTOCALLS_DEFAULT_REMOTE_ENDPOINT = 'https://dashing-otter-990b47.netlify.app/.netlify/functions/autocalls-call';
   let pendingAutocall = null;
   let autocallsCallBusy = false;
@@ -2191,6 +2192,138 @@
     try { localStorage.removeItem(AUTOCALLS_CALL_KEY_STORAGE); } catch (_) {}
   }
 
+  function getSelectedAutocallsFromNumber() {
+    try {
+      const raw = localStorage.getItem(AUTOCALLS_FROM_NUMBER_STORAGE);
+      if (!raw) return null;
+      const saved = JSON.parse(raw);
+      const id = Number(saved?.id);
+      const phone = normalizeAutocallsPhone(saved?.phone_number);
+      if (!Number.isInteger(id) || id <= 0 || !phone) return null;
+      return {
+        id,
+        phone_number: phone,
+        nickname: String(saved?.nickname || '').trim() || null,
+        type: String(saved?.type || '').trim() || null
+      };
+    } catch (_) {
+      return null;
+    }
+  }
+
+  function saveSelectedAutocallsFromNumber(number) {
+    const id = Number(number?.id);
+    const phone = normalizeAutocallsPhone(number?.phone_number);
+    if (!Number.isInteger(id) || id <= 0 || !phone) return false;
+    const saved = {
+      id,
+      phone_number: phone,
+      nickname: String(number?.nickname || '').trim() || null,
+      type: String(number?.type || '').trim() || null
+    };
+    try {
+      localStorage.setItem(AUTOCALLS_FROM_NUMBER_STORAGE, JSON.stringify(saved));
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  function clearSelectedAutocallsFromNumber() {
+    try { localStorage.removeItem(AUTOCALLS_FROM_NUMBER_STORAGE); } catch (_) {}
+  }
+
+  async function autocallsProtectedRequest(action, payload = {}) {
+    const callKey = requestAutocallsCallKey();
+    if (!callKey) {
+      throw new Error(language === 'en'
+        ? 'The protected NOVA Call Key is not configured on this device.'
+        : 'На этом устройстве не настроен защищённый NOVA Call Key.');
+    }
+
+    const response = await fetch(autocallsCallEndpoint(), {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-NOVA-Call-Key': callKey
+      },
+      cache: 'no-store',
+      body: JSON.stringify({
+        action,
+        ...payload
+      })
+    });
+
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok || data?.ok !== true) {
+      if (response.status === 401) clearAutocallsCallKey();
+      throw new Error(String(data?.error || `HTTP ${response.status}`));
+    }
+    return data;
+  }
+
+  function isAutocallsListNumbersCommand(value) {
+    const clean = stripNovaCallPrefix(value).toLocaleLowerCase(language === 'ru' ? 'ru-RU' : 'en-US');
+    return /^(?:(?:покажи\s+)?(?:мои\s+)?номера?\s+(?:для\s+)?звонк|с\s+каких\s+номеров?\s+(?:можно|могу)\s+звонить|list\s+(?:my\s+)?(?:call|caller)\s+numbers?)/i.test(clean);
+  }
+
+  function isAutocallsSelectFromNumberCommand(value) {
+    const clean = stripNovaCallPrefix(value).toLocaleLowerCase(language === 'ru' ? 'ru-RU' : 'en-US');
+    return /^(?:звони\s+с|звонить\s+с|выбери\s+(?:(?:исходящий\s+)?номер|номер\s+с\s+которого\s+звонить)|используй\s+номер|номер\s+для\s+звонков|call\s+from)\b/i.test(clean);
+  }
+
+  function isAutocallsSelectedNumberStatusCommand(value) {
+    const clean = stripNovaCallPrefix(value).toLocaleLowerCase(language === 'ru' ? 'ru-RU' : 'en-US');
+    return /^(?:с\s+какого\s+номера\s+(?:ты\s+)?звонишь|какой\s+(?:исходящий\s+)?номер\s+выбран|selected\s+caller\s+number|what\s+number\s+do\s+you\s+call\s+from)/i.test(clean);
+  }
+
+  function isAutocallsClearFromNumberCommand(value) {
+    const clean = stripNovaCallPrefix(value).toLocaleLowerCase(language === 'ru' ? 'ru-RU' : 'en-US');
+    return /^(?:(?:сбрось|убери|очисти)\s+(?:исходящий\s+)?номер(?:\s+для\s+звонков)?|clear\s+(?:selected\s+)?caller\s+number)/i.test(clean);
+  }
+
+  async function listAutocallsFromNumbers() {
+    const data = await autocallsProtectedRequest('list_numbers');
+    const numbers = Array.isArray(data?.numbers) ? data.numbers : [];
+    if (!numbers.length) {
+      respond(language === 'en'
+        ? 'No usable caller numbers were found in your Autocalls account.'
+        : 'В аккаунте Autocalls не найдено доступных исходящих номеров.');
+      return;
+    }
+    const summary = numbers.slice(0, 8).map((number, index) => {
+      const nickname = String(number?.nickname || '').trim();
+      return `${index + 1}) ${number.phone_number}${nickname ? ` — ${nickname}` : ''}`;
+    }).join('; ');
+    respond(language === 'en'
+      ? `Available caller numbers: ${summary}. To save one, say “NOVA, call from +1…”.`
+      : `Доступные номера для исходящих звонков: ${summary}. Чтобы сохранить номер, скажи: «Нова, звони с +1…».`);
+  }
+
+  async function selectAutocallsFromNumber(text) {
+    const phone = normalizeAutocallsPhone(text);
+    if (!phone) {
+      respond(language === 'en'
+        ? 'Tell me which caller number to save, for example: “NOVA, call from +19165551234”.'
+        : 'Назови номер, с которого звонить. Например: «Нова, звони с +19165551234».');
+      return;
+    }
+
+    const data = await autocallsProtectedRequest('resolve_number', {
+      from_phone_number: phone
+    });
+    if (!data?.number || !saveSelectedAutocallsFromNumber(data.number)) {
+      throw new Error(language === 'en'
+        ? 'I could not save that caller number.'
+        : 'Не удалось сохранить выбранный исходящий номер.');
+    }
+
+    const nickname = String(data.number.nickname || '').trim();
+    respond(language === 'en'
+      ? `Saved caller number ${data.number.phone_number}${nickname ? ` (${nickname})` : ''}. Every real call will still require separate confirmation.`
+      : `Сохранила исходящий номер ${data.number.phone_number}${nickname ? ` («${nickname}»)` : ''}. Выбор сохранится на этом устройстве. Каждый реальный звонок всё равно потребует отдельного подтверждения.`);
+  }
+
   async function performConfirmedAutocall() {
     if (!pendingAutocall || autocallsCallBusy) return;
     const age = Date.now() - pendingAutocall.createdAt;
@@ -2204,44 +2337,25 @@
 
     const call = { ...pendingAutocall };
     pendingAutocall = null;
-    const callKey = requestAutocallsCallKey();
-    if (!callKey) {
-      respond(language === 'en'
-        ? 'The call was not started. The protected NOVA Call Key is not configured on this device.'
-        : 'Звонок не запущен. На этом устройстве не настроен защищённый NOVA Call Key.');
-      return;
-    }
 
     autocallsCallBusy = true;
     pauseRecognitionForOutput();
     setStatus(language === 'en' ? 'Starting Autocalls…' : 'Запускаю Autocalls…', 'speaking');
 
     try {
-      const response = await fetch(autocallsCallEndpoint(), {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-NOVA-Call-Key': callKey
-        },
-        cache: 'no-store',
-        body: JSON.stringify({
-          phone_number: call.phone,
-          confirmed: true,
-          confirmed_at: Date.now()
-        })
+      const data = await autocallsProtectedRequest('make_call', {
+        phone_number: call.phone,
+        from_phone_number_id: call.fromNumber?.id || null,
+        from_phone_number: call.fromNumber?.phone_number || null,
+        confirmed: true,
+        confirmed_at: Date.now()
       });
 
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok || data?.ok !== true) {
-        const detail = String(data?.error || `HTTP ${response.status}`);
-        if (response.status === 401) clearAutocallsCallKey();
-        throw new Error(detail);
-      }
-
       const assistantName = String(data?.assistant?.name || '').trim();
+      const fromPhone = String(data?.from_number?.phone_number || call.fromNumber?.phone_number || '').trim();
       respond(language === 'en'
-        ? `Autocalls started the call to ${call.phone}${assistantName ? ` with ${assistantName}` : ''}.`
-        : `Autocalls запустил звонок на ${call.phone}${assistantName ? ` через ассистента «${assistantName}»` : ''}.`);
+        ? `Autocalls started the call to ${call.phone}${fromPhone ? ` from ${fromPhone}` : ''}${assistantName ? ` with ${assistantName}` : ''}.`
+        : `Autocalls запустил звонок на ${call.phone}${fromPhone ? ` с номера ${fromPhone}` : ''}${assistantName ? ` через ассистента «${assistantName}»` : ''}.`);
     } catch (error) {
       const detail = String(error?.message || '').trim();
       respond(language === 'en'
@@ -2254,6 +2368,49 @@
 
   async function handleAutocallsCommand(text) {
     const lowerText = String(text || '').toLocaleLowerCase(language === 'ru' ? 'ru-RU' : 'en-US');
+
+    if (isAutocallsListNumbersCommand(text)) {
+      try {
+        await listAutocallsFromNumbers();
+      } catch (error) {
+        respond(language === 'en'
+          ? `I could not load your Autocalls caller numbers. ${error?.message || ''}`
+          : `Не удалось загрузить исходящие номера Autocalls. ${error?.message || ''}`);
+      }
+      return true;
+    }
+
+    if (isAutocallsSelectFromNumberCommand(text)) {
+      try {
+        await selectAutocallsFromNumber(text);
+      } catch (error) {
+        respond(language === 'en'
+          ? `I could not select that caller number. ${error?.message || ''}`
+          : `Не удалось выбрать этот исходящий номер. ${error?.message || ''}`);
+      }
+      return true;
+    }
+
+    if (isAutocallsSelectedNumberStatusCommand(text)) {
+      const selected = getSelectedAutocallsFromNumber();
+      respond(selected
+        ? (language === 'en'
+          ? `Saved caller number: ${selected.phone_number}${selected.nickname ? ` (${selected.nickname})` : ''}.`
+          : `Сейчас сохранён исходящий номер ${selected.phone_number}${selected.nickname ? ` («${selected.nickname}»)` : ''}.`)
+        : (language === 'en'
+          ? 'No caller number is saved. Autocalls will use the number currently assigned to the assistant.'
+          : 'Исходящий номер в NOVA не выбран. Autocalls будет использовать номер, который сейчас назначен ассистенту.'));
+      return true;
+    }
+
+    if (isAutocallsClearFromNumberCommand(text)) {
+      pendingAutocall = null;
+      clearSelectedAutocallsFromNumber();
+      respond(language === 'en'
+        ? 'The saved caller number was cleared. Autocalls will use the assistant’s current number.'
+        : 'Сохранённый исходящий номер сброшен. Autocalls будет использовать текущий номер ассистента.');
+      return true;
+    }
 
     if (/^(?:сбрось|удали|очисти)\s+(?:ключ|код)\s+звонк|reset\s+(?:call|calling)\s+key/.test(stripNovaCallPrefix(lowerText))) {
       pendingAutocall = null;
@@ -2298,14 +2455,16 @@
       return true;
     }
 
+    const fromNumber = getSelectedAutocallsFromNumber();
     pendingAutocall = {
       phone,
+      fromNumber,
       createdAt: Date.now()
     };
 
     respond(language === 'en'
-      ? `Ready to call ${phone} through Autocalls. This can use your Autocalls balance. The call has NOT started. Say “confirm call” to place it, or “cancel call”.`
-      : `Готов звонок через Autocalls на ${phone}. Он может расходовать баланс Autocalls. Звонок ЕЩЁ НЕ запущен. Скажи «подтверждаю звонок», чтобы позвонить, или «отмена».`);
+      ? `Ready to call ${phone}${fromNumber ? ` from ${fromNumber.phone_number}` : ''} through Autocalls. This can use your Autocalls balance. The call has NOT started. Say “confirm call” to place it, or “cancel call”.`
+      : `Готов звонок через Autocalls на ${phone}${fromNumber ? ` с номера ${fromNumber.phone_number}` : ''}. Он может расходовать баланс Autocalls. Звонок ЕЩЁ НЕ запущен. Скажи «подтверждаю звонок», чтобы позвонить, или «отмена».`);
     return true;
   }
 
@@ -2774,6 +2933,7 @@
     get lessonScore() { return lessonState.correct.size; },
     get lessonItem() { return currentEnglishLessonItem(); },
     get pendingAutocall() { return pendingAutocall ? { ...pendingAutocall } : null; },
+    get selectedAutocallsFromNumber() { return getSelectedAutocallsFromNumber(); },
     get autocallsCallBusy() { return autocallsCallBusy; },
     get lastBotMessage() {
       const messages = chat.querySelectorAll('.message.bot .bubble');
@@ -2787,6 +2947,9 @@
     handleUserText,
     handleAutocallsCommand,
     normalizeAutocallsPhone,
+    getSelectedAutocallsFromNumber,
+    saveSelectedAutocallsFromNumber,
+    clearSelectedAutocallsFromNumber,
     activateNovaWakeOrb,
     deactivateNovaWakeOrb,
     isNovaWakePhrase,
