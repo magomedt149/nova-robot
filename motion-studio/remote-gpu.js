@@ -235,6 +235,7 @@ async function beginRecovery(job,source,sourceName,characterRef=null){
     if(meta.sourceSize)parts.push(meta.sourceCached?'видео сохранено':'видео держится пока страница открыта');
     if(meta.referenceSize)parts.push(meta.referenceCached?'фото персонажа сохранено':'фото персонажа держится пока страница открыта');
     setRecoveryStatus(parts.length?'Auto Recovery: '+parts.join(' • ')+'.':'Auto Recovery: Scene Pack сохранён.','ok');
+    requestRecoveryPersistence().catch(()=>{});
   }catch(_){
     meta.sourceCached=false;meta.referenceCached=false;saveRecoveryMeta(meta);
     setRecoveryStatus('Auto Recovery: сохранены параметры job; локальный файл-кэш недоступен.','');
@@ -752,6 +753,44 @@ async function cancel(){
   }
   localStorage.removeItem(LS_JOB);lastJobId='';await releaseWakeLock();await clearRecovery();setProgress(0);setStatus('Задание остановлено.','ok');
 }
+async function restoreCachedInputs(){
+  const bundle=await getRecoveryBundle();
+  if(!bundle)return null;
+  currentSourceFile=bundle.source||null;
+  currentCharacterRef=bundle.reference||null;
+  const parts=[];
+  if(currentSourceFile)parts.push('видео восстановлено из iPhone-кэша');
+  else if(bundle.meta?.sourceSize)parts.push('видео не найдено в iPhone-кэше');
+  if(currentCharacterRef)parts.push('фото восстановлено из iPhone-кэша');
+  else if(bundle.meta?.referenceSize)parts.push('фото не найдено в iPhone-кэше');
+  if(parts.length)setRecoveryStatus('После перезапуска: '+parts.join(' • ')+'.','ok');
+  return bundle;
+}
+async function resumeRunningJobAfterRestart(){
+  const jobId=localStorage.getItem(LS_JOB);
+  if(!jobId||!endpoint()||!token())return false;
+  try{
+    const health=await connect({resume:false});
+    if(!health)return false;
+    const data=await jsonFetch(endpoint()+'/jobs/'+encodeURIComponent(jobId),{headers:authHeaders()});
+    lastJobId=jobId;
+    if(data.status==='running'||data.status==='completed'){
+      setRecoveryStatus('После перезапуска найден активный job '+jobId+'. NOVA продолжает только наблюдение; новый GPU render не запускается.','ok');
+      poll(jobId);
+      return true;
+    }
+    if(['uploading','uploaded','queued'].includes(data.status)){
+      setRecoveryStatus('После перезапуска job '+jobId+' восстановлен в состоянии «'+data.status+'». FREE LOCK: продолжение GPU требует кнопки «Восстановить сейчас».','busy');
+      return true;
+    }
+    if(data.status==='error'||data.status==='cancelled'){
+      setRecoveryStatus('Старый job найден, но он '+data.status+'. Локальные фото/видео сохранены для нового ручного запуска.','error');
+      return true;
+    }
+  }catch(_){}
+  return false;
+}
+
 async function recoverNow(){
   if(!confirmRemoteCompute('Восстановление Remote GPU job'))return;
   if(!endpoint()||!token()){
@@ -776,8 +815,15 @@ async function restore(){
   if(pending&&$('prompt')){$('prompt').value=pending;localStorage.removeItem(LS_PENDING);$('applyPrompt')?.click()}
   const saved=localStorage.getItem(LS_JOB);
   const meta=recoveryMeta();
-  if(saved||meta){
-    setRecoveryStatus('FREE LOCK: найден старый Remote GPU job. Он НЕ продолжен автоматически. Нажми «Восстановить сейчас», если хочешь продолжить вручную.','busy');
+  const bundle=await restoreCachedInputs();
+  if(saved||meta||bundle){
+    const sourceOk=Boolean(bundle?.source);
+    const refOk=Boolean(bundle?.reference);
+    const cached=[];
+    if(sourceOk)cached.push('видео ✓');
+    if(refOk)cached.push('фото ✓');
+    setRecoveryStatus('Recovery загружен после перезапуска'+(cached.length?' • '+cached.join(' • '):'')+'. FREE LOCK не запускает новый GPU job автоматически.','ok');
+    await resumeRunningJobAfterRestart();
   }
   if(videoParam)setEasyState('FREE LOCK','Команда перенесена в Motion Studio. Нажми «Сделать видео»: локальный рендер бесплатный; Remote GPU потребует отдельного подтверждения.','ok');
   refreshEasyState();
