@@ -36,7 +36,12 @@
   "autocallsFreeTestMode": true,
   "autocallsMakeCallBlocked": true,
   "novaFreeInternetCalls": true,
-  "novaFreeInternetCallsProvider": "Jitsi Meet public instance",
+  "novaFreeInternetCallsProvider": "self-hosted call.tumsoev.com preferred; temporary Jitsi public fallback until first successful self-hosted connection",
   "novaFreeInternetCallsMode": "audio-only link room",
-  "novaFreeInternetCallsPaidApi": false
+  "novaFreeInternetCallsPaidApi": false,
+  "novaFreeInternetCallsSelfHostedUrl": "https://call.tumsoev.com/",
+  "novaFreeInternetCallsTurnUrl": "turn.call.tumsoev.com",
+  "novaFreeInternetCallsAutomaticCutover": true,
+  "novaFreeInternetCallsPublicFallbackDisablesAfterSelfHostedSuccess": true,
+  "novaFreeInternetCallsModuleVersion": "1.1.1"
 }
