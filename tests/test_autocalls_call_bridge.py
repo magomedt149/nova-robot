@@ -5,16 +5,25 @@ APP = (ROOT / "app.js").read_text(encoding="utf-8")
 BACKEND = (ROOT / "netlify/functions/autocalls-call.js").read_text(encoding="utf-8")
 
 
-def test_real_call_route_exists():
-    assert "/user/make_call" in BACKEND
-    assert "assistant_id" in BACKEND
-    assert "phone_number" in BACKEND
+def test_free_call_lock_is_hard_enabled():
+    assert "const FREE_CALL_LOCK = true;" in BACKEND
+    assert "NOVA FREE CALL LOCK" in APP
+    assert "NOVA FREE CALL LOCK" in BACKEND
 
 
-def test_confirmation_is_mandatory():
-    assert "body.confirmed !== true" in BACKEND
-    assert "confirmed_at" in BACKEND
-    assert "подтверждаю звонок" in APP
+def test_real_phone_call_request_is_blocked():
+    assert "action === 'make_call'" in BACKEND
+    assert "statusCode" not in ""
+    assert "No /user/make_call request was sent." in BACKEND
+    assert "autocallsRequest('/user/make_call'" not in BACKEND
+    assert 'autocallsRequest("/user/make_call"' not in BACKEND
+
+
+def test_free_development_test_exists():
+    assert "action === 'free_test'" in BACKEND
+    assert '"type": "test"' not in BACKEND  # JS uses unquoted property syntax
+    assert "type: 'test'" in BACKEND
+    assert "free Autocalls test" in APP or "бесплатный тест Autocalls" in APP
 
 
 def test_secret_stays_server_side():
@@ -23,25 +32,14 @@ def test_secret_stays_server_side():
     assert "X-NOVA-Call-Key" in BACKEND
 
 
-def test_saved_outbound_number_selection():
+def test_saved_outbound_number_selection_is_non_spending():
     assert "nova.autocalls.fromNumber.v1" in APP
     assert "list_numbers" in APP
     assert "resolve_number" in APP
-    assert "GET /user/phone-numbers/all" not in APP
     assert "/user/phone-numbers/all" in BACKEND
-    assert "phone_number_id: sender.id" in BACKEND
-    assert "method: 'PUT'" in BACKEND
+    assert "/user/assistant/" not in BACKEND
 
 
-def test_caller_number_is_applied_only_on_confirmed_call_path():
-    confirm_pos = BACKEND.index("body.confirmed !== true")
-    apply_pos = BACKEND.index("applyCallerNumber")
-    make_pos = BACKEND.rindex("/user/make_call")
-    assert confirm_pos < make_pos
-    assert "from_phone_number_id" in BACKEND
-    assert "from_phone_number" in BACKEND
-
-
-def test_call_bridge_does_not_add_sms_or_number_purchase():
+def test_bridge_does_not_add_sms_or_number_purchase():
     assert "/user/sms" not in BACKEND
     assert "/user/phone-numbers/purchase" not in BACKEND
