@@ -1,6 +1,7 @@
 const crypto = require('crypto');
 
 const AUTOCALLS_BASE_URL = 'https://app.autocalls.ai/api';
+const FREE_CALL_LOCK = true;
 const DEFAULT_ALLOWED_ORIGINS = [
   'https://magomedt149.github.io',
   'https://dashing-otter-990b47.netlify.app'
@@ -16,11 +17,7 @@ function json(statusCode, payload, origin = '') {
     headers['Access-Control-Allow-Origin'] = origin;
     headers['Vary'] = 'Origin';
   }
-  return {
-    statusCode,
-    headers,
-    body: JSON.stringify(payload)
-  };
+  return { statusCode, headers, body: JSON.stringify(payload) };
 }
 
 function allowedOrigins() {
@@ -34,13 +31,10 @@ function allowedOrigins() {
 function isAllowedOrigin(origin) {
   if (!origin) return false;
   if (allowedOrigins().has(origin)) return true;
-  if (
+  return (
     process.env.NOVA_AUTOCALLS_ALLOW_LOCALHOST === '1' &&
     /^https?:\/\/(?:localhost|127\.0\.0\.1)(?::\d+)?$/i.test(origin)
-  ) {
-    return true;
-  }
-  return false;
+  );
 }
 
 function safeEqual(left, right) {
@@ -82,15 +76,11 @@ async function autocallsRequest(path, options = {}) {
 
     const raw = await response.text();
     let data = {};
-    try {
-      data = raw ? JSON.parse(raw) : {};
-    } catch (_) {
-      data = raw ? { message: raw.slice(0, 500) } : {};
-    }
+    try { data = raw ? JSON.parse(raw) : {}; }
+    catch (_) { data = raw ? { message: raw.slice(0, 500) } : {}; }
 
     if (!response.ok) {
-      const message = String(data?.error || data?.message || `Autocalls HTTP ${response.status}`);
-      const error = new Error(message);
+      const error = new Error(String(data?.error || data?.message || `Autocalls HTTP ${response.status}`));
       error.status = response.status;
       throw error;
     }
@@ -115,6 +105,7 @@ async function resolveAssistant() {
     const existing = assistants.find((assistant) => Number(assistant?.id) === configured);
     return {
       id: configured,
+      uuid: String(existing?.uuid || '').trim() || null,
       name: existing?.name || String(process.env.AUTOCALLS_ASSISTANT_NAME || '').trim() || null,
       phone_number_id: Number(existing?.phone_number_id) || null,
       source: existing ? 'env+discovery' : 'env'
@@ -140,6 +131,7 @@ async function resolveAssistant() {
 
   return {
     id: Number(chosen.id),
+    uuid: String(chosen.uuid || '').trim() || null,
     name: chosen.name || null,
     phone_number_id: Number(chosen.phone_number_id) || null,
     source: 'discovery'
@@ -191,16 +183,41 @@ async function resolveOwnedPhoneNumber({ id, phone_number }) {
   return match;
 }
 
-async function applyCallerNumber(assistant, sender) {
-  await autocallsRequest(`/user/assistant/${assistant.id}`, {
-    method: 'PUT',
+async function freeTestConversation(message) {
+  const assistant = await resolveAssistant();
+  if (!assistant.uuid) {
+    const error = new Error('The selected Autocalls assistant has no UUID for a free test conversation.');
+    error.status = 409;
+    throw error;
+  }
+
+  const created = await autocallsRequest('/conversations', {
+    method: 'POST',
     body: {
-      phone_number_id: sender.id
+      assistant_id: assistant.uuid,
+      type: 'test'
     }
   });
+
+  const conversationUuid = String(created?.conversation_id || created?.uuid || '').trim();
+  let reply = null;
+  const cleanMessage = String(message || '').trim();
+
+  if (conversationUuid && cleanMessage) {
+    reply = await autocallsRequest(`/conversations/${encodeURIComponent(conversationUuid)}/messages`, {
+      method: 'POST',
+      body: { message: cleanMessage.slice(0, 1000) }
+    });
+  }
+
   return {
-    ...assistant,
-    phone_number_id: sender.id
+    assistant: {
+      id: assistant.id,
+      uuid: assistant.uuid,
+      name: assistant.name
+    },
+    conversation_uuid: conversationUuid || null,
+    reply
   };
 }
 
@@ -226,17 +243,12 @@ exports.handler = async (event) => {
     return json(405, { ok: false, error: 'Method not allowed.' }, isAllowedOrigin(origin) ? origin : '');
   }
 
-  if (!isAllowedOrigin(origin)) {
-    return json(403, { ok: false, error: 'Origin is not allowed.' });
-  }
+  if (!isAllowedOrigin(origin)) return json(403, { ok: false, error: 'Origin is not allowed.' });
 
   const apiKey = String(process.env.AUTOCALLS_API_KEY || '').trim();
   const ownerKey = String(process.env.NOVA_AUTOCALLS_CALL_KEY || '').trim();
   if (!apiKey || !ownerKey) {
-    return json(503, {
-      ok: false,
-      error: 'Autocalls calling backend is not configured.'
-    }, origin);
+    return json(503, { ok: false, error: 'Autocalls backend is not configured.' }, origin);
   }
 
   const suppliedOwnerKey = String(
@@ -244,24 +256,20 @@ exports.handler = async (event) => {
     event.headers?.['X-NOVA-Call-Key'] ||
     ''
   );
-
   if (!safeEqual(suppliedOwnerKey, ownerKey)) {
     return json(401, { ok: false, error: 'NOVA call authorization failed.' }, origin);
   }
 
   let body;
-  try {
-    body = parseJsonBody(event);
-  } catch (error) {
-    return json(400, { ok: false, error: error?.message || 'Invalid JSON.' }, origin);
-  }
+  try { body = parseJsonBody(event); }
+  catch (error) { return json(400, { ok: false, error: error?.message || 'Invalid JSON.' }, origin); }
 
-  const action = String(body.action || 'make_call').trim().toLowerCase();
+  const action = String(body.action || '').trim().toLowerCase();
 
   try {
     if (action === 'list_numbers') {
       const numbers = await listOwnedPhoneNumbers();
-      return json(200, { ok: true, numbers }, origin);
+      return json(200, { ok: true, free_call_lock: FREE_CALL_LOCK, numbers }, origin);
     }
 
     if (action === 'resolve_number') {
@@ -269,67 +277,28 @@ exports.handler = async (event) => {
         id: body.from_phone_number_id,
         phone_number: body.from_phone_number
       });
-      return json(200, { ok: true, number }, origin);
+      return json(200, { ok: true, free_call_lock: FREE_CALL_LOCK, number }, origin);
     }
 
-    if (action !== 'make_call') {
-      return json(400, { ok: false, error: 'Unknown Autocalls action.' }, origin);
-    }
-
-    if (body.confirmed !== true) {
-      return json(412, {
-        ok: false,
-        error: 'Explicit call confirmation is required.'
+    if (action === 'free_test') {
+      const result = await freeTestConversation(body.message);
+      return json(200, {
+        ok: true,
+        free_call_lock: FREE_CALL_LOCK,
+        mode: 'FREE_TEST_ONLY',
+        ...result
       }, origin);
     }
 
-    const confirmedAt = Number(body.confirmed_at);
-    const confirmationAge = Date.now() - confirmedAt;
-    if (!Number.isFinite(confirmedAt) || confirmationAge < -10000 || confirmationAge > 90000) {
-      return json(412, {
+    if (action === 'make_call') {
+      return json(402, {
         ok: false,
-        error: 'Call confirmation expired. Confirm the call again.'
+        free_call_lock: FREE_CALL_LOCK,
+        error: 'NOVA FREE CALL LOCK: real phone calls through Autocalls are billable and are blocked. No /user/make_call request was sent.'
       }, origin);
     }
 
-    const phoneNumber = normalizePhoneNumber(body.phone_number);
-    if (!phoneNumber) {
-      return json(422, {
-        ok: false,
-        error: 'Phone number must be in E.164 format, for example +19165551234.'
-      }, origin);
-    }
-
-    let assistant = await resolveAssistant();
-    let sender = null;
-
-    if (body.from_phone_number_id || body.from_phone_number) {
-      sender = await resolveOwnedPhoneNumber({
-        id: body.from_phone_number_id,
-        phone_number: body.from_phone_number
-      });
-      assistant = await applyCallerNumber(assistant, sender);
-    }
-
-    const result = await autocallsRequest('/user/make_call', {
-      method: 'POST',
-      body: {
-        phone_number: phoneNumber,
-        assistant_id: assistant.id
-      }
-    });
-
-    return json(200, {
-      ok: true,
-      phone_number: phoneNumber,
-      from_number: sender,
-      assistant: {
-        id: assistant.id,
-        name: assistant.name,
-        phone_number_id: assistant.phone_number_id
-      },
-      message: result?.message || 'Call initiated successfully'
-    }, origin);
+    return json(400, { ok: false, error: 'Unknown Autocalls action.' }, origin);
   } catch (error) {
     const upstreamStatus = Number(error?.status);
     const statusCode =
@@ -339,6 +308,7 @@ exports.handler = async (event) => {
 
     return json(statusCode, {
       ok: false,
+      free_call_lock: FREE_CALL_LOCK,
       error: error?.name === 'AbortError'
         ? 'Autocalls request timed out.'
         : String(error?.message || 'Autocalls request failed.')
