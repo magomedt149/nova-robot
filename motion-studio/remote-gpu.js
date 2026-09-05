@@ -397,6 +397,9 @@ async function preflight(engine,hasSource){
   const health=lastHealth||await connect({resume:false});
   if(!health)throw new Error('Colab worker не подключён');
   if(engine==='wangp'&&!health.wangp_api_ready){
+    if(humanMotionIntent().enabled){
+      throw new Error('WanGP motion-control не готов. Blender не подменяет генерацию человека: перезапусти актуальный GPU Worker.')
+    }
     if(hasSource&&health.blender){setStatus('WanGP ещё не готов — временно переключаю на Blender.','busy');return 'blender'}
     throw new Error('WanGP API не готов. Перезапусти Colab notebook с Run all.')
   }
@@ -618,6 +621,7 @@ async function resumeOrRecover(){
 }
 function isHeavyAiRequest(){
   const q=($('prompt')?.value||'').toLowerCase();
+  if(humanMotionIntent().enabled)return true;
   return /text[- ]?to[- ]?video|image[- ]?to[- ]?video|video[- ]?to[- ]?video|wan\b|wangp|seedance|kling|higgsfield|генер.*(?:человек|персонаж|сцену с нуля)|созд.*(?:человек|персонаж|сцену с нуля)|замен.*(?:лиц|персонаж)|фотореал|photoreal|реалистичн.*(?:человек|персонаж)/.test(q);
 }
 async function runLocalEasy(){
