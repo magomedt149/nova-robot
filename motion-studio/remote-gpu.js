@@ -235,6 +235,7 @@ async function beginRecovery(job,source,sourceName,characterRef=null){
     if(meta.sourceSize)parts.push(meta.sourceCached?'видео сохранено':'видео держится пока страница открыта');
     if(meta.referenceSize)parts.push(meta.referenceCached?'фото персонажа сохранено':'фото персонажа держится пока страница открыта');
     setRecoveryStatus(parts.length?'Auto Recovery: '+parts.join(' • ')+'.':'Auto Recovery: Scene Pack сохранён.','ok');
+    requestRecoveryPersistence().catch(()=>{});
   }catch(_){
     meta.sourceCached=false;meta.referenceCached=false;saveRecoveryMeta(meta);
     setRecoveryStatus('Auto Recovery: сохранены параметры job; локальный файл-кэш недоступен.','');
