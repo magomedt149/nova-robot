@@ -100,20 +100,26 @@ async function autocallsRequest(path, options = {}) {
   }
 }
 
-async function resolveAssistant() {
-  const configured = Number(process.env.AUTOCALLS_ASSISTANT_ID);
-  if (Number.isInteger(configured) && configured > 0) {
-    return {
-      id: configured,
-      name: String(process.env.AUTOCALLS_ASSISTANT_NAME || '').trim() || null,
-      source: 'env'
-    };
-  }
-
+async function listAssistants() {
   const payload = await autocallsRequest('/user/assistants/get?per_page=100&page=1');
-  const assistants = Array.isArray(payload?.data)
+  return Array.isArray(payload?.data)
     ? payload.data
     : (Array.isArray(payload?.assistants) ? payload.assistants : []);
+}
+
+async function resolveAssistant() {
+  const assistants = await listAssistants();
+  const configured = Number(process.env.AUTOCALLS_ASSISTANT_ID);
+
+  if (Number.isInteger(configured) && configured > 0) {
+    const existing = assistants.find((assistant) => Number(assistant?.id) === configured);
+    return {
+      id: configured,
+      name: existing?.name || String(process.env.AUTOCALLS_ASSISTANT_NAME || '').trim() || null,
+      phone_number_id: Number(existing?.phone_number_id) || null,
+      source: existing ? 'env+discovery' : 'env'
+    };
+  }
 
   const outbound = assistants.filter((assistant) =>
     assistant &&
@@ -135,7 +141,66 @@ async function resolveAssistant() {
   return {
     id: Number(chosen.id),
     name: chosen.name || null,
+    phone_number_id: Number(chosen.phone_number_id) || null,
     source: 'discovery'
+  };
+}
+
+async function listOwnedPhoneNumbers() {
+  const payload = await autocallsRequest('/user/phone-numbers/all');
+  const rows = Array.isArray(payload?.data) ? payload.data : [];
+  return rows
+    .filter((item) => item && Number.isInteger(Number(item.id)) && Number(item.id) > 0)
+    .map((item) => ({
+      id: Number(item.id),
+      phone_number: normalizePhoneNumber(item.phone_number),
+      nickname: item.nickname || null,
+      type: item.type || null,
+      type_label: item.type_label || null,
+      country_code: item.country_code || null,
+      has_active_subscription: item.has_active_subscription === true
+    }))
+    .filter((item) =>
+      item.phone_number &&
+      (item.type === 'normal' || item.type === 'caller_id' || !item.type)
+    );
+}
+
+async function resolveOwnedPhoneNumber({ id, phone_number }) {
+  const phoneNumbers = await listOwnedPhoneNumbers();
+  const wantedId = Number(id);
+  const wantedPhone = normalizePhoneNumber(phone_number);
+
+  const match = phoneNumbers.find((item) =>
+    (Number.isInteger(wantedId) && wantedId > 0 && item.id === wantedId) ||
+    (wantedPhone && item.phone_number === wantedPhone)
+  );
+
+  if (!match) {
+    const error = new Error('Selected caller number was not found in this Autocalls account.');
+    error.status = 404;
+    throw error;
+  }
+
+  if (wantedPhone && match.phone_number !== wantedPhone) {
+    const error = new Error('Selected caller number does not match its Autocalls ID.');
+    error.status = 409;
+    throw error;
+  }
+
+  return match;
+}
+
+async function applyCallerNumber(assistant, sender) {
+  await autocallsRequest(`/user/assistant/${assistant.id}`, {
+    method: 'PUT',
+    body: {
+      phone_number_id: sender.id
+    }
+  });
+  return {
+    ...assistant,
+    phone_number_id: sender.id
   };
 }
 
@@ -191,32 +256,61 @@ exports.handler = async (event) => {
     return json(400, { ok: false, error: error?.message || 'Invalid JSON.' }, origin);
   }
 
-  if (body.confirmed !== true) {
-    return json(412, {
-      ok: false,
-      error: 'Explicit call confirmation is required.'
-    }, origin);
-  }
-
-  const confirmedAt = Number(body.confirmed_at);
-  const confirmationAge = Date.now() - confirmedAt;
-  if (!Number.isFinite(confirmedAt) || confirmationAge < -10000 || confirmationAge > 90000) {
-    return json(412, {
-      ok: false,
-      error: 'Call confirmation expired. Confirm the call again.'
-    }, origin);
-  }
-
-  const phoneNumber = normalizePhoneNumber(body.phone_number);
-  if (!phoneNumber) {
-    return json(422, {
-      ok: false,
-      error: 'Phone number must be in E.164 format, for example +19165551234.'
-    }, origin);
-  }
+  const action = String(body.action || 'make_call').trim().toLowerCase();
 
   try {
-    const assistant = await resolveAssistant();
+    if (action === 'list_numbers') {
+      const numbers = await listOwnedPhoneNumbers();
+      return json(200, { ok: true, numbers }, origin);
+    }
+
+    if (action === 'resolve_number') {
+      const number = await resolveOwnedPhoneNumber({
+        id: body.from_phone_number_id,
+        phone_number: body.from_phone_number
+      });
+      return json(200, { ok: true, number }, origin);
+    }
+
+    if (action !== 'make_call') {
+      return json(400, { ok: false, error: 'Unknown Autocalls action.' }, origin);
+    }
+
+    if (body.confirmed !== true) {
+      return json(412, {
+        ok: false,
+        error: 'Explicit call confirmation is required.'
+      }, origin);
+    }
+
+    const confirmedAt = Number(body.confirmed_at);
+    const confirmationAge = Date.now() - confirmedAt;
+    if (!Number.isFinite(confirmedAt) || confirmationAge < -10000 || confirmationAge > 90000) {
+      return json(412, {
+        ok: false,
+        error: 'Call confirmation expired. Confirm the call again.'
+      }, origin);
+    }
+
+    const phoneNumber = normalizePhoneNumber(body.phone_number);
+    if (!phoneNumber) {
+      return json(422, {
+        ok: false,
+        error: 'Phone number must be in E.164 format, for example +19165551234.'
+      }, origin);
+    }
+
+    let assistant = await resolveAssistant();
+    let sender = null;
+
+    if (body.from_phone_number_id || body.from_phone_number) {
+      sender = await resolveOwnedPhoneNumber({
+        id: body.from_phone_number_id,
+        phone_number: body.from_phone_number
+      });
+      assistant = await applyCallerNumber(assistant, sender);
+    }
+
     const result = await autocallsRequest('/user/make_call', {
       method: 'POST',
       body: {
@@ -228,9 +322,11 @@ exports.handler = async (event) => {
     return json(200, {
       ok: true,
       phone_number: phoneNumber,
+      from_number: sender,
       assistant: {
         id: assistant.id,
-        name: assistant.name
+        name: assistant.name,
+        phone_number_id: assistant.phone_number_id
       },
       message: result?.message || 'Call initiated successfully'
     }, origin);
@@ -245,7 +341,7 @@ exports.handler = async (event) => {
       ok: false,
       error: error?.name === 'AbortError'
         ? 'Autocalls request timed out.'
-        : String(error?.message || 'Autocalls call failed.')
+        : String(error?.message || 'Autocalls request failed.')
     }, origin);
   }
 };
