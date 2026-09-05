@@ -44,7 +44,7 @@ self.addEventListener('activate', event => {
           try { return new URL(client.url).pathname.startsWith('/motion-studio/'); }
           catch (_) { return false; }
         })
-        .map(client => client.navigate(client.url).catch(() => null))
+        .map(client => typeof client.navigate === 'function' ? client.navigate(client.url).catch(() => null) : null)
     );
   })());
 });
