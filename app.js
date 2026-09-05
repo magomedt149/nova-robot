@@ -1,7 +1,7 @@
 (() => {
   'use strict';
 
-  const VERSION = '27.5.2';
+  const VERSION = '27.5.3';
   const $ = (selector) => document.querySelector(selector);
   const $$ = (selector) => [...document.querySelectorAll(selector)];
 
@@ -226,7 +226,7 @@
       'howAreYou': 'У меня всё отлично: батарея заряжена, глаза светятся, а кошка снова уснула.',
       'who': 'Меня зовут NOVA. Я умный лунный робот. Меня создал мой хозяин Тумсоев, чтобы я общалась с людьми, отвечала на вопросы, шутила и пела.',
       'creator': 'Меня создал мой хозяин Тумсоев. Он придумал NOVA и продолжает делать меня умнее.',
-      'help': 'Я бесплатный мини‑агент. Могу хранить заметки и задачи, ставить таймеры, считать, узнавать погоду, искать в Википедии, открывать карты и YouTube. По отдельному подтверждению могу запускать реальный звонок через Autocalls: скажи «Нова, позвони +1…». Ещё я учу английскому: 10 слов и фраз в день, транскрипция, произношение и проверка голосом. Скажи: «Учим английский».',
+      'help': 'Я бесплатный мини‑агент. Могу хранить заметки и задачи, ставить таймеры, считать, узнавать погоду, искать в Википедии, открывать карты и YouTube. NOVA FREE CALL LOCK не позволяет платным телефонным звонкам Autocalls списывать деньги; доступен бесплатный test-режим Autocalls. Ещё я учу английскому: 10 слов и фраз в день, транскрипция, произношение и проверка голосом. Скажи: «Учим английский».',
       'name.saved': 'Очень приятно, {name}! Я запомнила твоё имя.',
       'name.known': 'Конечно, тебя зовут {name}.',
       'name.unknown': 'Я пока не знаю твоё имя. Скажи: «Меня зовут Магомед».',
@@ -347,7 +347,7 @@
       'howAreYou': 'I’m doing great: my battery is full, my eyes are glowing, and the cat is asleep again.',
       'who': 'My name is NOVA. I’m a smart Moon robot. My owner Tumsoev created me to chat with people, answer questions, tell jokes, and sing.',
       'creator': 'My owner Tumsoev created me. He invented NOVA and keeps making me smarter.',
-      'help': 'I am a free mini-agent. I can store notes and tasks, set timers, calculate, check weather, search Wikipedia, and open maps or YouTube. With separate confirmation I can start a real phone call through Autocalls: say “NOVA, call +1…”. I also teach 10 English words and phrases a day with pronunciation and a voice quiz. Say “Learn English”.',
+      'help': 'I am a free mini-agent. I can store notes and tasks, set timers, calculate, check weather, search Wikipedia, and open maps or YouTube. NOVA FREE CALL LOCK blocks billable Autocalls phone calls; a free Autocalls development test mode is available. I also teach 10 English words and phrases a day with pronunciation and a voice quiz. Say “Learn English”.',
       'name.saved': 'Nice to meet you, {name}! I’ll remember your name.',
       'name.known': 'Of course, your name is {name}.',
       'name.unknown': 'I don’t know your name yet. Say: “My name is Alex.”',
@@ -2129,6 +2129,11 @@
     return /^(?:позвони|позвонить|набери(?:\s+номер)?|call)\b/i.test(clean);
   }
 
+  function isAutocallsFreeTestCommand(value) {
+    const clean = stripNovaCallPrefix(value).toLocaleLowerCase(language === 'ru' ? 'ru-RU' : 'en-US');
+    return /^(?:бесплатн(?:ый|ая)\s+(?:тест|проверка)\s+autocalls|тест\s+autocalls|free\s+autocalls\s+test)\b/i.test(clean);
+  }
+
   function isAutocallsConfirmCommand(value) {
     const clean = stripNovaCallPrefix(value).toLocaleLowerCase(language === 'ru' ? 'ru-RU' : 'en-US');
     return /^(?:подтверждаю\s+звонок|подтвердить\s+звонок|да[,\s]+звони|да\s+звони|confirm\s+(?:the\s+)?call|yes[,\s]+call)\s*[.!]?$/i.test(clean);
@@ -2300,6 +2305,24 @@
       : `Доступные номера для исходящих звонков: ${summary}. Чтобы сохранить номер, скажи: «Нова, звони с +1…».`);
   }
 
+  async function runFreeAutocallsTest() {
+    try {
+      const data = await autocallsProtectedRequest('free_test', {
+        message: language === 'en'
+          ? 'Hello. This is a free NOVA development test. Reply briefly.'
+          : 'Привет. Это бесплатный тест NOVA для разработки. Ответь коротко.'
+      });
+      const reply = String(data?.reply?.message || '').trim();
+      respond(language === 'en'
+        ? `Free Autocalls test completed. This was NOT a phone call and no phone number was dialed.${reply ? ` Reply: ${reply}` : ''}`
+        : `Бесплатный тест Autocalls выполнен. Это НЕ телефонный звонок, номер телефона не набирался.${reply ? ` Ответ: ${reply}` : ''}`);
+    } catch (error) {
+      respond(language === 'en'
+        ? `The free Autocalls test did not run. ${error?.message || ''}`
+        : `Бесплатный тест Autocalls не запустился. ${error?.message || ''}`);
+    }
+  }
+
   async function selectAutocallsFromNumber(text) {
     const phone = normalizeAutocallsPhone(text);
     if (!phone) {
@@ -2369,6 +2392,11 @@
   async function handleAutocallsCommand(text) {
     const lowerText = String(text || '').toLocaleLowerCase(language === 'ru' ? 'ru-RU' : 'en-US');
 
+    if (isAutocallsFreeTestCommand(text)) {
+      await runFreeAutocallsTest();
+      return true;
+    }
+
     if (isAutocallsListNumbersCommand(text)) {
       try {
         await listAutocallsFromNumbers();
@@ -2428,43 +2456,28 @@
     }
 
     if (isAutocallsConfirmCommand(text)) {
-      if (!pendingAutocall) {
-        respond(language === 'en'
-          ? 'There is no call waiting for confirmation.'
-          : 'Сейчас нет звонка, ожидающего подтверждения.');
-        return true;
-      }
-      await performConfirmedAutocall();
+      pendingAutocall = null;
+      respond(language === 'en'
+        ? 'NOVA FREE CALL LOCK is active. Real Autocalls phone calls are blocked because they can be billable. No charge was created.'
+        : 'NOVA FREE CALL LOCK включён. Реальные звонки Autocalls заблокированы, потому что они могут быть платными. Списания не произошло.');
       return true;
     }
 
     if (!isAutocallsStartCommand(text)) return false;
 
-    if (autocallsCallBusy) {
-      respond(language === 'en'
-        ? 'A call request is already being processed.'
-        : 'Предыдущий запрос звонка ещё выполняется.');
-      return true;
-    }
-
     const phone = normalizeAutocallsPhone(text);
+    pendingAutocall = null;
+
     if (!phone) {
       respond(language === 'en'
-        ? 'Tell me the phone number. Use +country code, for example: “NOVA, call +19165551234”.'
-        : 'Назови номер телефона. Например: «Нова, позвони +19165551234».');
+        ? 'Real Autocalls phone calls are not free, so NOVA FREE CALL LOCK blocks them. No charge will occur. For a free development test say “free Autocalls test”.'
+        : 'Реальные телефонные звонки Autocalls не бесплатны, поэтому NOVA FREE CALL LOCK их блокирует. Списаний не будет. Для бесплатной проверки скажи: «Нова, бесплатный тест Autocalls».');
       return true;
     }
 
-    const fromNumber = getSelectedAutocallsFromNumber();
-    pendingAutocall = {
-      phone,
-      fromNumber,
-      createdAt: Date.now()
-    };
-
     respond(language === 'en'
-      ? `Ready to call ${phone}${fromNumber ? ` from ${fromNumber.phone_number}` : ''} through Autocalls. This can use your Autocalls balance. The call has NOT started. Say “confirm call” to place it, or “cancel call”.`
-      : `Готов звонок через Autocalls на ${phone}${fromNumber ? ` с номера ${fromNumber.phone_number}` : ''}. Он может расходовать баланс Autocalls. Звонок ЕЩЁ НЕ запущен. Скажи «подтверждаю звонок», чтобы позвонить, или «отмена».`);
+      ? `NOVA FREE CALL LOCK blocked the real phone call to ${phone}. Autocalls charges real phone usage, so no /user/make_call request was sent and no charge was created. For a free development test say “free Autocalls test”.`
+      : `NOVA FREE CALL LOCK заблокировал реальный телефонный звонок на ${phone}. Autocalls тарифицирует реальные телефонные звонки, поэтому /user/make_call не отправлялся и списания не будет. Для бесплатной проверки скажи: «Нова, бесплатный тест Autocalls».`);
     return true;
   }
 
