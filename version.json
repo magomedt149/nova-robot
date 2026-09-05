@@ -1,7 +1,7 @@
 {
   "name": "NOVA",
-  "version": "27.5.1",
-  "pwa": "27.5.1",
+  "version": "27.5.2",
+  "pwa": "27.5.2",
   "mode": "free-only",
   "paidApis": false,
   "externalComputeRequiresConfirmation": true,
@@ -27,5 +27,8 @@
   "autocallsCallCommand": true,
   "autocallsCallRequiresConfirmation": true,
   "autocallsCallBackend": "protected-server-function",
-  "autocallsPaidActionsDefault": false
+  "autocallsPaidActionsDefault": false,
+  "autocallsCallerNumberSelection": true,
+  "autocallsCallerNumberSavedLocally": true,
+  "autocallsCallerNumberAppliedAfterConfirmation": true
 }
