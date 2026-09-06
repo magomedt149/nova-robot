@@ -51,8 +51,8 @@ SELF_TEST_LOCK = threading.Lock()
 WANGP_JOBS: dict[str, Any] = {}
 DOWNLOAD_TICKETS: dict[str, dict[str, Any]] = {}
 DOWNLOAD_TICKET_TTL = int(os.environ.get("NOVA_REMOTE_DOWNLOAD_TTL", "600"))
-WORKER_VERSION = "1.8.0"
-PROTOCOL_VERSION = 5
+WORKER_VERSION = "1.9.0"
+PROTOCOL_VERSION = 6
 SESSION_ID = uuid.uuid4().hex[:12]
 
 app = FastAPI(title="NOVA Remote GPU Worker", version="1.0")
@@ -319,6 +319,38 @@ def audio_file(job_dir: Path) -> Path | None:
     return candidates[0] if candidates else None
 
 
+def audio_files(job_dir: Path) -> list[Path]:
+    tracks = sorted(job_dir.glob("audio_track_*.*"))
+    if tracks:
+        return tracks
+    legacy = audio_file(job_dir)
+    return [legacy] if legacy is not None else []
+
+
+def source_has_audio(source: Path) -> bool:
+    if not command_exists("ffprobe"):
+        return True
+    try:
+        probe = subprocess.run(
+            [
+                "ffprobe", "-v", "error", "-select_streams", "a:0",
+                "-show_entries", "stream=index", "-of", "csv=p=0", str(source),
+            ],
+            capture_output=True, text=True, timeout=20, check=True,
+        )
+        return bool((probe.stdout or "").strip())
+    except Exception:
+        return False
+
+
+def clamp_volume(value: Any, default: float = 1.0) -> float:
+    try:
+        number = float(value)
+    except Exception:
+        number = default
+    return max(0.0, min(4.0, number))
+
+
 def normalize_video(job_id: str, source: Path, out: Path, profile: dict[str, Any], keep_audio: bool = True) -> Path:
     if not command_exists("ffmpeg"):
         raise RuntimeError("FFmpeg is not installed")
@@ -354,42 +386,72 @@ def normalize_video(job_id: str, source: Path, out: Path, profile: dict[str, Any
     return out
 
 
-def replace_audio_track(job_id: str, source: Path, audio: Path, out: Path) -> Path:
+def mix_audio_tracks(
+    job_id: str,
+    source: Path,
+    tracks: list[Path],
+    out: Path,
+    *,
+    include_original: bool,
+    source_volume: float = 1.0,
+    track_volumes: list[float] | None = None,
+    master_volume: float = 1.0,
+) -> Path:
     if not command_exists("ffmpeg"):
         raise RuntimeError("FFmpeg is not installed")
-    update_status(job_id, progress=24, stage="audio_replace", message="FFmpeg: заменяю звук в видео.")
-    args = [
-        "ffmpeg",
-        "-y",
-        "-i",
-        str(source),
-        "-i",
-        str(audio),
-        "-map",
-        "0:v:0",
-        "-map",
-        "1:a:0",
-        "-c:v",
-        "libx264",
-        "-preset",
-        "veryfast",
-        "-crf",
-        "20",
-        "-pix_fmt",
-        "yuv420p",
-        "-c:a",
-        "aac",
-        "-b:a",
-        "192k",
-        "-af",
-        "apad",
-        "-shortest",
-        "-movflags",
-        "+faststart",
-        str(out),
+    track_volumes = list(track_volumes or [])
+    inputs = ["ffmpeg", "-y", "-i", str(source)]
+    for track in tracks:
+        inputs += ["-i", str(track)]
+
+    filters: list[str] = []
+    labels: list[str] = []
+    if include_original and source_has_audio(source):
+        filters.append(
+            f"[0:a]aresample=async=1:first_pts=0,volume={clamp_volume(source_volume):.4f},apad[a0]"
+        )
+        labels.append("[a0]")
+
+    for index, _track in enumerate(tracks, start=1):
+        volume = track_volumes[index - 1] if index - 1 < len(track_volumes) else 1.0
+        filters.append(
+            f"[{index}:a]aresample=async=1:first_pts=0,volume={clamp_volume(volume):.4f},apad[a{index}]"
+        )
+        labels.append(f"[a{index}]")
+
+    if not labels:
+        raise RuntimeError("No audio streams available for requested mix")
+
+    if len(labels) == 1:
+        filters.append(f"{labels[0]}volume={clamp_volume(master_volume):.4f}[mix]")
+    else:
+        filters.append(
+            "".join(labels)
+            + f"amix=inputs={len(labels)}:duration=longest:dropout_transition=0,"
+            + f"volume={clamp_volume(master_volume):.4f}[mix]"
+        )
+
+    args = inputs + [
+        "-filter_complex", ";".join(filters),
+        "-map", "0:v:0", "-map", "[mix]",
+        "-c:v", "libx264", "-preset", "veryfast", "-crf", "20",
+        "-pix_fmt", "yuv420p",
+        "-c:a", "aac", "-b:a", "192k",
+        "-shortest", "-movflags", "+faststart", str(out),
     ]
     run_command(job_id, args)
     return out
+
+
+def replace_audio_track(job_id: str, source: Path, audio: Path, out: Path) -> Path:
+    update_status(job_id, progress=24, stage="audio_replace", message="FFmpeg: заменяю звук в видео.")
+    return mix_audio_tracks(
+        job_id, source, [audio], out,
+        include_original=False,
+        source_volume=0.0,
+        track_volumes=[1.0],
+        master_volume=1.0,
+    )
 
 
 def run_ffmpeg_job(job_id: str, job: dict[str, Any], job_dir: Path) -> Path:
@@ -399,13 +461,58 @@ def run_ffmpeg_job(job_id: str, job: dict[str, Any], job_dir: Path) -> Path:
     profile = profile_for(job)
     out = job_dir / ("FINAL.mp4" if profile["quality"] == "final" else "preview.mp4")
     media_action = str(job.get("media_action") or "").lower().strip()
+    tracks = audio_files(job_dir)
+    source_volume = clamp_volume(job.get("source_volume"), 1.0)
+    master_volume = clamp_volume(job.get("master_volume"), 1.0)
+    raw_track_volumes = job.get("track_volumes") or []
+    track_volumes = [clamp_volume(value, 1.0) for value in raw_track_volumes] if isinstance(raw_track_volumes, list) else []
+
     if media_action in {"replace_audio", "audio_replace"}:
-        audio = audio_file(job_dir)
-        if audio is None:
-            raise RuntimeError("Audio replacement needs an audio file")
-        replace_audio_track(job_id, source, audio, out)
-        update_status(job_id, progress=92, stage="encode", message="Новый звук наложен. Проверяю MP4.")
+        if not tracks:
+            raise RuntimeError("Audio replacement needs at least one audio file")
+        update_status(job_id, progress=24, stage="audio_replace", message=f"FFmpeg: заменяю звук, дорожек: {len(tracks)}.")
+        mix_audio_tracks(
+            job_id, source, tracks, out,
+            include_original=False,
+            source_volume=0.0,
+            track_volumes=track_volumes,
+            master_volume=master_volume,
+        )
+        update_status(job_id, progress=92, stage="encode", message="Новый звук наложен. Кодирую MP4 H.264/AAC.")
         return out
+
+    if media_action in {"mix_audio", "audio_mix"}:
+        if not tracks:
+            raise RuntimeError("Audio mix needs at least one added audio file")
+        update_status(job_id, progress=24, stage="audio_mix", message=f"FFmpeg: смешиваю оригинал + {len(tracks)} аудиодорожек.")
+        mix_audio_tracks(
+            job_id, source, tracks, out,
+            include_original=True,
+            source_volume=source_volume,
+            track_volumes=track_volumes,
+            master_volume=master_volume,
+        )
+        update_status(job_id, progress=92, stage="encode", message="Микс готов. Кодирую MP4 H.264/AAC.")
+        return out
+
+    if media_action in {"volume_adjust", "adjust_volume"}:
+        update_status(job_id, progress=24, stage="volume_adjust", message="FFmpeg: регулирую громкость и собираю MP4.")
+        mix_audio_tracks(
+            job_id, source, tracks, out,
+            include_original=True,
+            source_volume=source_volume,
+            track_volumes=track_volumes,
+            master_volume=master_volume,
+        )
+        update_status(job_id, progress=92, stage="encode", message="Громкость применена. Проверяю MP4.")
+        return out
+
+    if media_action in {"export_mp4", "mp4_export"}:
+        update_status(job_id, progress=20, stage="export_mp4", message="FFmpeg: экспортирую совместимый MP4.")
+        normalize_video(job_id, source, out, profile, keep_audio=True)
+        update_status(job_id, progress=92, stage="encode", message="MP4 экспортирован: H.264 + AAC.")
+        return out
+
     update_status(job_id, progress=20, stage="ffmpeg", message="Нормализую видео на удалённом GPU-воркере.")
     normalize_video(job_id, source, out, profile, keep_audio=True)
     update_status(job_id, progress=92, stage="encode", message="FFmpeg рендер готов, проверяю файл.")
@@ -932,7 +1039,7 @@ def checkpoint_job(job_id: str, job_dir: Path) -> str | None:
         for source in job_dir.iterdir():
             if not source.is_file():
                 continue
-            if not (source.name.startswith("source.") or source.name.startswith("audio.") or source.name in keep_names):
+            if not (source.name.startswith("source.") or source.name.startswith("audio.") or source.name.startswith("audio_track_") or source.name in keep_names):
                 continue
             destination = target / source.name
             if destination.exists() and destination.stat().st_size == source.stat().st_size:
@@ -1056,6 +1163,10 @@ async def health(request: Request):
             "auto_colab_resume": True,
             "audio_recovery": True,
             "audio_replace": command_exists("ffmpeg"),
+            "audio_mix": command_exists("ffmpeg"),
+            "multi_audio_tracks": 8,
+            "volume_adjust": command_exists("ffmpeg"),
+            "mp4_export": command_exists("ffmpeg"),
             "video_transcode": command_exists("ffmpeg"),
             "iphone_h264_encode": command_exists("ffmpeg"),
             "human_motion_control": True,
@@ -1084,6 +1195,7 @@ async def create_job(
     source: UploadFile | None = File(None),
     reference: UploadFile | None = File(None),
     audio: UploadFile | None = File(None),
+    audio_tracks: list[UploadFile] = File(default=[]),
 ):
     require_token(request)
     try:
@@ -1117,13 +1229,28 @@ async def create_job(
             raise HTTPException(status_code=400, detail="Unsupported character reference image type")
         reference_bytes = await save_upload(reference, job_dir / f"reference{ref_suffix}")
 
+    allowed_audio = {".mp3", ".wav", ".m4a", ".aac", ".flac", ".ogg", ".opus"}
     audio_bytes = 0
-    if audio is not None and audio.filename:
+    audio_count = 0
+    incoming_tracks = [item for item in (audio_tracks or []) if item is not None and item.filename]
+    if incoming_tracks:
+        if len(incoming_tracks) > 8:
+            shutil.rmtree(job_dir, ignore_errors=True)
+            raise HTTPException(status_code=400, detail="Maximum 8 audio tracks")
+        for index, item in enumerate(incoming_tracks):
+            audio_suffix = Path(item.filename).suffix.lower()
+            if audio_suffix not in allowed_audio:
+                shutil.rmtree(job_dir, ignore_errors=True)
+                raise HTTPException(status_code=400, detail="Unsupported audio type")
+            audio_bytes += await save_upload(item, job_dir / f"audio_track_{index:02d}{audio_suffix}")
+            audio_count += 1
+    elif audio is not None and audio.filename:
         audio_suffix = Path(audio.filename).suffix.lower()
-        if audio_suffix not in {".mp3", ".wav", ".m4a", ".aac", ".flac", ".ogg", ".opus"}:
+        if audio_suffix not in allowed_audio:
             shutil.rmtree(job_dir, ignore_errors=True)
             raise HTTPException(status_code=400, detail="Unsupported audio type")
         audio_bytes = await save_upload(audio, job_dir / f"audio{audio_suffix}")
+        audio_count = 1
 
     deferred = bool(job.get("defer_start"))
     update_status(
@@ -1136,7 +1263,8 @@ async def create_job(
         upload_bytes=upload_bytes,
         reference_bytes=reference_bytes,
         audio_bytes=audio_bytes,
-        has_audio=audio_file(job_dir) is not None,
+        audio_tracks=audio_count,
+        has_audio=bool(audio_files(job_dir)),
         has_character_reference=reference_file(job_dir) is not None,
         quality=str(job.get("quality") or "preview").lower(),
         created_at=time.time(),
@@ -1225,8 +1353,9 @@ async def start_job(job_id: str, request: Request):
     engine = str(job.get("engine") or "auto").lower()
     if engine == "ffmpeg" and source_file(job_dir) is None:
         raise HTTPException(status_code=400, detail="FFmpeg job needs a source video")
-    if str(job.get("media_action") or "").lower() in {"replace_audio", "audio_replace"} and audio_file(job_dir) is None:
-        raise HTTPException(status_code=400, detail="Audio replacement needs an audio file")
+    media_action = str(job.get("media_action") or "").lower()
+    if media_action in {"replace_audio", "audio_replace", "mix_audio", "audio_mix"} and not audio_files(job_dir):
+        raise HTTPException(status_code=400, detail="This audio operation needs at least one audio file")
     job["defer_start"] = False
     (job_dir / "job.json").write_text(json.dumps(job, ensure_ascii=False, indent=2), encoding="utf-8")
     update_status(job_id, status="queued", stage="queued", progress=max(12, current.get("progress") or 0), message="Видео принято. Запускаю GPU.")
@@ -1262,7 +1391,7 @@ async def promote_job(job_id: str, request: Request):
     for source in source_dir.iterdir():
         if not source.is_file():
             continue
-        if source.name.startswith("source.") or source.name.startswith("reference.") or source.name.startswith("audio.") or source.name in {
+        if source.name.startswith("source.") or source.name.startswith("reference.") or source.name.startswith("audio.") or source.name.startswith("audio_track_") or source.name in {
             "NOVA_scene_pack.json",
             "WAN_GP_INPUT.mp4",
             "WAN_GP_START.png",
