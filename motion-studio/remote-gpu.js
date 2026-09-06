@@ -1036,12 +1036,16 @@ async function restore(){
     if(meta?.userApprovedRemote&&!resumed)setTimeout(()=>recoverNow().catch(()=>{}),350);
   }
   if(videoParam){
-    if(mediaOperationIntent()==='replace_audio')setEasyState('ЗАМЕНА ЗВУКА','Команда принята. Выбери видео + аудио. После выбора второго файла NOVA продолжит сама.','ok');
+    const op=mediaOperationIntent();
+    if(op==='replace_audio')setEasyState('ЗАМЕНА МУЗЫКИ','Выбери видео и одну или несколько аудиодорожек. После выбора файлов NOVA продолжит сама.','ok');
+    else if(op==='mix_audio')setEasyState('МИКС ДОРОЖЕК','Выбери видео и до 8 аудиодорожек. Громкость можно задавать голосом в процентах.','ok');
+    else if(op==='volume_adjust')setEasyState('ГРОМКОСТЬ','Выбери видео. NOVA применит указанные уровни и экспортирует MP4.','ok');
+    else if(op==='export_mp4')setEasyState('ЭКСПОРТ MP4','Выбери видео. NOVA перекодирует его в H.264 + AAC MP4.','ok');
     else setEasyState('SAFE AUTO','Команда перенесена в Motion Studio. NOVA сама выберет нужный движок; Remote GPU потребует подтверждение.','ok');
   }
   refreshEasyState();
   if(colabParam)setTimeout(()=>openColab(),220);
-  else if(autoParam&&mediaOperationIntent()!=='replace_audio')setTimeout(()=>autoStart().catch(()=>{}),220);
+  else if(autoParam&&!['replace_audio','mix_audio','volume_adjust','export_mp4'].includes(mediaOperationIntent()))setTimeout(()=>autoStart().catch(()=>{}),220);
 }
 
 $('remoteEasyAction')?.addEventListener('click',easyAction);
@@ -1069,18 +1073,27 @@ $('remoteSource')?.addEventListener('change',async e=>{
     setRecoveryStatus(meta.userApprovedRemote?'Исходник восстановлен. Одобренный job готов продолжиться автоматически.':'Исходник выбран.','ok');
   }
   const params=new URLSearchParams(location.search);
-  if(params.get('auto')==='1'&&mediaOperationIntent()==='replace_audio'&&currentSourceFile&&currentAudioFile)setTimeout(()=>easyAction().catch(()=>{}),120);
+  if(params.get('auto')==='1'){
+    const op=mediaOperationIntent();
+    const audioReady=selectedAudioFiles().length>0;
+    const ready=(op==='replace_audio'||op==='mix_audio')?(currentSourceFile&&audioReady):(op==='volume_adjust'||op==='export_mp4')?Boolean(currentSourceFile):false;
+    if(ready)setTimeout(()=>easyAction().catch(()=>{}),120);
+  }
 });
 $('remoteAudio')?.addEventListener('change',async e=>{
-  currentAudioFile=e.target.files?.[0]||null;
+  currentAudioFiles=Array.from(e.target.files||[]).slice(0,8);
+  currentAudioFile=currentAudioFiles[0]||null;
   const meta=recoveryMeta();
-  if(meta&&currentAudioFile){
-    await beginRecovery(meta.job||buildJob(),currentSourceFile,currentSourceFile?.name||meta.sourceName||'source.mp4',currentCharacterRef,currentAudioFile,Boolean(meta.userApprovedRemote));
+  if(meta&&currentAudioFiles.length){
+    await beginRecovery(meta.job||buildJob(),currentSourceFile,currentSourceFile?.name||meta.sourceName||'source.mp4',currentCharacterRef,currentAudioFiles,Boolean(meta.userApprovedRemote));
   }
-  if(currentAudioFile)setEasyState('АУДИО ВЫБРАНО','Если видео уже выбрано, NOVA продолжит автоматически и выберет FFmpeg.','ok');
+  if(currentAudioFiles.length)setEasyState('АУДИО ВЫБРАНО',currentAudioFiles.length+' дорожк(и). Если видео уже выбрано, NOVA продолжит автоматически и выберет FFmpeg.','ok');
   refreshEasyState();
   const params=new URLSearchParams(location.search);
-  if(params.get('auto')==='1'&&mediaOperationIntent()==='replace_audio'&&currentSourceFile&&currentAudioFile)setTimeout(()=>easyAction().catch(()=>{}),120);
+  if(params.get('auto')==='1'&&['replace_audio','mix_audio'].includes(mediaOperationIntent())&&currentSourceFile&&currentAudioFiles.length)setTimeout(()=>easyAction().catch(()=>{}),120);
+});
+['remoteOriginalVolume','remoteAddedVolume','remoteMasterVolume'].forEach(id=>{
+  $(id)?.addEventListener('change',()=>{buildJob();refreshEasyState()});
 });
 $('remoteConnect')?.addEventListener('click',()=>connect());
 $('remotePasteCode')?.addEventListener('click',async()=>{
