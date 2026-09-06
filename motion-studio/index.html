@@ -136,10 +136,21 @@
           <label class="remote-source-easy">Видео движения / исходник
             <input id="remoteSource" type="file" accept="video/mp4,video/quicktime,video/webm,video/x-matroska,video/*">
           </label>
-          <label class="remote-source-easy">Мой звук / аудио — для замены звука
-            <input id="remoteAudio" type="file" accept="audio/mpeg,audio/wav,audio/mp4,audio/aac,audio/flac,audio/ogg,audio/*">
-            <small>Скажи «Нова, наложи мой звук на видео». Выбери видео и аудио — NOVA сама выберет FFmpeg и соберёт совместимый MP4.</small>
+          <label class="remote-source-easy">Музыка / аудиодорожки — до 8 файлов
+            <input id="remoteAudio" type="file" multiple accept="audio/mpeg,audio/wav,audio/mp4,audio/aac,audio/flac,audio/ogg,audio/*">
+            <small>Голосом: «замени музыку», «смешай дорожки», «музыка 35%, оригинал 80%». NOVA сама выберет FFmpeg.</small>
           </label>
+          <div class="grid3 remote-audio-levels">
+            <label>Оригинальный звук %
+              <input id="remoteOriginalVolume" type="number" min="0" max="400" step="5" value="100" inputmode="numeric">
+            </label>
+            <label>Добавленные дорожки %
+              <input id="remoteAddedVolume" type="number" min="0" max="400" step="5" value="100" inputmode="numeric">
+            </label>
+            <label>Общая громкость %
+              <input id="remoteMasterVolume" type="number" min="0" max="400" step="5" value="100" inputmode="numeric">
+            </label>
+          </div>
           <label class="remote-source-easy">Персонаж / фото — необязательно
             <input id="remoteCharacterRef" type="file" accept="image/jpeg,image/png,image/webp,image/*">
             <small>Фото отвечает за внешность. Видео выше отвечает за движение. Для лучшего identity lock используй чёткое фото одного человека.</small>
@@ -255,7 +266,7 @@
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', async () => {
         try {
-          const registration = await navigator.serviceWorker.register('./service-worker.js?v=26', {
+          const registration = await navigator.serviceWorker.register('./service-worker.js?v=27', {
             scope: './',
             updateViaCache: 'none'
           });
