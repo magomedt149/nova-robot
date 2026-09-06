@@ -1537,7 +1537,10 @@
     } else {
       localStorage.removeItem('nova.remoteGpu.pendingPrompt');
     }
-    window.location.assign('./motion-studio/?video=1#remoteGpu');
+    const route = bareGpuCommand
+      ? './motion-studio/?video=1&colab=1#remoteGpu'
+      : './motion-studio/?video=1&auto=1#remoteGpu';
+    window.location.assign(route);
   }
 
   function performCatScene() {
