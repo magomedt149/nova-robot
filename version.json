@@ -1,7 +1,7 @@
 {
   "name": "NOVA",
-  "version": "27.10.1",
-  "pwa": "27.10.1",
+  "version": "27.11.0",
+  "pwa": "27.11.0",
   "mode": "free-only",
   "paidApis": false,
   "externalComputeRequiresConfirmation": true,
@@ -50,9 +50,9 @@
   "novaCallRequiresVpsForBasicFreeCalls": false,
   "novaCallBasicFreeMode": "public WebRTC fallback; self-hosted optional",
   "novaCallLaunchCheckPaidActions": false,
-  "motionStudioVersion": "28",
-  "remoteGpuWorkerVersion": "2.0.0",
-  "remoteGpuProtocolVersion": 7,
+  "motionStudioVersion": "29",
+  "remoteGpuWorkerVersion": "2.1.0",
+  "remoteGpuProtocolVersion": 8,
   "ffmpegAudioReplace": true,
   "voiceMediaCommand": true,
   "voiceMediaCommandExample": "Нова, наложи мой звук на видео",
@@ -76,6 +76,7 @@
     "Blender preview MP4",
     "FFmpeg audio replacement",
     "FFmpeg multi-track mix + volume",
+    "FFmpeg music fade-in/fade-out",
     "H.264/AAC MP4 export"
   ],
   "voiceAutoStart": true,
@@ -114,5 +115,13 @@
     "Нова, сделай музыку по аккордам Am D G Em и подмешай в видео на 35%"
   ],
   "freeChordMusicVoiceMixPercent": true,
-  "freeChordMusicManualEngine": true
+  "freeChordMusicManualEngine": true,
+  "musicFadeInOut": true,
+  "musicFadeDefaultSeconds": 2,
+  "musicFadeVoiceExamples": [
+    "Нова, сделай плавное появление музыки 2 секунды",
+    "Нова, сделай затухание музыки 3 секунды",
+    "Нова, плавное появление и затухание музыки по 2 секунды",
+    "Нова, смешай музыку с видео, fade in 2 seconds, fade out 3 seconds"
+  ]
 }
