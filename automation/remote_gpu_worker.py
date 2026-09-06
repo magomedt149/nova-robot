@@ -1253,7 +1253,7 @@ async def create_job(
     source: UploadFile | None = File(None),
     reference: UploadFile | None = File(None),
     audio: UploadFile | None = File(None),
-    audio_tracks: list[UploadFile] = File(default=[]),
+    audio_tracks: list[UploadFile] | None = File(None),
 ):
     require_token(request)
     try:
