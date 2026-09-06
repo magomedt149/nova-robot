@@ -915,7 +915,7 @@ async function easyAction(){
       const health=await connect({resume:false});
       if(health){
         const engine=job.engine;
-        const ready=engine==='ffmpeg'?health.ffmpeg:engine==='blender'?health.blender:engine==='wangp'?health.wangp_api_ready:true;
+        const ready=engine==='music'?health.capabilities?.music_chords:engine==='ffmpeg'?health.ffmpeg:engine==='blender'?health.blender:engine==='wangp'?health.wangp_api_ready:true;
         if(ready){
           setEasyState(engine==='music'?'NOVA MUSIC':engine==='ffmpeg'?'FFMPEG':engine==='blender'?'BLENDER':engine==='wangp'?'WANGP':'REMOTE GPU','Worker на связи. NOVA сама отправляет одобренное задание.','busy');
           await send(true);
