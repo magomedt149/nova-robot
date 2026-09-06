@@ -358,15 +358,52 @@ function humanMotionIntent(){
 }
 function mediaOperationIntent(){
   const q=($('prompt')?.value||'').toLowerCase().replace(/ё/g,'е');
-  if(/(?:налож|постав|подстав|замен).{0,30}(?:мой |новый )?(?:звук|аудио).{0,30}(?:на|в).{0,15}видео|(?:звук|аудио).{0,30}(?:налож|постав|подстав|замен).{0,30}видео|replace.{0,20}audio|put.{0,20}audio.{0,20}(?:on|into).{0,20}video/.test(q))return 'replace_audio';
+  if(/экспорт|сохран.*mp4|готов.*mp4|сделай.*mp4|выведи.*mp4|export.*mp4|save.*mp4/.test(q))return 'export_mp4';
+  if(/смеш|смикс|миксуй|микс|mix.{0,25}(?:audio|track|music)|(?:добав|налож).{0,25}(?:музык|аудио|дорожк).{0,25}(?:к|с).*?(?:звук|аудио).*видео/.test(q))return 'mix_audio';
+  if(/(?:замен|подмен|постав|подстав).{0,30}(?:музык|звук|аудио).{0,30}(?:в|на).*видео|(?:налож).{0,30}(?:мой |новый )?(?:звук|аудио).{0,30}(?:на|в).{0,15}видео|replace.{0,20}(?:audio|music)|put.{0,20}audio.{0,20}(?:on|into).{0,20}video/.test(q))return 'replace_audio';
+  if(/громк|тише|громче|volume|убав.*звук|прибав.*звук/.test(q))return 'volume_adjust';
   return 'none';
+}
+function audioMixConfig(){
+  const q=($('prompt')?.value||'').toLowerCase().replace(/ё/g,'е');
+  const count=Math.max(1,selectedAudioFiles().length);
+  let sourcePct=clampPct($('remoteOriginalVolume')?.value,100);
+  let trackPct=clampPct($('remoteAddedVolume')?.value,100);
+  let masterPct=clampPct($('remoteMasterVolume')?.value,100);
+
+  const read=(re,fallback)=>{
+    const m=q.match(re);
+    return m?clampPct(m[1],fallback):fallback;
+  };
+  sourcePct=read(/(?:оригинал(?:ьный)?(?: звук| аудио)?|звук видео|исходн\w* звук)\D{0,18}(\d{1,3})\s*%/,sourcePct);
+  trackPct=read(/(?:музык\w*|мой звук|добавленн\w* звук|аудио(?:дорожк\w*)?)\D{0,18}(\d{1,3})\s*%/,trackPct);
+  masterPct=read(/(?:общ\w* громк\w*|мастер|master)\D{0,18}(\d{1,3})\s*%/,masterPct);
+
+  if(/музык\w*.{0,15}тише/.test(q)&&!/музык\w*\D{0,18}\d{1,3}\s*%/.test(q))trackPct=50;
+  if(/музык\w*.{0,15}громче/.test(q)&&!/музык\w*\D{0,18}\d{1,3}\s*%/.test(q))trackPct=125;
+  if(/оригинал\w*.{0,15}тише/.test(q)&&!/оригинал\w*\D{0,18}\d{1,3}\s*%/.test(q))sourcePct=50;
+  if(/оригинал\w*.{0,15}громче/.test(q)&&!/оригинал\w*\D{0,18}\d{1,3}\s*%/.test(q))sourcePct=125;
+
+  const trackVolumes=Array(count).fill(trackPct/100);
+  for(let i=0;i<count;i++){
+    const n=i+1;
+    const re=new RegExp('(?:дорожк(?:а|и)?|track)\\s*'+n+'\\D{0,18}(\\d{1,3})\\s*%');
+    const m=q.match(re);
+    if(m)trackVolumes[i]=clampPct(m[1],trackPct)/100;
+  }
+
+  if($('remoteOriginalVolume'))$('remoteOriginalVolume').value=String(Math.round(sourcePct));
+  if($('remoteAddedVolume'))$('remoteAddedVolume').value=String(Math.round(trackPct));
+  if($('remoteMasterVolume'))$('remoteMasterVolume').value=String(Math.round(masterPct));
+
+  return {source_volume:sourcePct/100,track_volumes:trackVolumes,master_volume:masterPct/100};
 }
 function chosenEngine(){
   const raw=$('remoteEngine')?.value||'auto';
   if(raw!=='auto')return raw;
   const q=($('prompt')?.value||'').toLowerCase();
   const hasSource=Boolean($('remoteSource')?.files?.[0]||currentSourceFile);
-  if(mediaOperationIntent()==='replace_audio'&&hasSource)return 'ffmpeg';
+  if(['replace_audio','mix_audio','volume_adjust','export_mp4'].includes(mediaOperationIntent())&&hasSource)return 'ffmpeg';
   const human=humanMotionIntent();
   const orbitIntent=/orbit|обл[её]т|вокруг|fly.?around|camera.*around/.test(q);
   const fullOrbit=/360|полный круг|full circle|full orbit/.test(q);
@@ -406,10 +443,14 @@ function buildJob(){
     vfx_intensity:Number(c.intensity||$('intensity')?.value||.65),human_motion:humanMotion,
     render_policy:{preview_first:true,paid_generation:false,max_paid_tests:1}
   };
+  const audioMix=audioMixConfig();
   return {
     schema:'nova.remote-job.v1',created_at:new Date().toISOString(),
     source_prompt:prompt||'TUMSOEV cinematic scene',engine:chosenEngine(),quality,
     media_action:mediaOperationIntent(),
+    source_volume:audioMix.source_volume,
+    track_volumes:audioMix.track_volumes,
+    master_volume:audioMix.master_volume,
     duration:Number(pack.duration||5),ratio:pack.format||'9:16',fps:quality==='preview'?24:30,
     style:pack.style,motion:pack.motion,camera:pack.camera,vfx:pack.vfx,
     human_motion:humanMotion,
@@ -441,8 +482,8 @@ async function connect({resume=true}={}){
     const bits=[gpu,data.blender?'Blender ✓':'Blender —',data.ffmpeg?'FFmpeg ✓':'FFmpeg —',data.wangp_api_ready?'WanGP API ✓':'WanGP —',protocol,data.free_disk_gb!=null?data.free_disk_gb+' GB free':''];
     setStatus('Подключено: '+bits.filter(Boolean).join(' • '),'ok');
     if(data.drive_mounted&&autoRecoverEnabled()&&$('remoteMirrorDrive'))$('remoteMirrorDrive').checked=true;
-    if(Number(data.protocol_version||0)<5){
-      setRecoveryStatus('Auto Recovery: worker старой версии. Для полного восстановления видео+аудио перезапусти актуальный notebook.','error');
+    if(Number(data.protocol_version||0)<6){
+      setRecoveryStatus('Auto Recovery: worker старой версии. Для multi-track audio перезапусти актуальный notebook.','error');
     }else if(autoRecoverEnabled()){
       setRecoveryStatus('Auto Recovery: worker '+(data.session_id||'')+' на связи.'+(data.drive_mounted?' Drive checkpoint включён.':''),'ok');
     }
