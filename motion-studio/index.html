@@ -121,13 +121,13 @@
       </section>
 
       <section id="remoteGpu" class="remote-gpu-panel" aria-label="Удалённый GPU Google Colab">
-        <div class="remote-gpu-head"><strong>✨ NOVA VIDEO</strong><span>FREE LOCK</span></div>
-        <p>Обычный режим делает видео прямо на iPhone. Удалённый GPU никогда не запускается автоматически: только вручную и после отдельного подтверждения.</p>
+        <div class="remote-gpu-head"><strong>✨ NOVA VIDEO</strong><span>SAFE AUTO</span></div>
+        <p>NOVA сначала пытается использовать уже подключённый worker. Если для одобренной команды нужен Colab, NOVA сама откроет наш notebook, сохранит job и продолжит после возврата. Платные API автоматически не запускаются.</p>
 
         <div class="remote-easy-card">
           <div class="remote-easy-top"><b>Простой режим</b><span id="remoteEasyState">ГОТОВ К ЗАПУСКУ</span></div>
           <button id="remoteEasyAction" class="remote-easy-action" type="button">✨ СДЕЛАТЬ ВИДЕО</button>
-          <div id="remoteEasyText" class="remote-easy-text">Нажми один раз. NOVA сначала использует бесплатный локальный рендер. Для Remote GPU появится отдельное предупреждение и подтверждение.</div>
+          <div id="remoteEasyText" class="remote-easy-text">Нажми один раз. Для локальных задач NOVA работает на iPhone; для WanGP/Blender/FFmpeg попросит одно подтверждение, а затем сама подключит или откроет Colab и доведёт одобренный job до MP4.</div>
           <div id="remoteSteps" class="remote-steps" aria-label="Этапы рендера">
             <span data-step="input" class="active">1 · Задача</span>
             <span data-step="render">2 · Рендер</span>
@@ -158,15 +158,15 @@
         </div>
 
         <div class="remote-progress"><i id="remoteProgressBar"></i><span id="remoteProgressText">0%</span></div>
-        <div id="remoteStatus" class="remote-status">FREE LOCK: автоматический Remote GPU выключен.</div>
-        <div id="remoteRecoveryStatus" class="remote-recovery-status">FREE LOCK: автоматическое восстановление выключено.</div>
+        <div id="remoteStatus" class="remote-status">Готово: NOVA сама выберет локальный режим, WanGP, Blender или FFmpeg.</div>
+        <div id="remoteRecoveryStatus" class="remote-recovery-status">Auto Recovery включается только для задания, которое ты сам подтвердил.</div>
         <a id="remoteResult" class="download hidden">Открыть готовый MP4</a>
 
         <details id="remoteAdvanced" class="remote-advanced">
           <summary>Ручной Remote GPU — только при необходимости</summary>
           <button id="remoteStudioToggle" class="secondary remote-studio-toggle" type="button">🎛️ Показать все настройки студии</button>
           <div class="remote-advanced-body">
-            <p class="remote-advanced-note">Для обычного Motion/VFX этот блок не нужен. FREE LOCK запрещает автозапуск внешнего compute. Подключай только свой бесплатный/личный Worker и подтверждай каждую отправку вручную.</p>
+            <p class="remote-advanced-note">Для обычной работы этот блок не нужен. NOVA может автоматически открыть наш Colab только после твоего явного подтверждения конкретного задания. FREE LOCK продолжает блокировать платные API и неожиданные внешние запуски.</p>
             <div class="permanent-gpu-setup">
               <b>Постоянный GPU — один раз настроить</b>
               <p>На Windows дважды нажми установщик. Worker сам стартует с Windows и публикуется по стабильному HTTPS через Tailscale Funnel.</p>
@@ -175,11 +175,12 @@
               <small>После установки вставь NOVA CONNECT CODE один раз. Потом тяжёлые AI‑задачи запускаются без Colab и без Run all.</small>
             </div>
             <div class="remote-smart-actions">
-              <button id="remoteAutoStart" type="button" disabled aria-disabled="true">🔒 FULL AUTO OFF</button>
-              <button id="remoteTest" class="secondary" type="button">🧪 Ручной тест GPU 1 сек</button>
+              <button id="remoteAutoStart" type="button">⚡ АВТО: COLAB + РЕНДЕР</button>
+              <button id="remoteSelfTest" class="secondary" type="button">✅ ПРОВЕРИТЬ ВСЁ</button>
+              <button id="remoteTest" class="secondary" type="button">🧪 Blender MP4 1 сек</button>
             </div>
-            <label class="remote-check"><input id="remoteAutoFinal" type="checkbox" disabled> <span><b>Full Auto:</b> отключён режимом FREE LOCK.</span></label>
-            <label class="remote-check"><input id="remoteAutoRecover" type="checkbox" disabled> <span><b>Auto Recovery:</b> отключён режимом FREE LOCK; восстановление запускается вручную.</span></label>
+            <label class="remote-check"><input id="remoteAutoFinal" type="checkbox" disabled> <span><b>Full Auto Final:</b> остаётся выключен по FREE LOCK, чтобы не тратить лишний GPU.</span></label>
+            <label class="remote-check"><input id="remoteAutoRecover" type="checkbox"> <span><b>Auto Recovery:</b> после твоего подтверждения сохраняет job/видео/аудио и продолжает после возврата из Colab.</span></label>
 
             <label>Быстрое подключение
               <input id="remoteConnectCode" autocomplete="off" placeholder="Вставь NOVA CONNECT CODE из Colab">
@@ -219,12 +220,12 @@
               <button id="remoteSend" type="button">🔒 Подтвердить и отправить на GPU</button>
               <button id="remoteCancel" class="secondary" type="button">Стоп</button>
             </div>
-            <div id="remoteHint" class="remote-hint">FREE LOCK: сохранённые URL/Token сами ничего не запускают. Любая отправка на Remote GPU требует ручного подтверждения.</div>
+            <div id="remoteHint" class="remote-hint">SAFE AUTO: первая отправка на Remote GPU требует твоего подтверждения. После этого NOVA может автоматически восстановить только этот уже одобренный job.</div>
             <button id="remoteRecoverNow" class="secondary remote-recover-now" type="button">♻️ Восстановить сейчас</button>
             <details class="remote-colab-fallback">
-              <summary>Резервный Colab — только если нужен</summary>
-              <a id="remoteColabLink" class="remote-colab-link" href="https://colab.research.google.com/github/magomedt149/nova-robot/blob/main/blender-colab/NOVA_Remote_GPU_Worker.ipynb" target="_blank" rel="noopener">Открыть старый Colab fallback</a>
-              <small>Это резервный ручной вариант. В обычном сценарии NOVA его не открывает.</small>
+              <summary>Google Colab notebook</summary>
+              <a id="remoteColabLink" class="remote-colab-link" href="https://colab.research.google.com/github/magomedt149/nova-robot/blob/main/blender-colab/NOVA_Remote_GPU_Worker.ipynb" target="_blank" rel="noopener">Открыть NOVA Remote GPU Worker</a>
+              <small>NOVA открывает этот notebook автоматически, если одобренному заданию нужен Remote GPU и живой worker не найден.</small>
             </details>
           </div>
         </details>
@@ -254,7 +255,7 @@
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', async () => {
         try {
-          const registration = await navigator.serviceWorker.register('./service-worker.js?v=24', {
+          const registration = await navigator.serviceWorker.register('./service-worker.js?v=26', {
             scope: './',
             updateViaCache: 'none'
           });
