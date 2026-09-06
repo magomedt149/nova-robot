@@ -938,6 +938,8 @@ async function restore(){
   if($('remoteConnectCode'))$('remoteConnectCode').value='';
   const params=new URLSearchParams(location.search);
   const videoParam=params.get('video')==='1';
+  const autoParam=params.get('auto')==='1';
+  const colabParam=params.get('colab')==='1';
   setFullAuto(false);
   const pending=localStorage.getItem(LS_PENDING)||'';
   if(pending&&$('prompt')){$('prompt').value=pending;localStorage.removeItem(LS_PENDING);$('applyPrompt')?.click()}
@@ -958,10 +960,12 @@ async function restore(){
     if(meta?.userApprovedRemote&&!resumed)setTimeout(()=>recoverNow().catch(()=>{}),350);
   }
   if(videoParam){
-    if(mediaOperationIntent()==='replace_audio')setEasyState('ЗАМЕНА ЗВУКА','Команда принята. Выбери видео + аудио и нажми «Сделать видео». NOVA автоматически выберет FFmpeg.','ok');
-    else setEasyState('FREE LOCK','Команда перенесена в Motion Studio. Нажми «Сделать видео»: локальный рендер бесплатный; Remote GPU потребует отдельного подтверждения.','ok');
+    if(mediaOperationIntent()==='replace_audio')setEasyState('ЗАМЕНА ЗВУКА','Команда принята. Выбери видео + аудио. После выбора второго файла NOVA продолжит сама.','ok');
+    else setEasyState('SAFE AUTO','Команда перенесена в Motion Studio. NOVA сама выберет нужный движок; Remote GPU потребует подтверждение.','ok');
   }
   refreshEasyState();
+  if(colabParam)setTimeout(()=>openColab(),220);
+  else if(autoParam&&mediaOperationIntent()!=='replace_audio')setTimeout(()=>autoStart().catch(()=>{}),220);
 }
 
 $('remoteEasyAction')?.addEventListener('click',easyAction);
@@ -988,6 +992,8 @@ $('remoteSource')?.addEventListener('change',async e=>{
     await beginRecovery(meta.job||buildJob(),currentSourceFile,currentSourceFile.name,currentCharacterRef,currentAudioFile,Boolean(meta.userApprovedRemote));
     setRecoveryStatus(meta.userApprovedRemote?'Исходник восстановлен. Одобренный job готов продолжиться автоматически.':'Исходник выбран.','ok');
   }
+  const params=new URLSearchParams(location.search);
+  if(params.get('auto')==='1'&&mediaOperationIntent()==='replace_audio'&&currentSourceFile&&currentAudioFile)setTimeout(()=>easyAction().catch(()=>{}),120);
 });
 $('remoteAudio')?.addEventListener('change',async e=>{
   currentAudioFile=e.target.files?.[0]||null;
@@ -995,8 +1001,10 @@ $('remoteAudio')?.addEventListener('change',async e=>{
   if(meta&&currentAudioFile){
     await beginRecovery(meta.job||buildJob(),currentSourceFile,currentSourceFile?.name||meta.sourceName||'source.mp4',currentCharacterRef,currentAudioFile,Boolean(meta.userApprovedRemote));
   }
-  if(currentAudioFile)setEasyState('АУДИО ВЫБРАНО','Теперь выбери видео и нажми «Сделать видео». Для команды замены звука NOVA сама выберет FFmpeg.','ok');
+  if(currentAudioFile)setEasyState('АУДИО ВЫБРАНО','Если видео уже выбрано, NOVA продолжит автоматически и выберет FFmpeg.','ok');
   refreshEasyState();
+  const params=new URLSearchParams(location.search);
+  if(params.get('auto')==='1'&&mediaOperationIntent()==='replace_audio'&&currentSourceFile&&currentAudioFile)setTimeout(()=>easyAction().catch(()=>{}),120);
 });
 $('remoteConnect')?.addEventListener('click',()=>connect());
 $('remotePasteCode')?.addEventListener('click',async()=>{
