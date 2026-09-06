@@ -48,6 +48,10 @@ jobs:
           assert data.get("cells")
           print("Notebook OK:", len(data["cells"]), "cells")
           PY
+      - name: Install FFmpeg
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
       - name: FFmpeg audio replacement smoke test
         run: |
           set -e
