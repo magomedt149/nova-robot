@@ -1,7 +1,7 @@
 {
   "name": "NOVA",
-  "version": "27.8.0",
-  "pwa": "27.8.0",
+  "version": "27.8.1",
+  "pwa": "27.8.1",
   "mode": "free-only",
   "paidApis": false,
   "externalComputeRequiresConfirmation": true,
@@ -73,5 +73,8 @@
     "WanGP API",
     "Blender preview MP4",
     "FFmpeg H.264/AAC audio replacement"
-  ]
+  ],
+  "voiceAutoStart": true,
+  "voiceBareColabCommand": true,
+  "audioReplaceAutoStartsAfterFiles": true
 }
