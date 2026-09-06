@@ -81,6 +81,7 @@
     "GPU",
     "NOVA Music chord synth WAV/MP3",
     "WanGP API",
+    "Hybrid Photo→Motion router",
     "Blender preview MP4",
     "FFmpeg audio replacement",
     "FFmpeg multi-track mix + volume",
@@ -133,7 +134,7 @@
     "Нова, смешай музыку с видео, fade in 2 seconds, fade out 3 seconds"
   ],
   "healthRuntime": true,
-  "healthRuntimeVersion": "27.12.0",
+  "healthRuntimeVersion": "27.13.0",
   "autoMontage": true,
   "autoMontageVersion": "1.0.0",
   "autoMontageMode": "local-first 5-second preview; remote compute only after approval",
