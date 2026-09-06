@@ -203,7 +203,9 @@ def run_worker_self_test() -> dict[str, Any]:
                         ffmpeg, "-y", "-hide_banner", "-loglevel", "error",
                         "-i", str(source), "-i", str(audio), "-i", str(audio2),
                         "-filter_complex",
-                        "[0:a]volume=0.80,apad[a0];[1:a]volume=0.35,apad[a1];[2:a]volume=0.20,apad[a2];"
+                        "[0:a]volume=0.80,apad[a0];"
+                        "[1:a]volume=0.35,afade=t=in:st=0:d=0.15,afade=t=out:st=0.45:d=0.15,apad[a1];"
+                        "[2:a]volume=0.20,afade=t=in:st=0:d=0.10,afade=t=out:st=0.65:d=0.15,apad[a2];"
                         "[a0][a1][a2]amix=inputs=3:duration=longest:dropout_transition=0,volume=1.0[mix]",
                         "-map", "0:v:0", "-map", "[mix]",
                         "-c:v", "libx264", "-preset", "veryfast", "-crf", "20",
@@ -227,6 +229,7 @@ def run_worker_self_test() -> dict[str, Any]:
                     "replace_audio": replace_ok,
                     "multi_track_mix": mix_ok,
                     "volume_control": mix_ok,
+                    "fade_in_out": mix_ok,
                     "mp4_export": mix_ok,
                     "video_codec": mix_vcodec,
                     "audio_codec": mix_acodec,
