@@ -30,6 +30,9 @@ jobs:
           test -f app.js
           test -f styles.css
           test -f manifest.webmanifest
+          test -f nova-health.js
+          test -f nova-auto-montage.js
+          test -f automation/validate_frontend.py
           echo "NOVA critical files: OK"
 
       - name: Check JavaScript syntax
@@ -40,6 +43,12 @@ jobs:
             node --check "$file"
           done < <(find . -type f -name '*.js' -not -path './.git/*' -print0)
           echo "JavaScript syntax: OK"
+
+      - name: Validate frontend structure
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 automation/validate_frontend.py
 
       - name: Enforce FREE LOCK
         shell: bash

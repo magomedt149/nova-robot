@@ -1,4 +1,4 @@
-const CACHE = 'nova-v78-music-fades-20260905';
+const CACHE = 'nova-v79-stability-autopilot-20260906';
 const API_CACHE = 'nova-api-economy-v2';
 const METERED_NETLIFY_HOST = /(^|\\.)netlify\\.app$/i.test(self.location.hostname);
 const YOUTUBE_TTL_MS = 24 * 60 * 60 * 1000;
@@ -11,6 +11,8 @@ const CORE = [
   './version.json',
   './styles.css',
   './app.js',
+  './nova-health.js',
+  './nova-auto-montage.js',
   './english-lessons.js',
   './brain.js',
   './voice-fix.js',
@@ -70,7 +72,15 @@ const YT_INVIDIOUS = [
 
 self.addEventListener('install', (event) => {
   self.skipWaiting();
-  event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(CORE)));
+  event.waitUntil((async () => {
+    const cache = await caches.open(CACHE);
+    const results = await Promise.allSettled(CORE.map((path) => cache.add(path)));
+    const failed = CORE.filter((_, index) => results[index].status === 'rejected');
+    if (failed.length) console.warn('[NOVA SW] Optional cache misses:', failed);
+    for (const critical of ['./index.html', './app.js', './styles.css']) {
+      if (!(await cache.match(critical, { ignoreSearch: true }))) await cache.add(critical);
+    }
+  })());
 });
 
 self.addEventListener('activate', (event) => {
