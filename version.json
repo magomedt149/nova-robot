@@ -29,6 +29,7 @@
   "hybridAutoBridgeVideoProToMotion": true,
   "hybridNaturalMotion": true,
   "hybridTextBackgroundStabilityPrompt": true,
+  "hybridZeroCreditRouterSelfTest": true,
   "iphoneVirtualCameraOrientation": true,
   "iphoneVirtualCameraTranslation": "blender-path",
   "autocallsCallCommand": true,
