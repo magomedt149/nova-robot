@@ -389,7 +389,9 @@ function musicSpecFromPrompt(){
   const explicitReplace=/замен.*(?:музык|звук).*видео|replace.*music/.test(q);
   const mixIntoVideo=source&&($('remoteMusicMixVideo')?.checked||explicitMix||explicitReplace);
   let musicVolume=Number($('remoteMusicVolume')?.value||60)/100;
-  const musicPct=q.match(/(?:музык\w*|аккомпанемент)\D{0,18}(\d{1,3})\s*%/);
+  const musicPct=q.match(/(?:музык\w*|аккомпанемент)\D{0,18}(\d{1,3})\s*%/)
+    || q.match(/(?:подмеш|добав.*видео|смеш.*видео)\D{0,28}(\d{1,3})\s*%/)
+    || q.match(/видео\D{0,12}(\d{1,3})\s*%/);
   if(musicPct)musicVolume=clampPct(musicPct[1],60)/100;
   if($('remoteMusicChords'))$('remoteMusicChords').value=chords;
   if($('remoteMusicBpm'))$('remoteMusicBpm').value=String(Math.round(bpm));
