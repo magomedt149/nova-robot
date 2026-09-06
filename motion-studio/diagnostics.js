@@ -46,7 +46,7 @@ function ensureUi(){
         <div class="nova-diag-card"><span>Активный Service Worker</span><b id="novaDiagWorkerState">—</b><small id="novaDiagWorkerUrl"></small></div>
         <div class="nova-diag-card"><span>Активный cache name</span><b id="novaDiagCache">—</b><small id="novaDiagCacheNote"></small></div>
         <div class="nova-diag-card"><span>Старые кэши v22–v29</span><b id="novaDiagLegacy">—</b><small id="novaDiagLegacyList"></small></div>
-        <div class="nova-diag-card"><span>Принудительное обновление v29</span><b id="novaDiagForce">—</b><small id="novaDiagForceNote"></small></div>
+        <div class="nova-diag-card"><span>Принудительное обновление v30</span><b id="novaDiagForce">—</b><small id="novaDiagForceNote"></small></div>
       </div>
 
       <details class="nova-diag-details">
@@ -56,7 +56,7 @@ function ensureUi(){
 
       <div class="nova-diag-actions">
         <button id="novaDiagRefresh" class="secondary" type="button">↻ Проверить заново</button>
-        <button id="novaDiagForceUpdate" type="button">⬆ Принудительно обновить до v29</button>
+        <button id="novaDiagForceUpdate" type="button">⬆ Принудительно обновить до v30</button>
       </div>
       <div id="novaDiagActionStatus" class="nova-diag-action-status">Проверка ничего не запускает на GPU и не расходует кредиты.</div>
     </section>`;
@@ -135,7 +135,7 @@ async function inspect({showBusy=false}={}){
   const pending=sessionStorage.getItem(FORCE_PENDING)==='1';
 
   $('novaDiagVersion').textContent=activeExpected?EXPECTED_VERSION:(reportedVersion||'не подтверждена');
-  $('novaDiagVersionNote').textContent=activeExpected?'Активный worker подтвердил v29.':'Ожидается '+EXPECTED_VERSION+'.';
+  $('novaDiagVersionNote').textContent=activeExpected?'Активный worker подтвердил v30.':'Ожидается '+EXPECTED_VERSION+'.';
 
   $('novaDiagControlled').textContent=controlled?'ДА ✓':'НЕТ';
   $('novaDiagController').textContent=controller?.scriptURL||'Страница пока не контролируется Service Worker.';
@@ -144,7 +144,7 @@ async function inspect({showBusy=false}={}){
   $('novaDiagWorkerUrl').textContent=active?.scriptURL||controller?.scriptURL||'—';
 
   $('novaDiagCache').textContent=reportedCache|| (expectedCachePresent?EXPECTED_CACHE:'не подтверждён');
-  $('novaDiagCacheNote').textContent=expectedCachePresent?'v29 cache присутствует на устройстве.':'v29 cache пока не найден.';
+  $('novaDiagCacheNote').textContent=expectedCachePresent?'v30 cache присутствует на устройстве.':'v30 cache пока не найден.';
 
   $('novaDiagLegacy').textContent=legacy.length?'НАЙДЕНЫ ⚠️':'НЕТ ✓';
   $('novaDiagLegacyList').textContent=legacy.length?legacy.join(' • '):'v22–v29 отсутствуют.';
@@ -154,7 +154,7 @@ async function inspect({showBusy=false}={}){
     const result={
       at:new Date().toISOString(),
       ok:success,
-      message:success?'УСПЕХ: iPhone работает на Motion Studio v29, старые v22–v29 удалены.':'После перезагрузки v29 ещё не подтверждён полностью.',
+      message:success?'УСПЕХ: iPhone работает на Motion Studio v30, старые v22–v29 удалены.':'После перезагрузки v30 ещё не подтверждён полностью.',
       activeVersion:reportedVersion||null,
       activeCache:reportedCache||null,
       legacy
@@ -169,7 +169,7 @@ async function inspect({showBusy=false}={}){
 
   const good=activeExpected&&controlled&&expectedCachePresent&&legacy.length===0;
   setOverall(
-    good?'✅ Motion Studio v29 активен. Старого кода v22–v29 нет.':'⚠️ Диагностика нашла состояние, которое требует обновления.',
+    good?'✅ Motion Studio v30 активен. Старого кода v22–v29 нет.':'⚠️ Диагностика нашла состояние, которое требует обновления.',
     good?'ok':'error'
   );
 
@@ -199,8 +199,8 @@ async function forceUpdateToExpected(){
   ensureUi();
   const button=$('novaDiagForceUpdate');
   if(button)button.disabled=true;
-  setAction('Принудительно проверяю v29 и удаляю старые v22–v29…','busy');
-  setOverall('Обновление v29…','busy');
+  setAction('Принудительно проверяю v30 и удаляю старые v22–v29…','busy');
+  setOverall('Обновление v30…','busy');
 
   try{
     if(!('serviceWorker' in navigator))throw new Error('Service Worker не поддерживается этим браузером.');
@@ -210,12 +210,12 @@ async function forceUpdateToExpected(){
     const legacy=before.filter(name=>LEGACY_CACHE_RE.test(name));
     await Promise.all(legacy.map(name=>caches.delete(name)));
 
-    const response=await fetch('./service-worker.js?v=24&diagnostics='+Date.now(),{cache:'no-store'});
-    if(!response.ok)throw new Error('Не удалось скачать service-worker.js v29: HTTP '+response.status);
+    const response=await fetch('./service-worker.js?v=30&diagnostics='+Date.now(),{cache:'no-store'});
+    if(!response.ok)throw new Error('Не удалось скачать service-worker.js v30: HTTP '+response.status);
     const source=await response.text();
-    if(!source.includes(EXPECTED_CACHE))throw new Error('Сервер вернул Service Worker без маркера Motion Studio v29.');
+    if(!source.includes(EXPECTED_CACHE))throw new Error('Сервер вернул Service Worker без маркера Motion Studio v30.');
 
-    const registration=await navigator.serviceWorker.register('./service-worker.js?v=24',{
+    const registration=await navigator.serviceWorker.register('./service-worker.js?v=30',{
       scope:'./',
       updateViaCache:'none'
     });
@@ -226,10 +226,10 @@ async function forceUpdateToExpected(){
     saveForceResult({
       at:new Date().toISOString(),
       ok:false,
-      message:'v29 скачан и update() выполнен. Проверяю активный worker после перезагрузки…',
+      message:'v30 скачан и update() выполнен. Проверяю активный worker после перезагрузки…',
       deletedLegacy:legacy
     });
-    setAction('v29 скачан. Перезагружаю Motion Studio и проверяю активный worker…','busy');
+    setAction('v30 скачан. Перезагружаю Motion Studio и проверяю активный worker…','busy');
 
     setTimeout(()=>location.reload(),350);
   }catch(error){
@@ -238,7 +238,7 @@ async function forceUpdateToExpected(){
     $('novaDiagForce').textContent='ОШИБКА';
     $('novaDiagForceNote').textContent=result.message;
     setAction(result.message,'error');
-    setOverall('❌ Принудительное обновление v29 не завершилось.','error');
+    setOverall('❌ Принудительное обновление v30 не завершилось.','error');
     if(button)button.disabled=false;
   }
 }
