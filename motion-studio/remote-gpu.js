@@ -356,6 +356,60 @@ function humanMotionIntent(){
   }
   return {enabled:mode!=='none',mode};
 }
+function musicCreationIntent(){
+  const q=($('prompt')?.value||'').toLowerCase().replace(/ё/g,'е');
+  if($('remoteMusicEnabled')?.checked)return true;
+  return /(?:созд|сдел|сгенер|сочин|сыграй|собер).{0,35}(?:музык|аккомпанемент|гитар|пиан|фортеп|аккордеон|бас|синт).{0,45}(?:аккорд|bpm|темп)|(?:по|из)\s+аккорд.{0,35}(?:музык|аккомпанемент|гитар|пиан|аккордеон)|(?:chord|chords).{0,30}(?:music|guitar|piano|accordion|bass|synth)/.test(q);
+}
+function musicSpecFromPrompt(){
+  const raw=($('prompt')?.value||'').replace(/ё/g,'е');
+  const q=raw.toLowerCase();
+  const chordMatches=raw.match(/\b[A-Ga-g](?:#|b)?(?:maj7|min7|m7|m|7|sus2|sus4|5|dim|aug)?\b/g)||[];
+  const chords=(chordMatches.length?chordMatches.join(' '):($('remoteMusicChords')?.value||'Am D G Em')).trim();
+  const bpmMatch=q.match(/\b(\d{2,3})\s*(?:bpm|бпм|удар(?:ов)?\s*(?:в|за)\s*мин)/);
+  const bpm=Math.max(30,Math.min(240,Number(bpmMatch?.[1]||$('remoteMusicBpm')?.value||90)));
+  let instrument=String($('remoteMusicInstrument')?.value||'guitar');
+  if(/аккордеон|accordion/.test(q))instrument='accordion';
+  else if(/фортеп|пиан|piano/.test(q))instrument='piano';
+  else if(/\bбас|bass/.test(q))instrument='bass';
+  else if(/синт|synth/.test(q))instrument='synth';
+  else if(/гитар|guitar/.test(q))instrument='guitar';
+  let format=String($('remoteMusicFormat')?.value||'wav');
+  if(/\bmp3\b/.test(q))format='mp3';
+  else if(/\bwav\b/.test(q))format='wav';
+  const repeatMatch=q.match(/(?:повтор(?:и|ить)?|(?:сделай|сыграй)\s*)?(\d{1,2})\s*(?:раз|раза|повтор)/);
+  const repeats=Math.max(1,Math.min(32,Number(repeatMatch?.[1]||$('remoteMusicRepeats')?.value||1)));
+  const beatsMatch=q.match(/(?:по\s*)?(\d{1,2}(?:[.,]\d+)?)\s*(?:удара|ударов|дол[ия]|beat)/);
+  const beatsPerChord=Math.max(.5,Math.min(16,Number(String(beatsMatch?.[1]||$('remoteMusicBeats')?.value||4).replace(',','.'))));
+  const audioMix=audioMixConfig();
+  const source=Boolean($('remoteSource')?.files?.[0]||currentSourceFile);
+  const explicitMix=/подмеш|добав.*видео|смеш.*видео|mix.*video|into.*video/.test(q);
+  const explicitReplace=/замен.*(?:музык|звук).*видео|replace.*music/.test(q);
+  const mixIntoVideo=source&&($('remoteMusicMixVideo')?.checked||explicitMix||explicitReplace);
+  let musicVolume=Number($('remoteMusicVolume')?.value||60)/100;
+  const musicPct=q.match(/(?:музык\w*|аккомпанемент)\D{0,18}(\d{1,3})\s*%/);
+  if(musicPct)musicVolume=clampPct(musicPct[1],60)/100;
+  if($('remoteMusicChords'))$('remoteMusicChords').value=chords;
+  if($('remoteMusicBpm'))$('remoteMusicBpm').value=String(Math.round(bpm));
+  if($('remoteMusicInstrument'))$('remoteMusicInstrument').value=instrument;
+  if($('remoteMusicFormat'))$('remoteMusicFormat').value=format;
+  if($('remoteMusicRepeats'))$('remoteMusicRepeats').value=String(repeats);
+  if($('remoteMusicBeats'))$('remoteMusicBeats').value=String(beatsPerChord);
+  if($('remoteMusicVolume'))$('remoteMusicVolume').value=String(Math.round(musicVolume*100));
+  if($('remoteMusicMixVideo')&&source&&explicitMix)$('remoteMusicMixVideo').checked=true;
+  return {
+    chords:chords.split(/[\s,;|]+/).filter(Boolean),
+    bpm,instrument,format,
+    beats_per_chord:beatsPerChord,
+    repeats,
+    mix_into_video:mixIntoVideo,
+    mix_mode:explicitReplace?'replace':'mix',
+    original_volume:audioMix.source_volume,
+    music_volume:Math.max(0,Math.min(4,musicVolume)),
+    master_volume:audioMix.master_volume
+  };
+}
+
 function mediaOperationIntent(){
   const q=($('prompt')?.value||'').toLowerCase().replace(/ё/g,'е');
   if(/смеш|смикс|миксуй|микс|mix.{0,25}(?:audio|track|music)|(?:добав|налож).{0,25}(?:музык|аудио|дорожк).{0,25}(?:к|с).*?(?:звук|аудио).*видео/.test(q))return 'mix_audio';
@@ -403,6 +457,7 @@ function chosenEngine(){
   if(raw!=='auto')return raw;
   const q=($('prompt')?.value||'').toLowerCase();
   const hasSource=Boolean($('remoteSource')?.files?.[0]||currentSourceFile);
+  if(musicCreationIntent())return 'music';
   if(['replace_audio','mix_audio','volume_adjust','export_mp4'].includes(mediaOperationIntent())&&hasSource)return 'ffmpeg';
   const human=humanMotionIntent();
   const orbitIntent=/orbit|обл[её]т|вокруг|fly.?around|camera.*around/.test(q);
@@ -444,6 +499,7 @@ function buildJob(){
     render_policy:{preview_first:true,paid_generation:false,max_paid_tests:1}
   };
   const audioMix=audioMixConfig();
+  const musicSpec=musicSpecFromPrompt();
   return {
     schema:'nova.remote-job.v1',created_at:new Date().toISOString(),
     source_prompt:prompt||'TUMSOEV cinematic scene',engine:chosenEngine(),quality,
@@ -451,6 +507,7 @@ function buildJob(){
     source_volume:audioMix.source_volume,
     track_volumes:audioMix.track_volumes,
     master_volume:audioMix.master_volume,
+    music_spec:musicSpec,
     duration:Number(pack.duration||5),ratio:pack.format||'9:16',fps:quality==='preview'?24:30,
     style:pack.style,motion:pack.motion,camera:pack.camera,vfx:pack.vfx,
     human_motion:humanMotion,
@@ -482,8 +539,8 @@ async function connect({resume=true}={}){
     const bits=[gpu,data.blender?'Blender ✓':'Blender —',data.ffmpeg?'FFmpeg ✓':'FFmpeg —',data.wangp_api_ready?'WanGP API ✓':'WanGP —',protocol,data.free_disk_gb!=null?data.free_disk_gb+' GB free':''];
     setStatus('Подключено: '+bits.filter(Boolean).join(' • '),'ok');
     if(data.drive_mounted&&autoRecoverEnabled()&&$('remoteMirrorDrive'))$('remoteMirrorDrive').checked=true;
-    if(Number(data.protocol_version||0)<6){
-      setRecoveryStatus('Auto Recovery: worker старой версии. Для multi-track audio перезапусти актуальный notebook.','error');
+    if(Number(data.protocol_version||0)<7){
+      setRecoveryStatus('Auto Recovery: worker старой версии. Для генератора музыки перезапусти актуальный notebook.','error');
     }else if(autoRecoverEnabled()){
       setRecoveryStatus('Auto Recovery: worker '+(data.session_id||'')+' на связи.'+(data.drive_mounted?' Drive checkpoint включён.':''),'ok');
     }
@@ -513,15 +570,25 @@ async function preflight(engine,hasSource){
     throw new Error('Blender не готов в Colab.')
   }
   if(engine==='ffmpeg'&&!health.ffmpeg)throw new Error('FFmpeg не готов в Colab.');
+  if(engine==='music'&&!health.capabilities?.music_chords)throw new Error('NOVA Music не готов. Перезапусти актуальный Colab notebook.');
   return engine;
 }
 async function downloadResult(jobId){
   try{
     const ticket=await jsonFetch(endpoint()+'/jobs/'+encodeURIComponent(jobId)+'/download-ticket',{method:'POST',headers:authHeaders()});
     const url=endpoint()+ticket.path;
+    const filename=ticket.filename||('NOVA_'+jobId+'.mp4');
+    const ext=(filename.split('.').pop()||'').toLowerCase();
     const a=$('remoteResult');
-    if(a){a.href=url;a.download=ticket.filename||('NOVA_'+jobId+'.mp4');a.classList.remove('hidden');a.textContent='Открыть / сохранить готовый MP4'}
-    const video=$('video');if(video){video.src=url;video.classList.remove('hidden')}
+    if(a){
+      a.href=url;a.download=filename;a.classList.remove('hidden');
+      a.textContent=ext==='mp3'?'Открыть / сохранить MP3':ext==='wav'?'Открыть / сохранить WAV':'Открыть / сохранить готовый MP4';
+    }
+    const video=$('video');
+    if(video){
+      if(ext==='mp4'){video.src=url;video.classList.remove('hidden')}
+      else {video.removeAttribute('src');video.classList.add('hidden')}
+    }
   }catch(error){setStatus('Рендер готов, но ссылка на файл не создалась: '+error.message,'error')}
 }
 async function uploadVideoChunks(jobId,file,filename,startIndex=0){
@@ -797,7 +864,8 @@ async function easyAction(){
   const reference=$('remoteCharacterRef')?.files?.[0]||currentCharacterRef||null;
   const explicitFfmpeg=/ffmpeg|конверт|перекод|encode|transcod|upscale|апскейл/.test(prompt);
   const explicitBlender=/blender|360|полный круг|orbit|облет|true.?3d|3d.?block|блокинг|blocking/.test(prompt);
-  const remoteNeeded=['replace_audio','mix_audio','volume_adjust','export_mp4'].includes(mediaAction)||explicitFfmpeg||explicitBlender||isHeavyAiRequest();
+  const musicTask=musicCreationIntent();
+  const remoteNeeded=musicTask||['replace_audio','mix_audio','volume_adjust','export_mp4'].includes(mediaAction)||explicitFfmpeg||explicitBlender||isHeavyAiRequest();
 
   if(['replace_audio','mix_audio'].includes(mediaAction)&&(!source||!audioTracks.length)){
     setEasyState('НУЖНЫ ФАЙЛЫ','Выбери видео и хотя бы одну аудиодорожку. NOVA поддерживает до 8 дорожек.','error');
@@ -813,7 +881,9 @@ async function easyAction(){
   }
 
   if(remoteNeeded){
-    const actionLabel=mediaAction==='replace_audio'
+    const actionLabel=musicTask
+      ?'NOVA Music: создать музыку по аккордам'
+      :mediaAction==='replace_audio'
       ?'FFmpeg: заменить музыку в видео'
       :mediaAction==='mix_audio'
         ?'FFmpeg: смешать аудиодорожки'
@@ -838,7 +908,7 @@ async function easyAction(){
         const engine=job.engine;
         const ready=engine==='ffmpeg'?health.ffmpeg:engine==='blender'?health.blender:engine==='wangp'?health.wangp_api_ready:true;
         if(ready){
-          setEasyState(engine==='ffmpeg'?'FFMPEG':engine==='blender'?'BLENDER':engine==='wangp'?'WANGP':'REMOTE GPU','Worker на связи. NOVA сама отправляет одобренное задание.','busy');
+          setEasyState(engine==='music'?'NOVA MUSIC':engine==='ffmpeg'?'FFMPEG':engine==='blender'?'BLENDER':engine==='wangp'?'WANGP':'REMOTE GPU','Worker на связи. NOVA сама отправляет одобренное задание.','busy');
           await send(true);
           return;
         }
