@@ -360,7 +360,7 @@ function mediaOperationIntent(){
   const q=($('prompt')?.value||'').toLowerCase().replace(/ё/g,'е');
   if(/смеш|смикс|миксуй|микс|mix.{0,25}(?:audio|track|music)|(?:добав|налож).{0,25}(?:музык|аудио|дорожк).{0,25}(?:к|с).*?(?:звук|аудио).*видео/.test(q))return 'mix_audio';
   if(/(?:замен|подмен|постав|подстав).{0,30}(?:музык|звук|аудио).{0,30}(?:в|на).*видео|(?:налож).{0,30}(?:мой |новый )?(?:звук|аудио).{0,30}(?:на|в).{0,15}видео|replace.{0,20}(?:audio|music)|put.{0,20}audio.{0,20}(?:on|into).{0,20}video/.test(q))return 'replace_audio';
-  if(/громк|тише|громче|volume|убав.*звук|прибав.*звук/.test(q))return 'volume_adjust';
+  if(/громк|тише|громче|volume|убав.*звук|прибав.*звук|(?:музык\w*|оригинал\w*|звук видео|дорожк(?:а|и)?\s*\d+)\D{0,18}\d{1,3}\s*%/.test(q))return 'volume_adjust';
   if(/экспорт|сохран.*mp4|готов.*mp4|сделай.*mp4|выведи.*mp4|export.*mp4|save.*mp4/.test(q))return 'export_mp4';
   return 'none';
 }
