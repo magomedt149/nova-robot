@@ -352,6 +352,7 @@ function humanMotionIntent(){
     else if(/\b(dance|dancing)\b|танц/.test(q))mode='dance';
     else if(/\b(walk|walking|stride|gait)\b|ходьб|ид[её]т|идти|шага/.test(q))mode='walk';
     else if(/motion.?transfer|openpose|skeleton|pose.?control|скелет|поз[аы]|движени[ея] человека/.test(q))mode='motion-reference';
+    else if(/\b(animate|alive|move|moving|motion)\b|ожив|двига|движени|шевел/.test(q))mode='natural';
     else mode='none';
   }
   return {enabled:mode!=='none',mode};
@@ -1169,6 +1170,50 @@ async function restore(){
   if(colabParam)setTimeout(()=>openColab(),220);
   else if(autoParam&&!['replace_audio','mix_audio','volume_adjust','export_mp4'].includes(mediaOperationIntent()))setTimeout(()=>autoStart().catch(()=>{}),220);
 }
+
+async function acceptHybridReferenceFromParent(event){
+  if(event.origin!==location.origin)return;
+  const data=event.data||{};
+  if(data.type!=='NOVA_HYBRID_REFERENCE')return;
+  const file=data.file;
+  if(!(file instanceof File)||!String(file.type||'').startsWith('image/')){
+    setStatus('Hybrid: NOVA не получила корректное фото reference.','error');
+    return;
+  }
+  currentCharacterRef=file;
+  const input=$('remoteCharacterRef');
+  if(input){
+    try{
+      const dt=new DataTransfer();
+      dt.items.add(file);
+      input.files=dt.files;
+    }catch(_){}
+  }
+  if(typeof data.prompt==='string'&&data.prompt.trim()&&$('prompt')){
+    $('prompt').value=data.prompt.trim();
+    $('applyPrompt')?.click();
+  }
+  if($('humanMotionMode')){
+    const requested=String(data.motionMode||'natural');
+    const allowed=new Set(['auto','natural','walk','run','dance','motion-reference','none']);
+    $('humanMotionMode').value=allowed.has(requested)?requested:'natural';
+  }
+  const meta=recoveryMeta();
+  if(meta){
+    await beginRecovery(
+      meta.job||buildJob(),
+      currentSourceFile,
+      currentSourceFile?.name||meta.sourceName||'source.mp4',
+      currentCharacterRef,
+      currentAudioFiles.length?currentAudioFiles:currentAudioFile,
+      Boolean(meta.userApprovedRemote)
+    );
+  }
+  setEasyState('HYBRID PHOTO ГОТОВО','Фото из NOVA Video PRO передано в Motion Studio. Человек будет анимирован через WanGP image-to-video; Remote GPU запустится только после твоего подтверждения.','ok');
+  setRecoveryStatus('Hybrid reference ✓ · фото сохранено для identity/image-to-video.','ok');
+  refreshEasyState();
+}
+window.addEventListener('message',event=>{acceptHybridReferenceFromParent(event).catch(error=>setStatus('Hybrid bridge: '+(error?.message||error),'error'))});
 
 $('remoteEasyAction')?.addEventListener('click',easyAction);
 $('remoteStudioToggle')?.addEventListener('click',toggleSimpleStudioMode);

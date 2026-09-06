@@ -102,6 +102,47 @@
     return pane;
   }
 
+  async function currentHybridPhoto() {
+    const direct = $('#novaProImageRef')?.files?.[0] || null;
+    if (direct) return direct;
+    const preview = $('#novaProImagePreview');
+    if (!preview?.src || preview.hidden) return null;
+    try {
+      const response = await fetch(preview.src);
+      if (!response.ok) return null;
+      const blob = await response.blob();
+      if (!String(blob.type || '').startsWith('image/')) return null;
+      return new File([blob], 'NOVA_HYBRID_REFERENCE.png', { type: blob.type || 'image/png', lastModified: Date.now() });
+    } catch (_) {
+      return null;
+    }
+  }
+
+  function inferHybridMotionMode(prompt) {
+    const q = String(prompt || '').toLowerCase();
+    if (/\b(run|running|sprint)\b|бег|беж|спринт/.test(q)) return 'run';
+    if (/\b(dance|dancing)\b|танц/.test(q)) return 'dance';
+    if (/\b(walk|walking|stride|gait)\b|ходьб|ид[её]т|идти|шага/.test(q)) return 'walk';
+    if (/motion.?transfer|openpose|скелет|повтор.*движ/.test(q)) return 'motion-reference';
+    return 'natural';
+  }
+
+  async function pushHybridReferenceToMotion() {
+    const frame = $('#novaMotionFrame');
+    if (!frame?.contentWindow) return false;
+    const file = await currentHybridPhoto();
+    if (!file) return false;
+    const prompt = $('#novaProPrompt')?.value || $('#novaSimpleVideoPrompt')?.value || '';
+    frame.contentWindow.postMessage({
+      type: 'NOVA_HYBRID_REFERENCE',
+      file,
+      prompt,
+      motionMode: inferHybridMotionMode(prompt)
+    }, location.origin);
+    status('✅ Hybrid: фото передано в Motion+VFX. Фон/текст защищаем, человек → image-to-video.');
+    return true;
+  }
+
   function loadMotionFrame() {
     const wrap = $('#novaMotionFrameWrap');
     if (!wrap) return;
@@ -117,8 +158,24 @@
       wrap.innerHTML = '';
       wrap.appendChild(frame);
       status('Motion + VFX загружается внутри NOVA…');
-      frame.addEventListener('load', () => status('✅ Motion + VFX готов. Локальный режим бесплатный; Remote GPU требует подтверждения.'), { once: true });
+      frame.addEventListener('load', () => {
+        status('✅ Motion + VFX готов. Локальный режим бесплатный; Remote GPU требует подтверждения.');
+        pushHybridReferenceToMotion().catch(() => {});
+      }, { once: true });
+    } else {
+      pushHybridReferenceToMotion().catch(() => {});
     }
+  }
+
+  function wireHybridBridge() {
+    if (document.documentElement.dataset.novaHybridBridge === '1') return;
+    document.documentElement.dataset.novaHybridBridge = '1';
+    document.addEventListener('change', event => {
+      if (event.target?.id === 'novaProImageRef') pushHybridReferenceToMotion().catch(() => {});
+    });
+    document.addEventListener('input', event => {
+      if (event.target?.id === 'novaProPrompt') pushHybridReferenceToMotion().catch(() => {});
+    });
   }
 
   function ensureIrinaPanel() {
@@ -362,6 +419,7 @@
     ensureIrinaPanel();
     ensureTextVideoQuick();
     ensureEditorTools();
+    wireHybridBridge();
     wireLaunchers(modal);
     setActive(restore(), { loadMotion: false });
     window.NovaUnifiedVideoStudio = Object.freeze({

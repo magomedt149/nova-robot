@@ -1,9 +1,9 @@
 (()=>{
 'use strict';
 
-const EXPECTED_VERSION='v29';
-const EXPECTED_CACHE='tumsoev-motion-vfx-studio-v29-music-fades';
-const LEGACY_CACHE_RE=/tumsoev-motion-vfx-studio-v(?:22|23|24|25|26|27|28)(?:-|$)/i;
+const EXPECTED_VERSION='v30';
+const EXPECTED_CACHE='tumsoev-motion-vfx-studio-v30-hybrid-image-motion';
+const LEGACY_CACHE_RE=/tumsoev-motion-vfx-studio-v(?:22|23|24|25|26|27|28|29)(?:-|$)/i;
 const FORCE_PENDING='nova.motion.diagnostics.forcePending';
 const FORCE_RESULT='nova.motion.diagnostics.forceResult';
 const AUTO_OPEN='nova.motion.diagnostics.autoOpen';

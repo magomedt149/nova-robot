@@ -201,18 +201,19 @@
           </details>
           <label class="remote-source-easy">Персонаж / фото — необязательно
             <input id="remoteCharacterRef" type="file" accept="image/jpeg,image/png,image/webp,image/*">
-            <small>Фото отвечает за внешность. Видео выше отвечает за движение. Для лучшего identity lock используй чёткое фото одного человека.</small>
+            <small>Фото отвечает за внешность и может быть единственным входом для Hybrid image-to-video. Если добавлено driving-video, оно управляет движением. Для лучшего identity lock используй чёткое фото одного человека.</small>
           </label>
           <label class="remote-source-easy">Движение человека
             <select id="humanMotionMode">
               <option value="auto" selected>Авто — NOVA определит по тексту</option>
+              <option value="natural">Естественное движение / оживить фото</option>
               <option value="walk">Ходьба</option>
               <option value="run">Бег</option>
               <option value="dance">Танец</option>
               <option value="motion-reference">Повторить движение из видео</option>
               <option value="none">Не управлять телом</option>
             </select>
-            <small>Если загружено видео, NOVA использует его как driving/control reference для WanGP. Бесплатный Remote GPU запускается только после твоего подтверждения.</small>
+            <small>Только фото → WanGP image-to-video. Фото + видео → видео используется как driving/control reference. Remote GPU запускается только после твоего подтверждения и FREE LOCK.</small>
           </label>
         </div>
 
@@ -315,7 +316,7 @@
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', async () => {
         try {
-          const registration = await navigator.serviceWorker.register('./service-worker.js?v=29', {
+          const registration = await navigator.serviceWorker.register('./service-worker.js?v=30', {
             scope: './',
             updateViaCache: 'none'
           });
