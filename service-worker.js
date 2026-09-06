@@ -1,4 +1,4 @@
-const CACHE = 'nova-v84-glasses-connect-20260906';
+const CACHE = 'nova-v85-auto-camera-failover-20260906';
 const API_CACHE = 'nova-api-economy-v2';
 const METERED_NETLIFY_HOST = /(^|\\.)netlify\\.app$/i.test(self.location.hostname);
 const YOUTUBE_TTL_MS = 24 * 60 * 60 * 1000;
