@@ -1,7 +1,7 @@
 {
   "name": "NOVA",
-  "version": "27.9.0",
-  "pwa": "27.9.0",
+  "version": "27.9.1",
+  "pwa": "27.9.1",
   "mode": "free-only",
   "paidApis": false,
   "externalComputeRequiresConfirmation": true,
@@ -90,5 +90,6 @@
     "Нова, оригинал 80%, музыка 35%",
     "Нова, дорожка 1 70%, дорожка 2 30%",
     "Нова, экспортируй готовый MP4"
-  ]
+  ],
+  "audioCommandRelease": "multi-track-voice-v2"
 }
