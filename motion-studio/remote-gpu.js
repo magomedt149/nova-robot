@@ -16,11 +16,21 @@ const MAX_SOURCE_CACHE=1536*1024*1024;
 const FREE_LOCK=true;
 
 let pollTimer=0,recoveryTimer=0,lastJobId='',wakeLock=null,lastHealth=null,sendBusy=false,localRenderBusy=false;
-let pollFailures=0,recoveryAttempt=0,currentSourceFile=null,currentCharacterRef=null,currentAudioFile=null;
+let pollFailures=0,recoveryAttempt=0,currentSourceFile=null,currentCharacterRef=null,currentAudioFile=null,currentAudioFiles=[];
 
 function endpoint(){return ($('remoteUrl')?.value||'').trim().replace(/\/+$/,'')}
 function token(){return ($('remoteToken')?.value||'').trim()}
 function authHeaders(){return {'X-NOVA-Token':token()}}
+function selectedAudioFiles(){
+  const input=Array.from($('remoteAudio')?.files||[]);
+  if(input.length)return input.slice(0,8);
+  if(currentAudioFiles.length)return currentAudioFiles.slice(0,8);
+  return currentAudioFile?[currentAudioFile]:[];
+}
+function clampPct(value,fallback=100){
+  const n=Number(value);
+  return Number.isFinite(n)?Math.max(0,Math.min(400,n)):fallback;
+}
 function saveConnection(){
   localStorage.setItem(LS_URL,endpoint());
   localStorage.setItem(LS_TOKEN,token());
@@ -202,12 +212,14 @@ async function canCacheSource(source){
 async function beginRecovery(job,source,sourceName,characterRef=null,audioRef=null,approvedRemote=false){
   const name=sourceName||source?.name||'source.mp4';
   const ref=characterRef||currentCharacterRef||$('remoteCharacterRef')?.files?.[0]||null;
-  const audio=audioRef||currentAudioFile||$('remoteAudio')?.files?.[0]||null;
+  const providedAudio=Array.isArray(audioRef)?audioRef:(audioRef?[audioRef]:selectedAudioFiles());
+  const audioList=providedAudio.slice(0,8);
+  const audio=audioList[0]||null;
   const refName=ref?.name||'character-reference.png';
   const audioName=audio?.name||'audio.mp3';
   const previous=recoveryMeta();
   const meta={
-    version:3,
+    version:4,
     phase:'prepared',
     job:{...job,defer_start:false},
     remoteJobId:'',
@@ -224,28 +236,33 @@ async function beginRecovery(job,source,sourceName,characterRef=null,audioRef=nu
     referenceCached:false,
     audioName,
     audioType:audio?.type||'audio/mpeg',
-    audioSize:Number(audio?.size||0),
+    audioSize:audioList.reduce((sum,item)=>sum+Number(item?.size||0),0),
+    audioCount:audioList.length,
     audioCached:false,
     updatedAt:Date.now()
   };
   saveRecoveryMeta(meta);
-  let cachedSource=null,cachedReference=null,cachedAudio=null;
+  let cachedSource=null,cachedReference=null,cachedAudio=null,cachedAudioTracks=[];
   if(source&&await canCacheSource(source))cachedSource=source;
   if(ref&&await canCacheSource(ref))cachedReference=ref;
-  if(audio&&await canCacheSource(audio))cachedAudio=audio;
+  for(const item of audioList){
+    if(await canCacheSource(item))cachedAudioTracks.push(item);
+    else {cachedAudioTracks=[];break}
+  }
+  cachedAudio=cachedAudioTracks[0]||null;
   try{
-    await dbPut({id:DB_KEY,job:meta.job,source:cachedSource,sourceName:name,sourceType:meta.sourceType,reference:cachedReference,referenceName:refName,referenceType:meta.referenceType,audio:cachedAudio,audioName,audioType:meta.audioType,meta});
-    if(cachedSource||cachedReference||cachedAudio){
+    await dbPut({id:DB_KEY,job:meta.job,source:cachedSource,sourceName:name,sourceType:meta.sourceType,reference:cachedReference,referenceName:refName,referenceType:meta.referenceType,audio:cachedAudio,audioTracks:cachedAudioTracks,audioName,audioType:meta.audioType,meta});
+    if(cachedSource||cachedReference||cachedAudioTracks.length){
       meta.sourceCached=Boolean(cachedSource);
       meta.referenceCached=Boolean(cachedReference);
-      meta.audioCached=Boolean(cachedAudio);
+      meta.audioCached=audioList.length>0&&cachedAudioTracks.length===audioList.length;
       saveRecoveryMeta(meta);
-      await dbPut({id:DB_KEY,job:meta.job,source:cachedSource,sourceName:name,sourceType:meta.sourceType,reference:cachedReference,referenceName:refName,referenceType:meta.referenceType,audio:cachedAudio,audioName,audioType:meta.audioType,meta});
+      await dbPut({id:DB_KEY,job:meta.job,source:cachedSource,sourceName:name,sourceType:meta.sourceType,reference:cachedReference,referenceName:refName,referenceType:meta.referenceType,audio:cachedAudio,audioTracks:cachedAudioTracks,audioName,audioType:meta.audioType,meta});
     }
     const parts=[];
     if(meta.sourceSize)parts.push(meta.sourceCached?'видео сохранено':'видео держится пока страница открыта');
     if(meta.referenceSize)parts.push(meta.referenceCached?'фото персонажа сохранено':'фото персонажа держится пока страница открыта');
-    if(meta.audioSize)parts.push(meta.audioCached?'аудио сохранено':'аудио держится пока страница открыта');
+    if(meta.audioSize)parts.push(meta.audioCached?('аудиодорожки сохранены: '+meta.audioCount):('аудио держится пока страница открыта: '+meta.audioCount));
     setRecoveryStatus(parts.length?'Auto Recovery: '+parts.join(' • ')+'.':'Auto Recovery: Scene Pack сохранён.','ok');
     requestRecoveryPersistence().catch(()=>{});
   }catch(_){
@@ -279,7 +296,8 @@ async function getRecoveryBundle(){
     reference:currentCharacterRef||record?.reference||null,
     referenceName:record?.referenceName||meta.referenceName||'character-reference.png',
     audio:currentAudioFile||record?.audio||null,
-    audioName:record?.audioName||meta.audioName||'audio.mp3'
+    audioName:record?.audioName||meta.audioName||'audio.mp3',
+    audioTracks:currentAudioFiles.length?currentAudioFiles:(record?.audioTracks||((record?.audio)?[record.audio]:[]))
   };
 }
 async function clearRecovery(){
@@ -288,6 +306,7 @@ async function clearRecovery(){
   currentSourceFile=null;
   currentCharacterRef=null;
   currentAudioFile=null;
+  currentAudioFiles=[];
   setRecoveryStatus('Auto Recovery: готов.','ok');
 }
 async function readClipboardCode(){
