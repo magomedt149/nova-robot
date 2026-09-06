@@ -825,11 +825,14 @@ async function restoreCachedInputs(){
   if(!bundle)return null;
   currentSourceFile=bundle.source||null;
   currentCharacterRef=bundle.reference||null;
+  currentAudioFile=bundle.audio||null;
   const parts=[];
   if(currentSourceFile)parts.push('видео восстановлено из iPhone-кэша');
   else if(bundle.meta?.sourceSize)parts.push('видео не найдено в iPhone-кэше');
   if(currentCharacterRef)parts.push('фото восстановлено из iPhone-кэша');
   else if(bundle.meta?.referenceSize)parts.push('фото не найдено в iPhone-кэше');
+  if(currentAudioFile)parts.push('аудио восстановлено из iPhone-кэша');
+  else if(bundle.meta?.audioSize)parts.push('аудио не найдено в iPhone-кэше');
   if(parts.length)setRecoveryStatus('После перезапуска: '+parts.join(' • ')+'.','ok');
   return bundle;
 }
@@ -847,7 +850,12 @@ async function resumeRunningJobAfterRestart(){
       return true;
     }
     if(['uploading','uploaded','queued'].includes(data.status)){
-      setRecoveryStatus('После перезапуска job '+jobId+' восстановлен в состоянии «'+data.status+'». FREE LOCK: продолжение GPU требует кнопки «Восстановить сейчас».','busy');
+      if(recoveryMeta()?.userApprovedRemote){
+        setRecoveryStatus('После перезапуска job '+jobId+' восстановлен в состоянии «'+data.status+'». Продолжаю автоматически — это уже одобренное задание.','busy');
+        await resumeOrRecover();
+      }else{
+        setRecoveryStatus('После перезапуска job '+jobId+' восстановлен в состоянии «'+data.status+'». Для продолжения нужно подтверждение.','busy');
+      }
       return true;
     }
     if(data.status==='error'||data.status==='cancelled'){
@@ -859,14 +867,21 @@ async function resumeRunningJobAfterRestart(){
 }
 
 async function recoverNow(){
-  if(!confirmRemoteCompute('Восстановление Remote GPU job'))return;
+  const meta=recoveryMeta();
+  if(!meta?.userApprovedRemote&&!confirmRemoteCompute('Восстановление Remote GPU job'))return;
   if(!endpoint()||!token()){
+    if(meta?.userApprovedRemote){
+      setRecoveryStatus('Worker не подключён. Открываю наш Colab для восстановления уже одобренного задания.','busy');
+      openColab();
+      return;
+    }
     document.getElementById('remoteAdvanced')?.setAttribute('open','');
-    setRecoveryStatus('Для старого Remote GPU job нужен сохранённый постоянный Worker URL + Token. Colab автоматически не открывается.','error');
+    setRecoveryStatus('Для восстановления нужен Worker URL + Token или запуск нашего Colab.','error');
     return;
   }
   const health=await connect({resume:false});
   if(health)await resumeOrRecover();
+  else if(meta?.userApprovedRemote){openColab()}
   else scheduleRecoveryProbe(1000);
 }
 async function restore(){
@@ -877,19 +892,21 @@ async function restore(){
   const params=new URLSearchParams(location.search);
   const videoParam=params.get('video')==='1';
   setFullAuto(false);
-  setAutoRecover(false);
   const pending=localStorage.getItem(LS_PENDING)||'';
   if(pending&&$('prompt')){$('prompt').value=pending;localStorage.removeItem(LS_PENDING);$('applyPrompt')?.click()}
   const saved=localStorage.getItem(LS_JOB);
   const meta=recoveryMeta();
+  setAutoRecover(Boolean(meta?.userApprovedRemote||localStorage.getItem(LS_AUTORECOVER)==='1'));
   const bundle=await restoreCachedInputs();
   if(saved||meta||bundle){
     const sourceOk=Boolean(bundle?.source);
     const refOk=Boolean(bundle?.reference);
+    const audioOk=Boolean(bundle?.audio);
     const cached=[];
     if(sourceOk)cached.push('видео ✓');
     if(refOk)cached.push('фото ✓');
-    setRecoveryStatus('Recovery загружен после перезапуска'+(cached.length?' • '+cached.join(' • '):'')+'. FREE LOCK не запускает новый GPU job автоматически.','ok');
+    if(audioOk)cached.push('аудио ✓');
+    setRecoveryStatus('Recovery загружен после перезапуска'+(cached.length?' • '+cached.join(' • '):'')+(meta?.userApprovedRemote?' • одобренный job продолжится автоматически.':'.'),'ok');
     await resumeRunningJobAfterRestart();
   }
   if(videoParam){
@@ -910,8 +927,8 @@ $('remoteCharacterRef')?.addEventListener('change',async e=>{
   currentCharacterRef=e.target.files?.[0]||null;
   const meta=recoveryMeta();
   if(meta&&currentCharacterRef){
-    await beginRecovery(meta.job||buildJob(),currentSourceFile,currentSourceFile?.name||meta.sourceName||'source.mp4',currentCharacterRef);
-    setRecoveryStatus('Фото персонажа сохранено для identity lock. FREE LOCK: GPU не запускается автоматически.','ok');
+    await beginRecovery(meta.job||buildJob(),currentSourceFile,currentSourceFile?.name||meta.sourceName||'source.mp4',currentCharacterRef,currentAudioFile,Boolean(meta.userApprovedRemote));
+    setRecoveryStatus('Фото персонажа сохранено для identity lock.','ok');
   }
 });
 $('remoteSource')?.addEventListener('change',async e=>{
@@ -919,12 +936,16 @@ $('remoteSource')?.addEventListener('change',async e=>{
   refreshEasyState();
   const meta=recoveryMeta();
   if(meta&&meta.sourceSize&&currentSourceFile){
-    await beginRecovery(meta.job||buildJob(),currentSourceFile,currentSourceFile.name);
-    setRecoveryStatus('FREE LOCK: исходник выбран. Remote GPU не продолжен автоматически; при необходимости нажми «Восстановить сейчас».','ok');
+    await beginRecovery(meta.job||buildJob(),currentSourceFile,currentSourceFile.name,currentCharacterRef,currentAudioFile,Boolean(meta.userApprovedRemote));
+    setRecoveryStatus(meta.userApprovedRemote?'Исходник восстановлен. Одобренный job готов продолжиться автоматически.':'Исходник выбран.','ok');
   }
 });
-$('remoteAudio')?.addEventListener('change',e=>{
+$('remoteAudio')?.addEventListener('change',async e=>{
   currentAudioFile=e.target.files?.[0]||null;
+  const meta=recoveryMeta();
+  if(meta&&currentAudioFile){
+    await beginRecovery(meta.job||buildJob(),currentSourceFile,currentSourceFile?.name||meta.sourceName||'source.mp4',currentCharacterRef,currentAudioFile,Boolean(meta.userApprovedRemote));
+  }
   if(currentAudioFile)setEasyState('АУДИО ВЫБРАНО','Теперь выбери видео и нажми «Сделать видео». Для команды замены звука NOVA сама выберет FFmpeg.','ok');
   refreshEasyState();
 });
@@ -937,18 +958,42 @@ $('remoteSend')?.addEventListener('click',()=>send(false));
 $('remoteCancel')?.addEventListener('click',cancel);
 $('remoteUrl')?.addEventListener('change',saveConnection);
 $('remoteToken')?.addEventListener('change',saveConnection);
-$('remoteConnectCode')?.addEventListener('change',e=>{
-  if(parseConnectCode(e.target.value))setStatus('Connect Code принят. FREE LOCK: нажми «Проверить GPU» вручную.','ok');
-  else if(e.target.value.trim())setStatus('Не удалось прочитать NOVA CONNECT CODE.','error');
+$('remoteConnectCode')?.addEventListener('change',async e=>{
+  if(parseConnectCode(e.target.value)){
+    setStatus('Connect Code принят. Проверяю worker…','busy');
+    const health=await connect();
+    if(health&&recoveryMeta()?.userApprovedRemote)await resumeOrRecover();
+  }else if(e.target.value.trim())setStatus('Не удалось прочитать NOVA CONNECT CODE.','error');
 });
-$('remoteConnectCode')?.addEventListener('paste',()=>setTimeout(()=>{
+$('remoteConnectCode')?.addEventListener('paste',()=>setTimeout(async()=>{
   const el=$('remoteConnectCode');
-  if(el&&parseConnectCode(el.value))setStatus('Connect Code принят. FREE LOCK: соединение не запускается автоматически.','ok');
+  if(el&&parseConnectCode(el.value)){
+    setStatus('Connect Code принят. Проверяю worker…','busy');
+    const health=await connect();
+    if(health&&recoveryMeta()?.userApprovedRemote)await resumeOrRecover();
+  }
 },0));
-window.addEventListener('online',()=>refreshEasyState());
-window.addEventListener('pageshow',()=>refreshEasyState());
+window.addEventListener('online',()=>{
+  refreshEasyState();
+  if(recoveryMeta()?.userApprovedRemote&&autoRecoverEnabled())recoverNow().catch(()=>{});
+});
+window.addEventListener('pageshow',()=>{
+  refreshEasyState();
+  if(localStorage.getItem(LS_WAITING)==='1'||recoveryMeta()?.userApprovedRemote){
+    tryClipboardReconnect().then(found=>{
+      if(!found&&endpoint()&&token())connect().then(health=>{if(health&&recoveryMeta()?.userApprovedRemote)resumeOrRecover().catch(()=>{})}).catch(()=>{});
+    }).catch(()=>{});
+  }
+});
 document.addEventListener('visibilitychange',()=>{
-  if(document.visibilityState==='visible'&&(lastJobId||localStorage.getItem(LS_JOB)))holdWakeLock();
+  if(document.visibilityState==='visible'){
+    if(lastJobId||localStorage.getItem(LS_JOB))holdWakeLock();
+    if(recoveryMeta()?.userApprovedRemote&&autoRecoverEnabled()){
+      tryClipboardReconnect().then(found=>{
+        if(!found&&endpoint()&&token())connect().then(health=>{if(health)resumeOrRecover().catch(()=>{})}).catch(()=>{});
+      }).catch(()=>{});
+    }
+  }
 });
 restore().catch(()=>{});
 })();
