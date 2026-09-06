@@ -1,7 +1,7 @@
 {
   "name": "NOVA",
-  "version": "27.10.0",
-  "pwa": "27.10.0",
+  "version": "27.10.1",
+  "pwa": "27.10.1",
   "mode": "free-only",
   "paidApis": false,
   "externalComputeRequiresConfirmation": true,
@@ -112,5 +112,7 @@
     "Нова, создай гитару Am D G Em, 90 BPM, MP3",
     "Нова, создай аккордеон Am D G Em, 100 BPM, WAV",
     "Нова, сделай музыку по аккордам Am D G Em и подмешай в видео на 35%"
-  ]
+  ],
+  "freeChordMusicVoiceMixPercent": true,
+  "freeChordMusicManualEngine": true
 }
