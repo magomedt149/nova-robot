@@ -47,11 +47,12 @@ WANGP_ROOT = Path(os.environ.get("NOVA_WANGP_ROOT", "/content/Wan2GP")).resolve(
 WANGP_OUTPUT_ROOT = Path(os.environ.get("NOVA_WANGP_OUTPUT_ROOT", str(JOB_ROOT / "_wangp_outputs"))).resolve()
 WANGP_SESSION = None
 WANGP_SESSION_LOCK = threading.Lock()
+SELF_TEST_LOCK = threading.Lock()
 WANGP_JOBS: dict[str, Any] = {}
 DOWNLOAD_TICKETS: dict[str, dict[str, Any]] = {}
 DOWNLOAD_TICKET_TTL = int(os.environ.get("NOVA_REMOTE_DOWNLOAD_TTL", "600"))
-WORKER_VERSION = "1.7.0"
-PROTOCOL_VERSION = 4
+WORKER_VERSION = "1.8.0"
+PROTOCOL_VERSION = 5
 SESSION_ID = uuid.uuid4().hex[:12]
 
 app = FastAPI(title="NOVA Remote GPU Worker", version="1.0")
@@ -127,6 +128,112 @@ def gpu_info() -> dict[str, Any]:
     except Exception:
         pass
     return result
+
+
+def run_worker_self_test() -> dict[str, Any]:
+    """Run zero-credit smoke tests for the complete NOVA remote media stack."""
+    with SELF_TEST_LOCK:
+        work = JOB_ROOT / f"_selftest_{uuid.uuid4().hex[:8]}"
+        work.mkdir(parents=True, exist_ok=True)
+        results: dict[str, Any] = {}
+        try:
+            gpu = gpu_info()
+            results["gpu"] = {"ok": bool(gpu.get("available")), **gpu}
+
+            ffmpeg_ok = False
+            ffmpeg_error = ""
+            try:
+                ffmpeg = shutil.which("ffmpeg")
+                ffprobe = shutil.which("ffprobe")
+                if not ffmpeg or not ffprobe:
+                    raise RuntimeError("ffmpeg/ffprobe not installed")
+                source = work / "source.mp4"
+                audio = work / "new.wav"
+                out = work / "replaced.mp4"
+                subprocess.run(
+                    [
+                        ffmpeg, "-y", "-hide_banner", "-loglevel", "error",
+                        "-f", "lavfi", "-i", "color=c=black:s=160x90:r=24",
+                        "-f", "lavfi", "-i", "sine=frequency=440:sample_rate=44100",
+                        "-t", "1", "-c:v", "libx264", "-pix_fmt", "yuv420p",
+                        "-c:a", "aac", str(source),
+                    ],
+                    check=True, timeout=60,
+                )
+                subprocess.run(
+                    [
+                        ffmpeg, "-y", "-hide_banner", "-loglevel", "error",
+                        "-f", "lavfi", "-i", "sine=frequency=880:sample_rate=44100",
+                        "-t", "0.6", "-c:a", "pcm_s16le", str(audio),
+                    ],
+                    check=True, timeout=30,
+                )
+                subprocess.run(
+                    [
+                        ffmpeg, "-y", "-hide_banner", "-loglevel", "error",
+                        "-i", str(source), "-i", str(audio),
+                        "-map", "0:v:0", "-map", "1:a:0",
+                        "-c:v", "libx264", "-preset", "veryfast", "-crf", "20",
+                        "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "192k",
+                        "-af", "apad", "-shortest", "-movflags", "+faststart", str(out),
+                    ],
+                    check=True, timeout=60,
+                )
+                vcodec = subprocess.run(
+                    [ffprobe, "-v", "error", "-select_streams", "v:0", "-show_entries", "stream=codec_name", "-of", "csv=p=0", str(out)],
+                    capture_output=True, text=True, check=True, timeout=20,
+                ).stdout.strip()
+                acodec = subprocess.run(
+                    [ffprobe, "-v", "error", "-select_streams", "a:0", "-show_entries", "stream=codec_name", "-of", "csv=p=0", str(out)],
+                    capture_output=True, text=True, check=True, timeout=20,
+                ).stdout.strip()
+                ffmpeg_ok = out.is_file() and out.stat().st_size > 0 and vcodec == "h264" and acodec == "aac"
+                results["ffmpeg"] = {"ok": ffmpeg_ok, "video_codec": vcodec, "audio_codec": acodec, "mp4_bytes": out.stat().st_size if out.is_file() else 0}
+            except Exception as exc:
+                ffmpeg_error = str(exc)
+                results["ffmpeg"] = {"ok": False, "error": ffmpeg_error}
+
+            blender_ok = False
+            try:
+                if not command_exists("blender"):
+                    raise RuntimeError("Blender not installed")
+                out_dir = work / "blender"
+                subprocess.run(
+                    [
+                        sys.executable, str(REPO_ROOT / "automation" / "nova_pipeline.py"),
+                        "--prompt", "NOVA self test cube, slow push-in",
+                        "--duration", "1", "--ratio", "9:16",
+                        "--out", str(out_dir), "--run-blender",
+                    ],
+                    check=True, timeout=150, capture_output=True, text=True,
+                )
+                preview = out_dir / "NOVA_blocking_preview.mp4"
+                blender_ok = preview.is_file() and preview.stat().st_size > 0
+                results["blender"] = {"ok": blender_ok, "preview_bytes": preview.stat().st_size if preview.is_file() else 0}
+            except Exception as exc:
+                results["blender"] = {"ok": False, "error": str(exc)}
+
+            wangp_api = WANGP_ROOT / "shared" / "api.py"
+            wangp_ok = False
+            try:
+                if not wangp_api.is_file():
+                    raise RuntimeError(f"WanGP API missing: {wangp_api}")
+                subprocess.run([sys.executable, "-m", "py_compile", str(wangp_api)], check=True, timeout=30)
+                wangp_ok = True
+                results["wangp"] = {"ok": True, "api": str(wangp_api)}
+            except Exception as exc:
+                results["wangp"] = {"ok": False, "error": str(exc), "api": str(wangp_api)}
+
+            ok = bool(results["gpu"]["ok"] and ffmpeg_ok and blender_ok and wangp_ok)
+            return {
+                "ok": ok,
+                "worker_version": WORKER_VERSION,
+                "protocol_version": PROTOCOL_VERSION,
+                "session_id": SESSION_ID,
+                "results": results,
+            }
+        finally:
+            shutil.rmtree(work, ignore_errors=True)
 
 
 def safe_job_id(value: str | None = None) -> str:
@@ -945,6 +1052,9 @@ async def health(request: Request):
             "blender": command_exists("blender"),
             "ffmpeg": command_exists("ffmpeg"),
             "wangp": (WANGP_ROOT / "shared" / "api.py").is_file(),
+            "self_test": True,
+            "auto_colab_resume": True,
+            "audio_recovery": True,
             "audio_replace": command_exists("ffmpeg"),
             "video_transcode": command_exists("ffmpeg"),
             "iphone_h264_encode": command_exists("ffmpeg"),
@@ -956,6 +1066,15 @@ async def health(request: Request):
         "drive_mounted": Path("/content/drive/MyDrive").exists(),
         "free_disk_gb": round(disk.free / 1024**3, 1),
     }
+
+
+@app.post("/self-test")
+async def self_test(request: Request):
+    require_token(request)
+    result = await asyncio.to_thread(run_worker_self_test)
+    if not result.get("ok"):
+        return JSONResponse(result, status_code=503)
+    return result
 
 
 @app.post("/jobs")
