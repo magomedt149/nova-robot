@@ -60,15 +60,23 @@ jobs:
           mkdir -p /tmp/nova-media-test
           ffmpeg -y -hide_banner -loglevel error -f lavfi -i color=c=black:s=320x240:r=24 -f lavfi -i sine=frequency=440:sample_rate=44100 -t 2 -c:v libx264 -pix_fmt yuv420p -c:a aac /tmp/nova-media-test/source.mp4
           ffmpeg -y -hide_banner -loglevel error -f lavfi -i sine=frequency=880:sample_rate=44100 -t 1 -c:a pcm_s16le /tmp/nova-media-test/new.wav
+          ffmpeg -y -hide_banner -loglevel error -f lavfi -i sine=frequency=1320:sample_rate=44100 -t 1.3 -c:a pcm_s16le /tmp/nova-media-test/second.wav
           ffmpeg -y -hide_banner -loglevel error -i /tmp/nova-media-test/source.mp4 -i /tmp/nova-media-test/new.wav -map 0:v:0 -map 1:a:0 -c:v libx264 -preset veryfast -crf 20 -pix_fmt yuv420p -c:a aac -b:a 192k -af apad -shortest -movflags +faststart /tmp/nova-media-test/out.mp4
           test "$(ffprobe -v error -select_streams v:0 -show_entries stream=codec_name -of csv=p=0 /tmp/nova-media-test/out.mp4)" = "h264"
           test "$(ffprobe -v error -select_streams a:0 -show_entries stream=codec_name -of csv=p=0 /tmp/nova-media-test/out.mp4)" = "aac"
+          ffmpeg -y -hide_banner -loglevel error             -i /tmp/nova-media-test/source.mp4 -i /tmp/nova-media-test/new.wav -i /tmp/nova-media-test/second.wav             -filter_complex "[0:a]volume=0.8,apad[a0];[1:a]volume=0.35,apad[a1];[2:a]volume=0.2,apad[a2];[a0][a1][a2]amix=inputs=3:duration=longest:dropout_transition=0,volume=1[mix]"             -map 0:v:0 -map "[mix]" -c:v libx264 -preset veryfast -crf 20 -pix_fmt yuv420p -c:a aac -b:a 192k -shortest -movflags +faststart /tmp/nova-media-test/mix.mp4
+          test "$(ffprobe -v error -select_streams v:0 -show_entries stream=codec_name -of csv=p=0 /tmp/nova-media-test/mix.mp4)" = "h264"
+          test "$(ffprobe -v error -select_streams a:0 -show_entries stream=codec_name -of csv=p=0 /tmp/nova-media-test/mix.mp4)" = "aac"
           grep -q "replace_audio" automation/remote_gpu_worker.py
+          grep -q "mix_audio" automation/remote_gpu_worker.py
+          grep -q "export_mp4_compatible" automation/remote_gpu_worker.py
           grep -q "run_worker_self_test" automation/remote_gpu_worker.py
-          grep -q "PROTOCOL_VERSION = 5" automation/remote_gpu_worker.py
+          grep -q "PROTOCOL_VERSION = 6" automation/remote_gpu_worker.py
+          grep -q "audio_tracks" automation/remote_gpu_worker.py
           grep -q "remoteAudio" motion-studio/remote-gpu.js
+          grep -q "track_volumes" motion-studio/remote-gpu.js
           grep -q "userApprovedRemote" motion-studio/remote-gpu.js
           grep -q "remoteSelfTest" motion-studio/remote-gpu.js
-          grep -q "налож.*звук" app.js
-          grep -q "v26-safe-auto-colab" motion-studio/service-worker.js
-          echo "OK: NOVA FFmpeg audio replacement + safe auto-Colab pipeline"
+          grep -q "смеш.*дорож" app.js
+          grep -q "v27-multitrack-audio" motion-studio/service-worker.js
+          echo "OK: NOVA replace + multi-track mix + volume + MP4 export + safe auto-Colab"
