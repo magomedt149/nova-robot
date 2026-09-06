@@ -402,6 +402,7 @@ function musicSpecFromPrompt(){
     bpm,instrument,format,
     beats_per_chord:beatsPerChord,
     repeats,
+    requested_video_mix:Boolean(explicitMix||explicitReplace),
     mix_into_video:mixIntoVideo,
     mix_mode:explicitReplace?'replace':'mix',
     original_volume:audioMix.source_volume,
@@ -867,6 +868,14 @@ async function easyAction(){
   const musicTask=musicCreationIntent();
   const remoteNeeded=musicTask||['replace_audio','mix_audio','volume_adjust','export_mp4'].includes(mediaAction)||explicitFfmpeg||explicitBlender||isHeavyAiRequest();
 
+  if(musicTask){
+    const spec=musicSpecFromPrompt();
+    if(spec.requested_video_mix&&!source){
+      setEasyState('НУЖНО ВИДЕО','Команда просит сразу подмешать созданную музыку в видео. Выбери видеофайл — NOVA продолжит автоматически.','error');
+      return;
+    }
+  }
+
   if(['replace_audio','mix_audio'].includes(mediaAction)&&(!source||!audioTracks.length)){
     setEasyState('НУЖНЫ ФАЙЛЫ','Выбери видео и хотя бы одну аудиодорожку. NOVA поддерживает до 8 дорожек.','error');
     return;
@@ -1146,7 +1155,7 @@ $('remoteSource')?.addEventListener('change',async e=>{
   if(params.get('auto')==='1'){
     const op=mediaOperationIntent();
     const audioReady=selectedAudioFiles().length>0;
-    const ready=(op==='replace_audio'||op==='mix_audio')?(currentSourceFile&&audioReady):(op==='volume_adjust'||op==='export_mp4')?Boolean(currentSourceFile):false;
+    const ready=(op==='replace_audio'||op==='mix_audio')?(currentSourceFile&&audioReady):(op==='volume_adjust'||op==='export_mp4')?Boolean(currentSourceFile):musicCreationIntent()?Boolean(currentSourceFile):false;
     if(ready)setTimeout(()=>easyAction().catch(()=>{}),120);
   }
 });
@@ -1162,7 +1171,7 @@ $('remoteAudio')?.addEventListener('change',async e=>{
   const params=new URLSearchParams(location.search);
   if(params.get('auto')==='1'&&['replace_audio','mix_audio'].includes(mediaOperationIntent())&&currentSourceFile&&currentAudioFiles.length)setTimeout(()=>easyAction().catch(()=>{}),120);
 });
-['remoteOriginalVolume','remoteAddedVolume','remoteMasterVolume'].forEach(id=>{
+['remoteOriginalVolume','remoteAddedVolume','remoteMasterVolume','remoteMusicEnabled','remoteMusicChords','remoteMusicBpm','remoteMusicInstrument','remoteMusicFormat','remoteMusicBeats','remoteMusicRepeats','remoteMusicVolume','remoteMusicMixVideo'].forEach(id=>{
   $(id)?.addEventListener('change',()=>{buildJob();refreshEasyState()});
 });
 $('remoteConnect')?.addEventListener('click',()=>connect());
