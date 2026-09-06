@@ -8,6 +8,7 @@ on:
       - "app.js"
       - "motion-studio/**"
       - "automation/remote_gpu_worker.py"
+      - "blender-colab/NOVA_Remote_GPU_Worker.ipynb"
       - "version.json"
       - ".github/workflows/validate-nova.yml"
 
@@ -63,6 +64,11 @@ jobs:
           test "$(ffprobe -v error -select_streams v:0 -show_entries stream=codec_name -of csv=p=0 /tmp/nova-media-test/out.mp4)" = "h264"
           test "$(ffprobe -v error -select_streams a:0 -show_entries stream=codec_name -of csv=p=0 /tmp/nova-media-test/out.mp4)" = "aac"
           grep -q "replace_audio" automation/remote_gpu_worker.py
+          grep -q "run_worker_self_test" automation/remote_gpu_worker.py
+          grep -q "PROTOCOL_VERSION = 5" automation/remote_gpu_worker.py
           grep -q "remoteAudio" motion-studio/remote-gpu.js
+          grep -q "userApprovedRemote" motion-studio/remote-gpu.js
+          grep -q "remoteSelfTest" motion-studio/remote-gpu.js
           grep -q "налож.*звук" app.js
-          echo "OK: NOVA FFmpeg audio replacement pipeline"
+          grep -q "v26-safe-auto-colab" motion-studio/service-worker.js
+          echo "OK: NOVA FFmpeg audio replacement + safe auto-Colab pipeline"
