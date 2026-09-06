@@ -1,7 +1,7 @@
 {
   "name": "NOVA",
-  "version": "27.14.0",
-  "pwa": "27.14.0",
+  "version": "27.15.0",
+  "pwa": "27.15.0",
   "mode": "free-only",
   "paidApis": false,
   "externalComputeRequiresConfirmation": true,
@@ -151,7 +151,7 @@
     "Colab fallback only after approval"
   ],
   "visionLive": true,
-  "visionLiveVersion": "1.0.0",
+  "visionLiveVersion": "1.1.0",
   "visionLiveFreeOnDevice": true,
   "visionLivePaidApi": false,
   "visionLiveCameraNarration": true,
@@ -169,5 +169,27 @@
     "Нова, переключи камеру",
     "Нова, говори что видишь",
     "Нова, выключи камеру"
-  ]
+  ],
+  "visionExternalCamera": true,
+  "visionPhoneGlassesSwitch": true,
+  "visionExternalMediaStreamBridge": true,
+  "visionWebRTCOfferReceiver": true,
+  "visionNativeHttpsLiveUrl": true,
+  "visionGlassesAutoDetectLabels": true,
+  "visionGlassesAutoReconnect": true,
+  "visionSourceModes": [
+    "phone",
+    "glasses-device",
+    "external-mediastream",
+    "webrtc-mediastream",
+    "https-live-url"
+  ],
+  "visionGlassesVoiceCommands": [
+    "Нова, камера телефона",
+    "Нова, переключись на камеру очков",
+    "Нова, внешняя камера",
+    "Нова, переключи источник",
+    "Нова, режим очков"
+  ],
+  "visionGlassesIntegrationNote": "NOVA can consume a glasses MediaStream/WebRTC stream when the glasses companion/browser bridge exposes it; proprietary vendor cameras still require that vendor bridge to supply the stream."
 }
