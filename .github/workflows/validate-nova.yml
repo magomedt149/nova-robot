@@ -85,5 +85,5 @@ jobs:
           grep -q "userApprovedRemote" motion-studio/remote-gpu.js
           grep -q "remoteSelfTest" motion-studio/remote-gpu.js
           grep -q "смеш.*дорож" app.js
-          grep -q "v27-multitrack-audio" motion-studio/service-worker.js
+          grep -q "v28-free-chord-music" motion-studio/service-worker.js
           echo "OK: NOVA chord music WAV/MP3 + video mix + multi-track audio + safe auto-Colab"
