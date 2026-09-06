@@ -151,6 +151,46 @@
               <input id="remoteMasterVolume" type="number" min="0" max="400" step="5" value="100" inputmode="numeric">
             </label>
           </div>
+          <details class="remote-music-box">
+            <summary>🎵 Музыка по аккордам — бесплатно</summary>
+            <label class="remote-check"><input id="remoteMusicEnabled" type="checkbox"> <span><b>Создать музыку:</b> включить NOVA Music для этой задачи.</span></label>
+            <label>Аккорды
+              <input id="remoteMusicChords" value="Am D G Em" placeholder="Am D G Em">
+            </label>
+            <div class="grid3">
+              <label>Темп BPM
+                <input id="remoteMusicBpm" type="number" min="30" max="240" value="90" inputmode="numeric">
+              </label>
+              <label>Инструмент
+                <select id="remoteMusicInstrument">
+                  <option value="guitar" selected>Гитара</option>
+                  <option value="piano">Пианино</option>
+                  <option value="accordion">Аккордеон</option>
+                  <option value="bass">Бас</option>
+                  <option value="synth">Синтезатор</option>
+                </select>
+              </label>
+              <label>Формат
+                <select id="remoteMusicFormat">
+                  <option value="wav" selected>WAV</option>
+                  <option value="mp3">MP3</option>
+                </select>
+              </label>
+            </div>
+            <div class="grid3">
+              <label>Долей на аккорд
+                <input id="remoteMusicBeats" type="number" min="0.5" max="16" step="0.5" value="4">
+              </label>
+              <label>Повторов
+                <input id="remoteMusicRepeats" type="number" min="1" max="32" value="1">
+              </label>
+              <label>Музыка %
+                <input id="remoteMusicVolume" type="number" min="0" max="400" step="5" value="60">
+              </label>
+            </div>
+            <label class="remote-check"><input id="remoteMusicMixVideo" type="checkbox" checked> <span><b>Подмешать в видео:</b> если выбран видеофайл, сразу собрать MP4.</span></label>
+            <small>Пример голосом: «Нова, создай гитару Am D G Em, 90 BPM, MP3» или «…и подмешай в видео на 35%».</small>
+          </details>
           <label class="remote-source-easy">Персонаж / фото — необязательно
             <input id="remoteCharacterRef" type="file" accept="image/jpeg,image/png,image/webp,image/*">
             <small>Фото отвечает за внешность. Видео выше отвечает за движение. Для лучшего identity lock используй чёткое фото одного человека.</small>
@@ -266,7 +306,7 @@
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', async () => {
         try {
-          const registration = await navigator.serviceWorker.register('./service-worker.js?v=27', {
+          const registration = await navigator.serviceWorker.register('./service-worker.js?v=28', {
             scope: './',
             updateViaCache: 'none'
           });
