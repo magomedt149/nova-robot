@@ -1,7 +1,7 @@
 {
   "name": "NOVA",
-  "version": "27.11.0",
-  "pwa": "27.11.0",
+  "version": "27.12.0",
+  "pwa": "27.12.0",
   "mode": "free-only",
   "paidApis": false,
   "externalComputeRequiresConfirmation": true,
@@ -123,5 +123,18 @@
     "Нова, сделай затухание музыки 3 секунды",
     "Нова, плавное появление и затухание музыки по 2 секунды",
     "Нова, смешай музыку с видео, fade in 2 seconds, fade out 3 seconds"
+  ],
+  "healthRuntime": true,
+  "healthRuntimeVersion": "27.12.0",
+  "autoMontage": true,
+  "autoMontageVersion": "1.0.0",
+  "autoMontageMode": "local-first 5-second preview; remote compute only after approval",
+  "autoMontagePipeline": [
+    "Runtime health",
+    "Exact video reference",
+    "Local Whisper speech/subtitles",
+    "Local 5s Video PRO preview",
+    "Media Library save",
+    "Colab fallback only after approval"
   ]
-}
+}\n
