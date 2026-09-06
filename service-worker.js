@@ -1,4 +1,4 @@
-const CACHE = 'nova-v80-hybrid-animate-20260906';
+const CACHE = 'nova-v81-vision-live-20260906';
 const API_CACHE = 'nova-api-economy-v2';
 const METERED_NETLIFY_HOST = /(^|\\.)netlify\\.app$/i.test(self.location.hostname);
 const YOUTUBE_TTL_MS = 24 * 60 * 60 * 1000;
@@ -31,6 +31,7 @@ const CORE = [
   './nova-transcript-editor-sync.js',
   './nova-multi-shorts.js',
   './nova-media-library.js',
+  './nova-vision-live.js',
   './nova-ios-output-actions.js',
   './nova-video-pro.js',
   './nova-3d-director.js',
