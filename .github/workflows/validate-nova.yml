@@ -72,7 +72,7 @@ jobs:
           grep -q "mix_audio" automation/remote_gpu_worker.py
           grep -q "export_mp4_compatible" automation/remote_gpu_worker.py
           grep -q "run_worker_self_test" automation/remote_gpu_worker.py
-          grep -q "PROTOCOL_VERSION = 7" automation/remote_gpu_worker.py
+          grep -q "PROTOCOL_VERSION = 8" automation/remote_gpu_worker.py
           for instrument in guitar piano accordion bass synth; do
             python automation/nova_music.py --chords "Am,D,G,Em" --bpm 120 --instrument "$instrument" --beats-per-chord 0.5 --repeats 1 --out "/tmp/nova-media-test/music-$instrument.wav"
             test -s "/tmp/nova-media-test/music-$instrument.wav"
@@ -82,7 +82,7 @@ jobs:
           ffmpeg -y -hide_banner -loglevel error -i /tmp/nova-media-test/chords.wav -c:a libmp3lame -b:a 128k /tmp/nova-media-test/chords.mp3
           test -s /tmp/nova-media-test/chords.mp3
           test "$(ffprobe -v error -select_streams a:0 -show_entries stream=codec_name -of csv=p=0 /tmp/nova-media-test/chords.mp3)" = "mp3"
-          ffmpeg -y -hide_banner -loglevel error             -i /tmp/nova-media-test/source.mp4 -i /tmp/nova-media-test/chords.wav             -filter_complex "[0:a]volume=0.8,apad[a0];[1:a]volume=0.35,apad[a1];[a0][a1]amix=inputs=2:duration=longest:dropout_transition=0[mix]"             -map 0:v:0 -map "[mix]" -c:v libx264 -preset veryfast -crf 20 -pix_fmt yuv420p -c:a aac -b:a 192k -shortest -movflags +faststart /tmp/nova-media-test/chord-video.mp4
+          ffmpeg -y -hide_banner -loglevel error             -i /tmp/nova-media-test/source.mp4 -i /tmp/nova-media-test/chords.wav             -filter_complex "[0:a]volume=0.8,apad[a0];[1:a]volume=0.35,afade=t=in:st=0:d=0.25,afade=t=out:st=0.75:d=0.25,apad[a1];[a0][a1]amix=inputs=2:duration=longest:dropout_transition=0[mix]"             -map 0:v:0 -map "[mix]" -c:v libx264 -preset veryfast -crf 20 -pix_fmt yuv420p -c:a aac -b:a 192k -shortest -movflags +faststart /tmp/nova-media-test/chord-video.mp4
           test "$(ffprobe -v error -select_streams v:0 -show_entries stream=codec_name -of csv=p=0 /tmp/nova-media-test/chord-video.mp4)" = "h264"
           test "$(ffprobe -v error -select_streams a:0 -show_entries stream=codec_name -of csv=p=0 /tmp/nova-media-test/chord-video.mp4)" = "aac"
           grep -q "audio_tracks" automation/remote_gpu_worker.py
@@ -90,8 +90,11 @@ jobs:
           grep -q "music_chords" automation/remote_gpu_worker.py
           grep -q "remoteAudio" motion-studio/remote-gpu.js
           grep -q "track_volumes" motion-studio/remote-gpu.js
+          grep -q "track_fade_in" automation/remote_gpu_worker.py
+          grep -q "track_fade_out" automation/remote_gpu_worker.py
+          grep -q "audioFadeConfig" motion-studio/remote-gpu.js
           grep -q "userApprovedRemote" motion-studio/remote-gpu.js
           grep -q "remoteSelfTest" motion-studio/remote-gpu.js
           grep -q "смеш.*дорож" app.js
-          grep -q "v28-free-chord-music" motion-studio/service-worker.js
-          echo "OK: NOVA chord music WAV/MP3 + video mix + multi-track audio + safe auto-Colab"
+          grep -q "v29-music-fades" motion-studio/service-worker.js
+          echo "OK: NOVA chord music + fade-in/fade-out + WAV/MP3 + video mix + multi-track audio"
