@@ -44,7 +44,7 @@
   const brainStateText = $('#brainStateText');
   const dragHint = $('#dragHint');
   const toast = $('#toast');
-  const actionButtons = $('.action-btn');
+  const actionButtons = $$('.action-btn');
   const versionBadge = document.querySelector('.status-row .version:not(#freeModeBadge)');
   if (versionBadge) versionBadge.textContent = `v${VERSION}`;
   const brain = window.NovaBrain || null;
