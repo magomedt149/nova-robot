@@ -936,7 +936,12 @@ def _model_blob(record: dict[str, Any]) -> str:
     ).lower()
 
 
-def pick_wangp_model(session, job: dict[str, Any], has_source: bool) -> dict[str, Any]:
+def pick_wangp_model(
+    session,
+    job: dict[str, Any],
+    has_source: bool,
+    has_reference: bool = False,
+) -> dict[str, Any]:
     options = job.get("wangp") if isinstance(job.get("wangp"), dict) else {}
     explicit = str(options.get("model_type") or "").strip()
     if explicit:
@@ -960,6 +965,11 @@ def pick_wangp_model(session, job: dict[str, Any], has_source: bool) -> dict[str
             queries += ["Wan 2.2 Animate 2", "Wan 2.2 Animate", "VACE 14B", "Scail 2"]
     elif has_source and not low_vram:
         queries += ["Scail 2", "Wan 2.2 Animate", "Bernini"]
+    elif has_reference:
+        # A single character/photo reference is a real image-to-video job.
+        # Prefer image-conditioned models so the uploaded photo cannot be
+        # silently ignored by a text-only model.
+        queries += ["FastWan", "Wan 2.2"]
     queries += ["FastWan", "Wan 2.2"]
 
     best_fallback = None
@@ -987,6 +997,12 @@ def pick_wangp_model(session, job: dict[str, Any], has_source: bool) -> dict[str
                 return record
             if has_source and "image" in inputs and "fastwan" in blob:
                 return record
+            if has_reference and not has_source:
+                if "image" in inputs:
+                    return record
+                # Do not fall through to a text-only model: that was the
+                # single-photo "person stays still / reference ignored" bug.
+                continue
             if not has_source and ("text" in inputs or not inputs):
                 return record
 
@@ -1004,6 +1020,19 @@ def pick_wangp_model(session, job: dict[str, Any], has_source: bool) -> dict[str
         raise RuntimeError(
             "WanGP human-motion control model is unavailable. On T4 install/enable VACE 1.3B; "
             "NOVA will not replace it with a static FastWan/Blender preview."
+        )
+
+    if has_reference and not has_source:
+        try:
+            records = session.list_model_metadata(main_output="video", limit=100)
+        except Exception:
+            records = []
+        for record in records:
+            if "image" in _model_inputs(record):
+                return record
+        raise RuntimeError(
+            "WanGP image-to-video model is unavailable. Install/enable an image-conditioned "
+            "Wan/FastWan model; NOVA will not ignore the uploaded photo."
         )
 
     if best_fallback is not None:
@@ -1095,6 +1124,30 @@ def build_wangp_settings(
         elif "image" in inputs:
             start_image = extract_first_frame(job["job_id"], prepared_video, job_dir / "WAN_GP_START.png")
             settings["image_start"] = str(start_image)
+    elif character_reference is not None:
+        # Static-photo Human/Hybrid mode: the photo itself is the start frame.
+        # This is the missing bridge that makes a person actually animate from
+        # a single NOVA Photo Reference instead of generating from text alone.
+        if "image" not in inputs:
+            raise RuntimeError(
+                "Selected WanGP model does not accept an image start frame; "
+                "NOVA will not ignore the character reference."
+            )
+        settings["image_start"] = str(character_reference)
+        settings["image_prompt_type"] = "S"
+        if motion["enabled"]:
+            identity_prompt = (
+                " Preserve the same character identity, face, hairstyle, clothing, proportions "
+                "and scene composition from the start image. Keep background signage and text stable "
+                "as much as possible while the person performs the requested motion."
+            )
+            settings["prompt"] = (str(settings.get("prompt") or "").strip() + identity_prompt).strip()
+            negative = str(settings.get("negative_prompt") or "").strip()
+            hybrid_negative = (
+                "background morphing, text distortion, warped letters, logo deformation, "
+                "identity drift, face change, clothing change"
+            )
+            settings["negative_prompt"] = (negative + ", " + hybrid_negative).strip(", ")
 
     (job_dir / "NOVA_MOTION_CONTROL.json").write_text(
         json.dumps(motion, ensure_ascii=False, indent=2),
@@ -1139,7 +1192,13 @@ def run_wangp_job(job_id: str, job: dict[str, Any], job_dir: Path) -> Path:
 
     update_status(job_id, progress=22, stage="wangp_init", message="Запускаю WanGP Python API.")
     session = get_wangp_session()
-    model_record = pick_wangp_model(session, job, prepared is not None)
+    character_reference = reference_file(job_dir)
+    model_record = pick_wangp_model(
+        session,
+        job,
+        prepared is not None,
+        character_reference is not None,
+    )
     model_type = str(model_record.get("model_type") or (model_record.get("metadata") or {}).get("model_type") or "")
     model_name = str(model_record.get("name") or model_type)
     motion = human_motion_options(job)
