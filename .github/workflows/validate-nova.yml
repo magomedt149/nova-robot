@@ -8,6 +8,7 @@ on:
       - "app.js"
       - "motion-studio/**"
       - "automation/remote_gpu_worker.py"
+      - "automation/nova_music.py"
       - "blender-colab/NOVA_Remote_GPU_Worker.ipynb"
       - "version.json"
       - ".github/workflows/validate-nova.yml"
@@ -29,7 +30,7 @@ jobs:
           node-version: "22"
       - name: Python syntax
         run: |
-          python -m py_compile             automation/remote_gpu_worker.py             automation/nova_pipeline.py             blender-colab/scripts/extract_pose.py
+          python -m py_compile             automation/remote_gpu_worker.py             automation/nova_pipeline.py             automation/nova_music.py             blender-colab/scripts/extract_pose.py
       - name: JavaScript syntax
         run: |
           node --check app.js
@@ -71,12 +72,18 @@ jobs:
           grep -q "mix_audio" automation/remote_gpu_worker.py
           grep -q "export_mp4_compatible" automation/remote_gpu_worker.py
           grep -q "run_worker_self_test" automation/remote_gpu_worker.py
-          grep -q "PROTOCOL_VERSION = 6" automation/remote_gpu_worker.py
+          grep -q "PROTOCOL_VERSION = 7" automation/remote_gpu_worker.py
+          python automation/nova_music.py --chords "Am,D,G,Em" --bpm 120 --instrument guitar --beats-per-chord 1 --repeats 1 --out /tmp/nova-media-test/chords.wav
+          test -s /tmp/nova-media-test/chords.wav
+          ffmpeg -y -hide_banner -loglevel error -i /tmp/nova-media-test/chords.wav -c:a libmp3lame -b:a 128k /tmp/nova-media-test/chords.mp3
+          test -s /tmp/nova-media-test/chords.mp3
           grep -q "audio_tracks" automation/remote_gpu_worker.py
+          grep -q "run_music_job" automation/remote_gpu_worker.py
+          grep -q "music_chords" automation/remote_gpu_worker.py
           grep -q "remoteAudio" motion-studio/remote-gpu.js
           grep -q "track_volumes" motion-studio/remote-gpu.js
           grep -q "userApprovedRemote" motion-studio/remote-gpu.js
           grep -q "remoteSelfTest" motion-studio/remote-gpu.js
           grep -q "смеш.*дорож" app.js
           grep -q "v27-multitrack-audio" motion-studio/service-worker.js
-          echo "OK: NOVA replace + multi-track mix + volume + MP4 export + safe auto-Colab"
+          echo "OK: NOVA chord music WAV/MP3 + video mix + multi-track audio + safe auto-Colab"
