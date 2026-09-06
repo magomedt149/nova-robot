@@ -1,7 +1,7 @@
 {
   "name": "NOVA",
-  "version": "27.17.0",
-  "pwa": "27.17.0",
+  "version": "27.18.0",
+  "pwa": "27.18.0",
   "mode": "free-only",
   "paidApis": false,
   "externalComputeRequiresConfirmation": true,
@@ -151,7 +151,7 @@
     "Colab fallback only after approval"
   ],
   "visionLive": true,
-  "visionLiveVersion": "1.3.0",
+  "visionLiveVersion": "1.4.0",
   "visionLiveFreeOnDevice": true,
   "visionLivePaidApi": false,
   "visionLiveCameraNarration": true,
@@ -245,5 +245,28 @@
     "Нова, найди устройства",
     "Нова, переподключи очки"
   ],
-  "visionGlassesReconnectBehavior": "Reconnects the current/last glasses source when reusable; WebRTC sources still require a valid live bridge/offer if the previous peer stream is gone."
+  "visionGlassesReconnectBehavior": "Reconnects the current/last glasses source when reusable; WebRTC sources still require a valid live bridge/offer if the previous peer stream is gone.",
+  "visionAutoCameraSwitch": true,
+  "visionAutoCameraSwitchDefault": true,
+  "visionAutoSwitchToGlassesOnConnect": true,
+  "visionAutoFallbackToPhoneOnLoss": true,
+  "visionAutoReturnToGlassesOnRecovery": true,
+  "visionExternalLossDetection": [
+    "MediaStreamTrack ended",
+    "MediaStreamTrack muted/stalled",
+    "camera device removed",
+    "WebRTC failed/closed/disconnected",
+    "video frame heartbeat timeout"
+  ],
+  "visionExternalRecoveryDetection": [
+    "external camera devicechange",
+    "new MediaStream/WebRTC stream",
+    "MediaStreamTrack unmute",
+    "reconnected external camera"
+  ],
+  "visionAutoSwitchDebounceMs": 1400,
+  "visionExternalLossGraceMs": 2600,
+  "visionExternalConnectConfirmMs": 900,
+  "visionAutoSwitchLoopProtection": true,
+  "visionAutoSwitchUiBadge": "AUTO CAM"
 }
