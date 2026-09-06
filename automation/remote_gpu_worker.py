@@ -486,6 +486,21 @@ def mix_audio_tracks(
     return out
 
 
+def export_mp4_compatible(job_id: str, source: Path, out: Path) -> Path:
+    if not command_exists("ffmpeg"):
+        raise RuntimeError("FFmpeg is not installed")
+    args = [
+        "ffmpeg", "-y", "-i", str(source),
+        "-map", "0:v:0", "-map", "0:a?",
+        "-c:v", "libx264", "-preset", "veryfast", "-crf", "20",
+        "-pix_fmt", "yuv420p",
+        "-c:a", "aac", "-b:a", "192k",
+        "-movflags", "+faststart", str(out),
+    ]
+    run_command(job_id, args)
+    return out
+
+
 def replace_audio_track(job_id: str, source: Path, audio: Path, out: Path) -> Path:
     update_status(job_id, progress=24, stage="audio_replace", message="FFmpeg: заменяю звук в видео.")
     return mix_audio_tracks(
@@ -551,8 +566,8 @@ def run_ffmpeg_job(job_id: str, job: dict[str, Any], job_dir: Path) -> Path:
         return out
 
     if media_action in {"export_mp4", "mp4_export"}:
-        update_status(job_id, progress=20, stage="export_mp4", message="FFmpeg: экспортирую совместимый MP4.")
-        normalize_video(job_id, source, out, profile, keep_audio=True)
+        update_status(job_id, progress=20, stage="export_mp4", message="FFmpeg: экспортирую совместимый MP4 без обрезки длительности.")
+        export_mp4_compatible(job_id, source, out)
         update_status(job_id, progress=92, stage="encode", message="MP4 экспортирован: H.264 + AAC.")
         return out
 
