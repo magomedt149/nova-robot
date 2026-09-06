@@ -36,7 +36,7 @@
 .remote-easy-top{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:9px}.remote-easy-top>b{font-size:12px}.remote-easy-top span{font-size:8px;font-weight:900;letter-spacing:.1em;padding:5px 7px;border-radius:999px;background:#18233b;color:#a9bbd8}.remote-easy-top span[data-kind="ok"]{background:rgba(43,199,135,.14);color:#8fffd0}.remote-easy-top span[data-kind="busy"]{background:rgba(55,175,255,.14);color:#9edfff}.remote-easy-top span[data-kind="error"]{background:rgba(255,88,124,.14);color:#ff9aad}
 .remote-easy-action{width:100%;min-height:52px;margin:0 0 9px;font-size:14px;font-weight:950;letter-spacing:.03em;border-radius:13px;background:linear-gradient(90deg,#52e8ff,#8a83ff);color:#061018;box-shadow:0 8px 24px rgba(70,161,255,.18)}
 .remote-easy-text{font-size:11px;line-height:1.5;color:#aebbd0;margin-bottom:10px}
-.remote-source-easy{margin:0}.remote-source-easy input{margin-top:6px}
+.remote-source-easy{margin:0}.remote-source-easy input{margin-top:6px}.remote-audio-levels{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:8px 0 10px}.remote-audio-levels label{margin:0;font-size:10px}.remote-audio-levels input{padding:9px 8px}
 .remote-advanced{margin-top:10px;border-top:1px solid #26304a;padding-top:8px}.remote-advanced>summary{cursor:pointer;color:#9fb0cb;font-size:11px;font-weight:800;padding:6px 2px;list-style:none}.remote-advanced>summary::-webkit-details-marker{display:none}.remote-advanced>summary:before{content:'⚙️ ';}.remote-advanced[open]>summary{color:#dce8ff}.remote-advanced-body{padding-top:8px}
 
 /* NOVA simple mode: keep only the task, the one-button renderer and the heading. */
@@ -76,3 +76,5 @@
 .nova-diag-actions{display:grid;grid-template-columns:1fr 1.45fr;gap:9px}.nova-diag-actions button{margin:0}
 .nova-diag-action-status{margin-top:10px;color:#899ab0;font-size:10px;line-height:1.45}.nova-diag-action-status[data-kind="busy"]{color:#9fe5ff}.nova-diag-action-status[data-kind="error"]{color:#ffabbc}
 @media(max-width:620px){.nova-diag-overlay{padding:0}.nova-diag-screen{width:100%;height:100%;max-height:none;border-radius:0;padding:18px 14px 28px}.nova-diag-grid{grid-template-columns:1fr}.nova-diag-actions{grid-template-columns:1fr}.nova-diag-head h2{font-size:24px}}
+
+@media(max-width:560px){.remote-audio-levels{grid-template-columns:1fr}.remote-audio-levels label{font-size:11px}}
