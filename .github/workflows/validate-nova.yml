@@ -6,6 +6,20 @@ on:
     branches:
       - main
       - "fix/**"
+    paths:
+      - "app.js"
+      - "index.html"
+      - "service-worker.js"
+      - "nova-health.js"
+      - "nova-auto-montage.js"
+      - "nova-whisper.js"
+      - "automation/validate_frontend.py"
+      - "motion-studio/**"
+      - "automation/remote_gpu_worker.py"
+      - "automation/nova_music.py"
+      - "blender-colab/NOVA_Remote_GPU_Worker.ipynb"
+      - "version.json"
+      - ".github/workflows/validate-nova.yml"
   pull_request:
     branches: [main]
     paths:
@@ -44,6 +58,9 @@ jobs:
       - name: JavaScript syntax
         run: |
           node --check app.js
+          node --check nova-health.js
+          node --check nova-auto-montage.js
+          node --check nova-whisper.js
           node --check motion-studio/app.js
           node --check motion-studio/director.js
           node --check motion-studio/remote-gpu.js
