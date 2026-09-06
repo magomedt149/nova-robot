@@ -50,8 +50,8 @@ WANGP_SESSION_LOCK = threading.Lock()
 WANGP_JOBS: dict[str, Any] = {}
 DOWNLOAD_TICKETS: dict[str, dict[str, Any]] = {}
 DOWNLOAD_TICKET_TTL = int(os.environ.get("NOVA_REMOTE_DOWNLOAD_TTL", "600"))
-WORKER_VERSION = "1.6.0"
-PROTOCOL_VERSION = 3
+WORKER_VERSION = "1.7.0"
+PROTOCOL_VERSION = 4
 SESSION_ID = uuid.uuid4().hex[:12]
 
 app = FastAPI(title="NOVA Remote GPU Worker", version="1.0")
@@ -207,6 +207,11 @@ def reference_file(job_dir: Path) -> Path | None:
     return candidates[0] if candidates else None
 
 
+def audio_file(job_dir: Path) -> Path | None:
+    candidates = sorted(job_dir.glob("audio.*"))
+    return candidates[0] if candidates else None
+
+
 def normalize_video(job_id: str, source: Path, out: Path, profile: dict[str, Any], keep_audio: bool = True) -> Path:
     if not command_exists("ffmpeg"):
         raise RuntimeError("FFmpeg is not installed")
@@ -242,13 +247,59 @@ def normalize_video(job_id: str, source: Path, out: Path, profile: dict[str, Any
     return out
 
 
+def replace_audio_track(job_id: str, source: Path, audio: Path, out: Path) -> Path:
+    if not command_exists("ffmpeg"):
+        raise RuntimeError("FFmpeg is not installed")
+    update_status(job_id, progress=24, stage="audio_replace", message="FFmpeg: заменяю звук в видео.")
+    args = [
+        "ffmpeg",
+        "-y",
+        "-i",
+        str(source),
+        "-i",
+        str(audio),
+        "-map",
+        "0:v:0",
+        "-map",
+        "1:a:0",
+        "-c:v",
+        "libx264",
+        "-preset",
+        "veryfast",
+        "-crf",
+        "20",
+        "-pix_fmt",
+        "yuv420p",
+        "-c:a",
+        "aac",
+        "-b:a",
+        "192k",
+        "-af",
+        "apad",
+        "-shortest",
+        "-movflags",
+        "+faststart",
+        str(out),
+    ]
+    run_command(job_id, args)
+    return out
+
+
 def run_ffmpeg_job(job_id: str, job: dict[str, Any], job_dir: Path) -> Path:
     source = source_file(job_dir)
     if source is None:
         raise RuntimeError("FFmpeg job needs a source video")
     profile = profile_for(job)
-    update_status(job_id, progress=20, stage="ffmpeg", message="Нормализую видео на удалённом GPU-воркере.")
     out = job_dir / ("FINAL.mp4" if profile["quality"] == "final" else "preview.mp4")
+    media_action = str(job.get("media_action") or "").lower().strip()
+    if media_action in {"replace_audio", "audio_replace"}:
+        audio = audio_file(job_dir)
+        if audio is None:
+            raise RuntimeError("Audio replacement needs an audio file")
+        replace_audio_track(job_id, source, audio, out)
+        update_status(job_id, progress=92, stage="encode", message="Новый звук наложен. Проверяю MP4.")
+        return out
+    update_status(job_id, progress=20, stage="ffmpeg", message="Нормализую видео на удалённом GPU-воркере.")
     normalize_video(job_id, source, out, profile, keep_audio=True)
     update_status(job_id, progress=92, stage="encode", message="FFmpeg рендер готов, проверяю файл.")
     return out
@@ -774,7 +825,7 @@ def checkpoint_job(job_id: str, job_dir: Path) -> str | None:
         for source in job_dir.iterdir():
             if not source.is_file():
                 continue
-            if not (source.name.startswith("source.") or source.name in keep_names):
+            if not (source.name.startswith("source.") or source.name.startswith("audio.") or source.name in keep_names):
                 continue
             destination = target / source.name
             if destination.exists() and destination.stat().st_size == source.stat().st_size:
@@ -894,6 +945,9 @@ async def health(request: Request):
             "blender": command_exists("blender"),
             "ffmpeg": command_exists("ffmpeg"),
             "wangp": (WANGP_ROOT / "shared" / "api.py").is_file(),
+            "audio_replace": command_exists("ffmpeg"),
+            "video_transcode": command_exists("ffmpeg"),
+            "iphone_h264_encode": command_exists("ffmpeg"),
             "human_motion_control": True,
             "human_motion_preferred_t4": "VACE 1.3B",
         },
@@ -910,6 +964,7 @@ async def create_job(
     job_json: str = Form(...),
     source: UploadFile | None = File(None),
     reference: UploadFile | None = File(None),
+    audio: UploadFile | None = File(None),
 ):
     require_token(request)
     try:
@@ -943,6 +998,14 @@ async def create_job(
             raise HTTPException(status_code=400, detail="Unsupported character reference image type")
         reference_bytes = await save_upload(reference, job_dir / f"reference{ref_suffix}")
 
+    audio_bytes = 0
+    if audio is not None and audio.filename:
+        audio_suffix = Path(audio.filename).suffix.lower()
+        if audio_suffix not in {".mp3", ".wav", ".m4a", ".aac", ".flac", ".ogg", ".opus"}:
+            shutil.rmtree(job_dir, ignore_errors=True)
+            raise HTTPException(status_code=400, detail="Unsupported audio type")
+        audio_bytes = await save_upload(audio, job_dir / f"audio{audio_suffix}")
+
     deferred = bool(job.get("defer_start"))
     update_status(
         job_id,
@@ -953,6 +1016,8 @@ async def create_job(
         message="Задание создано. Жду видео по частям." if deferred else "Задание принято Colab worker.",
         upload_bytes=upload_bytes,
         reference_bytes=reference_bytes,
+        audio_bytes=audio_bytes,
+        has_audio=audio_file(job_dir) is not None,
         has_character_reference=reference_file(job_dir) is not None,
         quality=str(job.get("quality") or "preview").lower(),
         created_at=time.time(),
@@ -1041,6 +1106,8 @@ async def start_job(job_id: str, request: Request):
     engine = str(job.get("engine") or "auto").lower()
     if engine == "ffmpeg" and source_file(job_dir) is None:
         raise HTTPException(status_code=400, detail="FFmpeg job needs a source video")
+    if str(job.get("media_action") or "").lower() in {"replace_audio", "audio_replace"} and audio_file(job_dir) is None:
+        raise HTTPException(status_code=400, detail="Audio replacement needs an audio file")
     job["defer_start"] = False
     (job_dir / "job.json").write_text(json.dumps(job, ensure_ascii=False, indent=2), encoding="utf-8")
     update_status(job_id, status="queued", stage="queued", progress=max(12, current.get("progress") or 0), message="Видео принято. Запускаю GPU.")
@@ -1076,7 +1143,7 @@ async def promote_job(job_id: str, request: Request):
     for source in source_dir.iterdir():
         if not source.is_file():
             continue
-        if source.name.startswith("source.") or source.name.startswith("reference.") or source.name in {
+        if source.name.startswith("source.") or source.name.startswith("reference.") or source.name.startswith("audio.") or source.name in {
             "NOVA_scene_pack.json",
             "WAN_GP_INPUT.mp4",
             "WAN_GP_START.png",
