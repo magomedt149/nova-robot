@@ -996,6 +996,7 @@ async function runRemoteSelfTest(){
     const bits=[
       r.gpu?.ok?'GPU ✓':'GPU —',
       r.wangp?.ok?'WanGP ✓':'WanGP —',
+      r.hybrid_router?.ok?'Hybrid Photo→Motion ✓':'Hybrid —',
       r.blender?.ok?'Blender MP4 ✓':'Blender —',
       r.ffmpeg?.ok?'FFmpeg H.264/AAC ✓':'FFmpeg —',
       r.music?.ok?'Music WAV/MP3 ✓':'Music —'
@@ -1004,7 +1005,7 @@ async function runRemoteSelfTest(){
     setStatus('Проверка: '+bits.join(' • '),result.ok?'ok':'error');
     if(result.ok){
       setEasyStep('final');
-      setEasyState('ВСЁ РАБОТАЕТ','Remote stack прошёл self-test: GPU, NOVA Music WAV/MP3, WanGP API, Blender MP4 и FFmpeg H.264/AAC.','ok');
+      setEasyState('ВСЁ РАБОТАЕТ','Remote stack прошёл self-test: GPU, WanGP API, Hybrid Photo→Motion router, NOVA Music WAV/MP3, Blender MP4 и FFmpeg H.264/AAC.','ok');
     }else{
       setEasyState('ЕСТЬ ОШИБКА','Один из компонентов не прошёл self-test. Смотри статус выше.','error');
     }
