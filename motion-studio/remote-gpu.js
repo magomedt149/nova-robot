@@ -366,7 +366,7 @@ function musicSpecFromPrompt(){
   const q=raw.toLowerCase();
   const chordMatches=raw.match(/\b[A-Ga-g](?:#|b)?(?:maj7|min7|m7|m|7|sus2|sus4|5|dim|aug)?\b/g)||[];
   const chords=(chordMatches.length?chordMatches.join(' '):($('remoteMusicChords')?.value||'Am D G Em')).trim();
-  const bpmMatch=q.match(/\b(\d{2,3})\s*(?:bpm|бпм|удар(?:ов)?\s*(?:в|за)\s*мин)/);
+  const bpmMatch=q.match(/\b(\d{2,3})\s*(?:bpm|бпм|удар(?:ов)?\s*(?:в|за)\s*мин)/)||q.match(/темп\D{0,10}(\d{2,3})/);
   const bpm=Math.max(30,Math.min(240,Number(bpmMatch?.[1]||$('remoteMusicBpm')?.value||90)));
   let instrument=String($('remoteMusicInstrument')?.value||'guitar');
   if(/аккордеон|accordion/.test(q))instrument='accordion';
@@ -378,7 +378,9 @@ function musicSpecFromPrompt(){
   if(/\bmp3\b/.test(q))format='mp3';
   else if(/\bwav\b/.test(q))format='wav';
   const repeatMatch=q.match(/(?:повтор(?:и|ить)?|(?:сделай|сыграй)\s*)?(\d{1,2})\s*(?:раз|раза|повтор)/);
-  const repeats=Math.max(1,Math.min(32,Number(repeatMatch?.[1]||$('remoteMusicRepeats')?.value||1)));
+  const repeatWords={один:1,одна:1,два:2,две:2,три:3,четыре:4,пять:5,шесть:6,семь:7,восемь:8};
+  const repeatWordMatch=q.match(/\b(один|одна|два|две|три|четыре|пять|шесть|семь|восемь)\s+раз(?:а)?\b/);
+  const repeats=Math.max(1,Math.min(32,Number(repeatMatch?.[1]||repeatWords[repeatWordMatch?.[1]]||$('remoteMusicRepeats')?.value||1)));
   const beatsMatch=q.match(/(?:по\s*)?(\d{1,2}(?:[.,]\d+)?)\s*(?:удара|ударов|дол[ия]|beat)/);
   const beatsPerChord=Math.max(.5,Math.min(16,Number(String(beatsMatch?.[1]||$('remoteMusicBeats')?.value||4).replace(',','.'))));
   const audioMix=audioMixConfig();
