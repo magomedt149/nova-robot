@@ -1,7 +1,7 @@
 {
   "name": "NOVA",
-  "version": "27.16.0",
-  "pwa": "27.16.0",
+  "version": "27.17.0",
+  "pwa": "27.17.0",
   "mode": "free-only",
   "paidApis": false,
   "externalComputeRequiresConfirmation": true,
@@ -151,7 +151,7 @@
     "Colab fallback only after approval"
   ],
   "visionLive": true,
-  "visionLiveVersion": "1.2.0",
+  "visionLiveVersion": "1.3.0",
   "visionLiveFreeOnDevice": true,
   "visionLivePaidApi": false,
   "visionLiveCameraNarration": true,
@@ -219,5 +219,31 @@
     "Нова, что ты видишь",
     "Нова, пауза описания",
     "Нова, говори что видишь"
-  ]
+  ],
+  "visionGlassesConnectionScreen": true,
+  "visionGlassesDeviceSearch": true,
+  "visionGlassesLiveStreamStatus": true,
+  "visionGlassesReconnectButton": true,
+  "visionGlassesStatusFields": [
+    "source",
+    "track readyState",
+    "video frame ready",
+    "resolution",
+    "frameRate",
+    "WebRTC connection state"
+  ],
+  "visionGlassesConnectionSources": [
+    "browser video input",
+    "external USB/UVC camera",
+    "MediaStream bridge",
+    "WebRTC MediaStream",
+    "HTTPS live video URL"
+  ],
+  "visionGlassesConnectionVoiceCommands": [
+    "Нова, подключение очков",
+    "Нова, экран подключения очков",
+    "Нова, найди устройства",
+    "Нова, переподключи очки"
+  ],
+  "visionGlassesReconnectBehavior": "Reconnects the current/last glasses source when reusable; WebRTC sources still require a valid live bridge/offer if the previous peer stream is gone."
 }
