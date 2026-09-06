@@ -149,7 +149,9 @@ def run_worker_self_test() -> dict[str, Any]:
                     raise RuntimeError("ffmpeg/ffprobe not installed")
                 source = work / "source.mp4"
                 audio = work / "new.wav"
+                audio2 = work / "second.wav"
                 out = work / "replaced.mp4"
+                mix_out = work / "mixed.mp4"
                 subprocess.run(
                     [
                         ffmpeg, "-y", "-hide_banner", "-loglevel", "error",
@@ -165,6 +167,14 @@ def run_worker_self_test() -> dict[str, Any]:
                         ffmpeg, "-y", "-hide_banner", "-loglevel", "error",
                         "-f", "lavfi", "-i", "sine=frequency=880:sample_rate=44100",
                         "-t", "0.6", "-c:a", "pcm_s16le", str(audio),
+                    ],
+                    check=True, timeout=30,
+                )
+                subprocess.run(
+                    [
+                        ffmpeg, "-y", "-hide_banner", "-loglevel", "error",
+                        "-f", "lavfi", "-i", "sine=frequency=1320:sample_rate=44100",
+                        "-t", "0.8", "-c:a", "pcm_s16le", str(audio2),
                     ],
                     check=True, timeout=30,
                 )
@@ -187,8 +197,41 @@ def run_worker_self_test() -> dict[str, Any]:
                     [ffprobe, "-v", "error", "-select_streams", "a:0", "-show_entries", "stream=codec_name", "-of", "csv=p=0", str(out)],
                     capture_output=True, text=True, check=True, timeout=20,
                 ).stdout.strip()
-                ffmpeg_ok = out.is_file() and out.stat().st_size > 0 and vcodec == "h264" and acodec == "aac"
-                results["ffmpeg"] = {"ok": ffmpeg_ok, "video_codec": vcodec, "audio_codec": acodec, "mp4_bytes": out.stat().st_size if out.is_file() else 0}
+                replace_ok = out.is_file() and out.stat().st_size > 0 and vcodec == "h264" and acodec == "aac"
+                subprocess.run(
+                    [
+                        ffmpeg, "-y", "-hide_banner", "-loglevel", "error",
+                        "-i", str(source), "-i", str(audio), "-i", str(audio2),
+                        "-filter_complex",
+                        "[0:a]volume=0.80,apad[a0];[1:a]volume=0.35,apad[a1];[2:a]volume=0.20,apad[a2];"
+                        "[a0][a1][a2]amix=inputs=3:duration=longest:dropout_transition=0,volume=1.0[mix]",
+                        "-map", "0:v:0", "-map", "[mix]",
+                        "-c:v", "libx264", "-preset", "veryfast", "-crf", "20",
+                        "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "192k",
+                        "-shortest", "-movflags", "+faststart", str(mix_out),
+                    ],
+                    check=True, timeout=60,
+                )
+                mix_vcodec = subprocess.run(
+                    [ffprobe, "-v", "error", "-select_streams", "v:0", "-show_entries", "stream=codec_name", "-of", "csv=p=0", str(mix_out)],
+                    capture_output=True, text=True, check=True, timeout=20,
+                ).stdout.strip()
+                mix_acodec = subprocess.run(
+                    [ffprobe, "-v", "error", "-select_streams", "a:0", "-show_entries", "stream=codec_name", "-of", "csv=p=0", str(mix_out)],
+                    capture_output=True, text=True, check=True, timeout=20,
+                ).stdout.strip()
+                mix_ok = mix_out.is_file() and mix_out.stat().st_size > 0 and mix_vcodec == "h264" and mix_acodec == "aac"
+                ffmpeg_ok = bool(replace_ok and mix_ok)
+                results["ffmpeg"] = {
+                    "ok": ffmpeg_ok,
+                    "replace_audio": replace_ok,
+                    "multi_track_mix": mix_ok,
+                    "volume_control": mix_ok,
+                    "mp4_export": mix_ok,
+                    "video_codec": mix_vcodec,
+                    "audio_codec": mix_acodec,
+                    "mp4_bytes": mix_out.stat().st_size if mix_out.is_file() else 0,
+                }
             except Exception as exc:
                 ffmpeg_error = str(exc)
                 results["ffmpeg"] = {"ok": False, "error": ffmpeg_error}
