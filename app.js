@@ -2568,8 +2568,8 @@
       return;
     }
 
-    if (/motion\s*\+?\s*vfx|motion studio|remote gpu|gpu render|google colab|colab|колаб|удал[её]нн.*gpu|рендер.*gpu|gpu.*рендер|запусти.*gpu|gpu.*запусти|сделай.*видео|создай.*видео|сгенерируй.*видео|сделать.*видео|создать.*видео|make.*video|create.*video|generate.*video|render.*video/.test(lower)) {
-      const videoAuto = /remote gpu|gpu render|google colab|colab|колаб|удал[её]нн.*gpu|рендер.*gpu|gpu.*рендер|запусти.*gpu|gpu.*запусти|сделай.*видео|создай.*видео|сгенерируй.*видео|сделать.*видео|создать.*видео|make.*video|create.*video|generate.*video|render.*video/.test(lower);
+    if (/motion\s*\+?\s*vfx|motion studio|remote gpu|gpu render|google colab|colab|колаб|удал[её]нн.*gpu|рендер.*gpu|gpu.*рендер|запусти.*gpu|gpu.*запусти|сделай.*видео|создай.*видео|сгенерируй.*видео|сделать.*видео|создать.*видео|налож.*(?:звук|аудио).*видео|(?:замен|подстав|постав).*(?:звук|аудио).*видео|make.*video|create.*video|generate.*video|render.*video|replace.*audio.*video|put.*audio.*video/.test(lower)) {
+      const videoAuto = /remote gpu|gpu render|google colab|colab|колаб|удал[её]нн.*gpu|рендер.*gpu|gpu.*рендер|запусти.*gpu|gpu.*запусти|сделай.*видео|создай.*видео|сгенерируй.*видео|сделать.*видео|создать.*видео|налож.*(?:звук|аудио).*видео|(?:замен|подстав|постав).*(?:звук|аудио).*видео|make.*video|create.*video|generate.*video|render.*video|replace.*audio.*video|put.*audio.*video/.test(lower);
       if (videoAuto) performRemoteGpu(text);
       else respond(language === 'en' ? 'Opening Motion and VFX Studio.' : 'Открываю Motion + VFX Studio.', { onEnd: () => window.location.assign('./motion-studio/') });
       return;
