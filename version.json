@@ -1,7 +1,7 @@
 {
   "name": "NOVA",
-  "version": "27.8.1",
-  "pwa": "27.8.1",
+  "version": "27.9.0",
+  "pwa": "27.9.0",
   "mode": "free-only",
   "paidApis": false,
   "externalComputeRequiresConfirmation": true,
@@ -50,16 +50,17 @@
   "novaCallRequiresVpsForBasicFreeCalls": false,
   "novaCallBasicFreeMode": "public WebRTC fallback; self-hosted optional",
   "novaCallLaunchCheckPaidActions": false,
-  "motionStudioVersion": "26",
-  "remoteGpuWorkerVersion": "1.8.0",
-  "remoteGpuProtocolVersion": 5,
+  "motionStudioVersion": "27",
+  "remoteGpuWorkerVersion": "1.9.0",
+  "remoteGpuProtocolVersion": 6,
   "ffmpegAudioReplace": true,
   "voiceMediaCommand": true,
   "voiceMediaCommandExample": "Нова, наложи мой звук на видео",
   "zeroCreditMediaPipeline": [
     "FFmpeg audio replace",
-    "H.264 encode",
-    "AAC encode",
+    "FFmpeg multi-track mix",
+    "FFmpeg volume control",
+    "H.264/AAC MP4 export",
     "WanGP generation",
     "Blender blocking"
   ],
@@ -72,9 +73,22 @@
     "GPU",
     "WanGP API",
     "Blender preview MP4",
-    "FFmpeg H.264/AAC audio replacement"
+    "FFmpeg audio replacement",
+    "FFmpeg multi-track mix + volume",
+    "H.264/AAC MP4 export"
   ],
   "voiceAutoStart": true,
   "voiceBareColabCommand": true,
-  "audioReplaceAutoStartsAfterFiles": true
+  "audioReplaceAutoStartsAfterFiles": true,
+  "ffmpegAudioMix": true,
+  "multiAudioTracks": 8,
+  "audioVolumeControl": true,
+  "mp4Export": true,
+  "voiceMediaCommands": [
+    "Нова, замени музыку в видео",
+    "Нова, смешай звук видео с моими дорожками",
+    "Нова, оригинал 80%, музыка 35%",
+    "Нова, дорожка 1 70%, дорожка 2 30%",
+    "Нова, экспортируй готовый MP4"
+  ]
 }
