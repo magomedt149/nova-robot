@@ -789,6 +789,44 @@ function openColab(){
   return true;
 }
 async function autoStart(){return easyAction()}
+async function testAll(){
+  if(!confirmRemoteCompute('Полная проверка WanGP + Blender + FFmpeg'))return;
+  let health=await connect({resume:false});
+  if(!health){
+    setAutoRecover(true);
+    await patchRecovery({userApprovedRemote:true,phase:'diagnostics'},buildJob());
+    setEasyState('ЗАПУСК COLAB','Worker не найден. NOVA открывает Colab; после возврата проверка продолжится.','busy');
+    openColab();
+    return;
+  }
+  setEasyStep('render');
+  setProgress(5);
+  setStatus('Проверяю GPU, WanGP, Blender, FFmpeg и создание MP4…','busy');
+  try{
+    const result=await jsonFetch(endpoint()+'/self-test',{method:'POST',headers:authHeaders()});
+    const r=result.results||{};
+    const bits=[
+      r.gpu?.ok?'GPU ✓':'GPU —',
+      r.wangp?.ok?'WanGP ✓':'WanGP —',
+      r.blender?.ok?'Blender ✓':'Blender —',
+      r.ffmpeg?.ok?'FFmpeg/H.264/AAC ✓':'FFmpeg —'
+    ];
+    setProgress(result.ok?100:50);
+    setStatus('Проверка: '+bits.join(' • '),result.ok?'ok':'error');
+    if(result.ok){
+      setEasyStep('final');
+      setEasyState('ВСЁ РАБОТАЕТ','Remote stack прошёл self-test: GPU, WanGP API, Blender preview MP4 и FFmpeg H.264/AAC.','ok');
+    }else{
+      setEasyState('ЕСТЬ ОШИБКА','Один из компонентов не прошёл self-test. Смотри статус выше.','error');
+    }
+    return result;
+  }catch(error){
+    setStatus('Self-test не прошёл: '+error.message,'error');
+    setEasyState('ПРОВЕРКА НЕ ПРОШЛА','Перезапусти актуальный Colab notebook и повтори проверку.','error');
+    return null;
+  }
+}
+
 async function testRender(){
   if(!confirmRemoteCompute('Тест Remote GPU 1 секунда'))return;
   const health=await connect({resume:false});if(!health)return;
@@ -922,6 +960,7 @@ $('remoteAutoStart')?.addEventListener('click',autoStart);
 $('remoteAutoFinal')?.addEventListener('change',e=>setFullAuto(e.target.checked));
 $('remoteAutoRecover')?.addEventListener('change',e=>setAutoRecover(e.target.checked));
 $('remoteRecoverNow')?.addEventListener('click',recoverNow);
+$('remoteSelfTest')?.addEventListener('click',testAll);
 $('remoteTest')?.addEventListener('click',testRender);
 $('remoteCharacterRef')?.addEventListener('change',async e=>{
   currentCharacterRef=e.target.files?.[0]||null;
