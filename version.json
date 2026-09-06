@@ -1,7 +1,7 @@
 {
   "name": "NOVA",
-  "version": "27.18.0",
-  "pwa": "27.18.0",
+  "version": "27.19.0",
+  "pwa": "27.19.0",
   "mode": "free-only",
   "paidApis": false,
   "externalComputeRequiresConfirmation": true,
@@ -151,7 +151,7 @@
     "Colab fallback only after approval"
   ],
   "visionLive": true,
-  "visionLiveVersion": "1.4.0",
+  "visionLiveVersion": "1.5.0",
   "visionLiveFreeOnDevice": true,
   "visionLivePaidApi": false,
   "visionLiveCameraNarration": true,
@@ -268,5 +268,20 @@
   "visionExternalLossGraceMs": 2600,
   "visionExternalConnectConfirmMs": 900,
   "visionAutoSwitchLoopProtection": true,
-  "visionAutoSwitchUiBadge": "AUTO CAM"
+  "visionAutoSwitchUiBadge": "AUTO CAM",
+  "visionVoicePriority": true,
+  "visionVoicePriorityOrder": [
+    "P3 danger / fast approaching object",
+    "P2 new scene change",
+    "P1 calm scene overview"
+  ],
+  "visionDangerCanInterruptLowerPrioritySpeech": true,
+  "visionDangerHeuristic": "Temporal bounding-box growth + central-zone position + object class + relative size/motion. This is a visual heuristic, not measured physical distance.",
+  "visionFastApproachAreaGrowthRatio": 1.34,
+  "visionDangerRepeatMs": 2400,
+  "visionChangeMinIntervalMs": 1800,
+  "visionCalmBeforeOverviewMs": 7000,
+  "visionOverviewIntervalMs": 12000,
+  "visionPriorityDeduplication": true,
+  "visionCalmOverviewSuppressedDuringMotionOrSceneChanges": true
 }
