@@ -1,9 +1,9 @@
 (()=>{
 'use strict';
 
-const EXPECTED_VERSION='v24';
-const EXPECTED_CACHE='tumsoev-motion-vfx-studio-v24-character-motion-lock';
-const LEGACY_CACHE_RE=/tumsoev-motion-vfx-studio-v(?:22|23)(?:-|$)/i;
+const EXPECTED_VERSION='v26';
+const EXPECTED_CACHE='tumsoev-motion-vfx-studio-v26-safe-auto-colab';
+const LEGACY_CACHE_RE=/tumsoev-motion-vfx-studio-v(?:22|23|24|25)(?:-|$)/i;
 const FORCE_PENDING='nova.motion.diagnostics.forcePending';
 const FORCE_RESULT='nova.motion.diagnostics.forceResult';
 const AUTO_OPEN='nova.motion.diagnostics.autoOpen';
@@ -45,8 +45,8 @@ function ensureUi(){
         <div class="nova-diag-card"><span>Страница под Service Worker</span><b id="novaDiagControlled">—</b><small id="novaDiagController"></small></div>
         <div class="nova-diag-card"><span>Активный Service Worker</span><b id="novaDiagWorkerState">—</b><small id="novaDiagWorkerUrl"></small></div>
         <div class="nova-diag-card"><span>Активный cache name</span><b id="novaDiagCache">—</b><small id="novaDiagCacheNote"></small></div>
-        <div class="nova-diag-card"><span>Старые кэши v22 / v23</span><b id="novaDiagLegacy">—</b><small id="novaDiagLegacyList"></small></div>
-        <div class="nova-diag-card"><span>Принудительное обновление v24</span><b id="novaDiagForce">—</b><small id="novaDiagForceNote"></small></div>
+        <div class="nova-diag-card"><span>Старые кэши v22–v25</span><b id="novaDiagLegacy">—</b><small id="novaDiagLegacyList"></small></div>
+        <div class="nova-diag-card"><span>Принудительное обновление v26</span><b id="novaDiagForce">—</b><small id="novaDiagForceNote"></small></div>
       </div>
 
       <details class="nova-diag-details">
@@ -56,7 +56,7 @@ function ensureUi(){
 
       <div class="nova-diag-actions">
         <button id="novaDiagRefresh" class="secondary" type="button">↻ Проверить заново</button>
-        <button id="novaDiagForceUpdate" type="button">⬆ Принудительно обновить до v24</button>
+        <button id="novaDiagForceUpdate" type="button">⬆ Принудительно обновить до v26</button>
       </div>
       <div id="novaDiagActionStatus" class="nova-diag-action-status">Проверка ничего не запускает на GPU и не расходует кредиты.</div>
     </section>`;
@@ -65,7 +65,7 @@ function ensureUi(){
   $('novaDiagnosticsClose')?.addEventListener('click',closeDiagnostics);
   overlay.addEventListener('click',event=>{if(event.target===overlay)closeDiagnostics()});
   $('novaDiagRefresh')?.addEventListener('click',()=>inspect({showBusy:true}));
-  $('novaDiagForceUpdate')?.addEventListener('click',forceUpdateToV24);
+  $('novaDiagForceUpdate')?.addEventListener('click',forceUpdateToExpected);
 }
 
 function setText(id,value,note=''){
@@ -129,13 +129,13 @@ async function inspect({showBusy=false}={}){
   const installing=registration?.installing||null;
   const reportedVersion=String(reported?.version||'');
   const reportedCache=String(reported?.cache||'');
-  const activeV24=reportedVersion===EXPECTED_VERSION && reportedCache===EXPECTED_CACHE;
+  const activeExpected=reportedVersion===EXPECTED_VERSION && reportedCache===EXPECTED_CACHE;
   const controlled=Boolean(controller);
   const force=parseForceResult();
   const pending=sessionStorage.getItem(FORCE_PENDING)==='1';
 
-  $('novaDiagVersion').textContent=activeV24?EXPECTED_VERSION:(reportedVersion||'не подтверждена');
-  $('novaDiagVersionNote').textContent=activeV24?'Активный worker подтвердил v24.':'Ожидается '+EXPECTED_VERSION+'.';
+  $('novaDiagVersion').textContent=activeExpected?EXPECTED_VERSION:(reportedVersion||'не подтверждена');
+  $('novaDiagVersionNote').textContent=activeExpected?'Активный worker подтвердил v26.':'Ожидается '+EXPECTED_VERSION+'.';
 
   $('novaDiagControlled').textContent=controlled?'ДА ✓':'НЕТ';
   $('novaDiagController').textContent=controller?.scriptURL||'Страница пока не контролируется Service Worker.';
@@ -144,17 +144,17 @@ async function inspect({showBusy=false}={}){
   $('novaDiagWorkerUrl').textContent=active?.scriptURL||controller?.scriptURL||'—';
 
   $('novaDiagCache').textContent=reportedCache|| (expectedCachePresent?EXPECTED_CACHE:'не подтверждён');
-  $('novaDiagCacheNote').textContent=expectedCachePresent?'v24 cache присутствует на устройстве.':'v24 cache пока не найден.';
+  $('novaDiagCacheNote').textContent=expectedCachePresent?'v26 cache присутствует на устройстве.':'v26 cache пока не найден.';
 
   $('novaDiagLegacy').textContent=legacy.length?'НАЙДЕНЫ ⚠️':'НЕТ ✓';
-  $('novaDiagLegacyList').textContent=legacy.length?legacy.join(' • '):'v22/v23 отсутствуют.';
+  $('novaDiagLegacyList').textContent=legacy.length?legacy.join(' • '):'v22–v25 отсутствуют.';
 
   if(pending){
-    const success=activeV24&&expectedCachePresent&&legacy.length===0;
+    const success=activeExpected&&expectedCachePresent&&legacy.length===0;
     const result={
       at:new Date().toISOString(),
       ok:success,
-      message:success?'УСПЕХ: iPhone работает на Motion Studio v24, старые v22/v23 удалены.':'После перезагрузки v24 ещё не подтверждён полностью.',
+      message:success?'УСПЕХ: iPhone работает на Motion Studio v26, старые v22–v25 удалены.':'После перезагрузки v26 ещё не подтверждён полностью.',
       activeVersion:reportedVersion||null,
       activeCache:reportedCache||null,
       legacy
@@ -167,9 +167,9 @@ async function inspect({showBusy=false}={}){
   $('novaDiagForce').textContent=latest?(latest.ok?'УСПЕХ ✓':'НЕ ЗАВЕРШЕНО'):'ещё не запускалось';
   $('novaDiagForceNote').textContent=latest?.message||'Нажми кнопку ниже для принудительной проверки/обновления.';
 
-  const good=activeV24&&controlled&&expectedCachePresent&&legacy.length===0;
+  const good=activeExpected&&controlled&&expectedCachePresent&&legacy.length===0;
   setOverall(
-    good?'✅ Motion Studio v24 активен. Старого кода v22/v23 нет.':'⚠️ Диагностика нашла состояние, которое требует обновления.',
+    good?'✅ Motion Studio v26 активен. Старого кода v22–v25 нет.':'⚠️ Диагностика нашла состояние, которое требует обновления.',
     good?'ok':'error'
   );
 
@@ -192,15 +192,15 @@ async function inspect({showBusy=false}={}){
     forceResult:parseForceResult()
   };
   $('novaDiagRaw').textContent=JSON.stringify(raw,null,2);
-  return {good,activeV24,expectedCachePresent,legacy,registration,reported};
+  return {good,activeExpected,expectedCachePresent,legacy,registration,reported};
 }
 
-async function forceUpdateToV24(){
+async function forceUpdateToExpected(){
   ensureUi();
   const button=$('novaDiagForceUpdate');
   if(button)button.disabled=true;
-  setAction('Принудительно проверяю v24 и удаляю старые v22/v23…','busy');
-  setOverall('Обновление v24…','busy');
+  setAction('Принудительно проверяю v26 и удаляю старые v22–v25…','busy');
+  setOverall('Обновление v26…','busy');
 
   try{
     if(!('serviceWorker' in navigator))throw new Error('Service Worker не поддерживается этим браузером.');
@@ -211,9 +211,9 @@ async function forceUpdateToV24(){
     await Promise.all(legacy.map(name=>caches.delete(name)));
 
     const response=await fetch('./service-worker.js?v=24&diagnostics='+Date.now(),{cache:'no-store'});
-    if(!response.ok)throw new Error('Не удалось скачать service-worker.js v24: HTTP '+response.status);
+    if(!response.ok)throw new Error('Не удалось скачать service-worker.js v26: HTTP '+response.status);
     const source=await response.text();
-    if(!source.includes(EXPECTED_CACHE))throw new Error('Сервер вернул Service Worker без маркера Motion Studio v24.');
+    if(!source.includes(EXPECTED_CACHE))throw new Error('Сервер вернул Service Worker без маркера Motion Studio v26.');
 
     const registration=await navigator.serviceWorker.register('./service-worker.js?v=24',{
       scope:'./',
@@ -226,10 +226,10 @@ async function forceUpdateToV24(){
     saveForceResult({
       at:new Date().toISOString(),
       ok:false,
-      message:'v24 скачан и update() выполнен. Проверяю активный worker после перезагрузки…',
+      message:'v26 скачан и update() выполнен. Проверяю активный worker после перезагрузки…',
       deletedLegacy:legacy
     });
-    setAction('v24 скачан. Перезагружаю Motion Studio и проверяю активный worker…','busy');
+    setAction('v26 скачан. Перезагружаю Motion Studio и проверяю активный worker…','busy');
 
     setTimeout(()=>location.reload(),350);
   }catch(error){
@@ -238,7 +238,7 @@ async function forceUpdateToV24(){
     $('novaDiagForce').textContent='ОШИБКА';
     $('novaDiagForceNote').textContent=result.message;
     setAction(result.message,'error');
-    setOverall('❌ Принудительное обновление v24 не завершилось.','error');
+    setOverall('❌ Принудительное обновление v26 не завершилось.','error');
     if(button)button.disabled=false;
   }
 }
@@ -255,7 +255,7 @@ function closeDiagnostics(){
 }
 
 ensureUi();
-window.NOVA_MOTION_DIAGNOSTICS={open:openDiagnostics,inspect,forceUpdateToV24,version:EXPECTED_VERSION,cache:EXPECTED_CACHE};
+window.NOVA_MOTION_DIAGNOSTICS={open:openDiagnostics,inspect,forceUpdateToExpected,version:EXPECTED_VERSION,cache:EXPECTED_CACHE};
 
 if(sessionStorage.getItem(AUTO_OPEN)==='1'){
   sessionStorage.removeItem(AUTO_OPEN);
