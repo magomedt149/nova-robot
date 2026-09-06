@@ -1,7 +1,7 @@
 {
   "name": "NOVA",
-  "version": "27.20.0",
-  "pwa": "27.20.0",
+  "version": "27.21.0",
+  "pwa": "27.21.0",
   "mode": "free-only",
   "paidApis": false,
   "externalComputeRequiresConfirmation": true,
@@ -151,7 +151,7 @@
     "Colab fallback only after approval"
   ],
   "visionLive": true,
-  "visionLiveVersion": "1.6.0",
+  "visionLiveVersion": "1.7.0",
   "visionLiveFreeOnDevice": true,
   "visionLivePaidApi": false,
   "visionLiveCameraNarration": true,
@@ -312,5 +312,25 @@
     "Нова, задержка на телефон 5 секунд",
     "Нова, задержка на очки 3 секунды"
   ],
-  "visionAutoSwitchCountdownInConnectionStatus": true
+  "visionAutoSwitchCountdownInConnectionStatus": true,
+  "visionAutoSwitchVoiceNotifications": true,
+  "visionAutoSwitchVisualNotifications": true,
+  "visionAutoSwitchVisualNotificationDurationMs": 4800,
+  "visionAutoSwitchNotificationReason": true,
+  "visionAutoSwitchNotificationEvent": "nova-vision-auto-camera-switch",
+  "visionAutoSwitchNotificationPriority": "P2 informational; P3 danger narration remains higher priority",
+  "visionAutoSwitchReasonLabels": [
+    "track ended/lost",
+    "bridge stream ended/detached",
+    "WebRTC disconnected/failed/closed",
+    "camera device removed/connected",
+    "external video error/stall",
+    "bridge registered/unmuted",
+    "WebRTC connected",
+    "external source detected"
+  ],
+  "visionAutoSwitchNotificationExamples": [
+    "Переключаюсь на камеру телефона. Причина: WebRTC-соединение с очками прервано.",
+    "Переключаюсь на камеру очков. Причина: камера очков снова подключена."
+  ]
 }
