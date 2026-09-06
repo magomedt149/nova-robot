@@ -51,8 +51,8 @@ SELF_TEST_LOCK = threading.Lock()
 WANGP_JOBS: dict[str, Any] = {}
 DOWNLOAD_TICKETS: dict[str, dict[str, Any]] = {}
 DOWNLOAD_TICKET_TTL = int(os.environ.get("NOVA_REMOTE_DOWNLOAD_TTL", "600"))
-WORKER_VERSION = "2.0.0"
-PROTOCOL_VERSION = 7
+WORKER_VERSION = "2.1.0"
+PROTOCOL_VERSION = 8
 SESSION_ID = uuid.uuid4().hex[:12]
 
 app = FastAPI(title="NOVA Remote GPU Worker", version="1.0")
@@ -422,6 +422,30 @@ def source_has_audio(source: Path) -> bool:
         return False
 
 
+def clamp_seconds(value: Any, default: float = 0.0) -> float:
+    try:
+        number = float(value)
+    except Exception:
+        number = default
+    return max(0.0, min(60.0, number))
+
+
+def media_duration_seconds(path: Path) -> float:
+    if not command_exists("ffprobe"):
+        return 0.0
+    try:
+        result = subprocess.run(
+            [
+                "ffprobe", "-v", "error", "-show_entries", "format=duration",
+                "-of", "default=noprint_wrappers=1:nokey=1", str(path),
+            ],
+            capture_output=True, text=True, check=True, timeout=20,
+        )
+        return max(0.0, float((result.stdout or "0").strip() or 0))
+    except Exception:
+        return 0.0
+
+
 def clamp_volume(value: Any, default: float = 1.0) -> float:
     try:
         number = float(value)
@@ -475,10 +499,14 @@ def mix_audio_tracks(
     source_volume: float = 1.0,
     track_volumes: list[float] | None = None,
     master_volume: float = 1.0,
+    track_fade_in: float = 0.0,
+    track_fade_out: float = 0.0,
 ) -> Path:
     if not command_exists("ffmpeg"):
         raise RuntimeError("FFmpeg is not installed")
     track_volumes = list(track_volumes or [])
+    track_fade_in = clamp_seconds(track_fade_in, 0.0)
+    track_fade_out = clamp_seconds(track_fade_out, 0.0)
     inputs = ["ffmpeg", "-y", "-i", str(source)]
     for track in tracks:
         inputs += ["-i", str(track)]
@@ -491,11 +519,19 @@ def mix_audio_tracks(
         )
         labels.append("[a0]")
 
-    for index, _track in enumerate(tracks, start=1):
+    for index, track in enumerate(tracks, start=1):
         volume = track_volumes[index - 1] if index - 1 < len(track_volumes) else 1.0
-        filters.append(
-            f"[{index}:a]aresample=async=1:first_pts=0,volume={clamp_volume(volume):.4f},apad[a{index}]"
-        )
+        chain = f"[{index}:a]aresample=async=1:first_pts=0,volume={clamp_volume(volume):.4f}"
+        duration = media_duration_seconds(track)
+        if track_fade_in > 0:
+            fade_in = min(track_fade_in, duration) if duration > 0 else track_fade_in
+            chain += f",afade=t=in:st=0:d={fade_in:.4f}"
+        if track_fade_out > 0 and duration > 0:
+            fade_out = min(track_fade_out, duration)
+            fade_start = max(0.0, duration - fade_out)
+            chain += f",afade=t=out:st={fade_start:.4f}:d={fade_out:.4f}"
+        chain += f",apad[a{index}]"
+        filters.append(chain)
         labels.append(f"[a{index}]")
 
     if not labels:
@@ -592,6 +628,8 @@ def run_music_job(job_id: str, job: dict[str, Any], job_dir: Path) -> Path:
         original_volume = clamp_volume(spec.get("original_volume"), 1.0)
         music_volume = clamp_volume(spec.get("music_volume"), 0.6)
         master_volume = clamp_volume(spec.get("master_volume"), 1.0)
+        fade_in = clamp_seconds(spec.get("fade_in"), 0.0)
+        fade_out = clamp_seconds(spec.get("fade_out"), 0.0)
         update_status(job_id, progress=58, stage="music_mix", message="Подмешиваю созданную музыку в видео через FFmpeg.")
         mix_audio_tracks(
             job_id,
@@ -602,6 +640,8 @@ def run_music_job(job_id: str, job: dict[str, Any], job_dir: Path) -> Path:
             source_volume=original_volume,
             track_volumes=[music_volume],
             master_volume=master_volume,
+            track_fade_in=fade_in,
+            track_fade_out=fade_out,
         )
         update_status(job_id, progress=94, stage="encode", message="Музыка создана и MP4 собран: H.264 + AAC.")
         return out
@@ -636,6 +676,8 @@ def run_ffmpeg_job(job_id: str, job: dict[str, Any], job_dir: Path) -> Path:
     master_volume = clamp_volume(job.get("master_volume"), 1.0)
     raw_track_volumes = job.get("track_volumes") or []
     track_volumes = [clamp_volume(value, 1.0) for value in raw_track_volumes] if isinstance(raw_track_volumes, list) else []
+    track_fade_in = clamp_seconds(job.get("track_fade_in"), 0.0)
+    track_fade_out = clamp_seconds(job.get("track_fade_out"), 0.0)
 
     if media_action in {"replace_audio", "audio_replace"}:
         if not tracks:
@@ -647,6 +689,8 @@ def run_ffmpeg_job(job_id: str, job: dict[str, Any], job_dir: Path) -> Path:
             source_volume=0.0,
             track_volumes=track_volumes,
             master_volume=master_volume,
+            track_fade_in=track_fade_in,
+            track_fade_out=track_fade_out,
         )
         update_status(job_id, progress=92, stage="encode", message="Новый звук наложен. Кодирую MP4 H.264/AAC.")
         return out
@@ -661,6 +705,8 @@ def run_ffmpeg_job(job_id: str, job: dict[str, Any], job_dir: Path) -> Path:
             source_volume=source_volume,
             track_volumes=track_volumes,
             master_volume=master_volume,
+            track_fade_in=track_fade_in,
+            track_fade_out=track_fade_out,
         )
         update_status(job_id, progress=92, stage="encode", message="Микс готов. Кодирую MP4 H.264/AAC.")
         return out
@@ -673,6 +719,8 @@ def run_ffmpeg_job(job_id: str, job: dict[str, Any], job_dir: Path) -> Path:
             source_volume=source_volume,
             track_volumes=track_volumes,
             master_volume=master_volume,
+            track_fade_in=track_fade_in,
+            track_fade_out=track_fade_out,
         )
         update_status(job_id, progress=92, stage="encode", message="Громкость применена. Проверяю MP4.")
         return out
@@ -1355,6 +1403,8 @@ async def health(request: Request):
             "music_wav": True,
             "music_mp3": command_exists("ffmpeg"),
             "music_video_mix": command_exists("ffmpeg"),
+            "music_fade_in_out": command_exists("ffmpeg"),
+            "track_fade_in_out": command_exists("ffmpeg"),
             "video_transcode": command_exists("ffmpeg"),
             "iphone_h264_encode": command_exists("ffmpeg"),
             "human_motion_control": True,
