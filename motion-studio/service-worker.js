@@ -1,5 +1,5 @@
-const MOTION_VERSION = 'v24';
-const CACHE = 'tumsoev-motion-vfx-studio-v24-character-motion-lock';
+const MOTION_VERSION = 'v25';
+const CACHE = 'tumsoev-motion-vfx-studio-v25-ffmpeg-audio-command';
 const ASSETS = [
   '/motion-studio/',
   '/motion-studio/index.html',
@@ -38,7 +38,7 @@ self.addEventListener('activate', event => {
 
     // A newly activated worker must not leave an already-open iPhone page
     // running the old JS in memory. Reload Motion Studio exactly once per
-    // service-worker activation; the next navigation is controlled by v24.
+    // service-worker activation; the next navigation is controlled by v25.
     const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
     await Promise.all(
       windows
@@ -76,7 +76,7 @@ self.addEventListener('fetch', event => {
   if (!isMotionAsset) return;
 
   // Network-first prevents stale v22/v23/v24 code from winning after restart.
-  // The v24 cache is only the offline fallback and is refreshed by successful fetches.
+  // The v25 cache is only the offline fallback and is refreshed by successful fetches.
   event.respondWith(
     fetch(event.request, { cache: 'no-store' })
       .then(response => {
