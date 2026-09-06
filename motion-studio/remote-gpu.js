@@ -427,7 +427,9 @@ async function connect({resume=true}={}){
     }else if(autoRecoverEnabled()){
       setRecoveryStatus('Auto Recovery: worker '+(data.session_id||'')+' на связи.'+(data.drive_mounted?' Drive checkpoint включён.':''),'ok');
     }
-    if(resume&&autoRecoverEnabled()&&recoveryMeta())setTimeout(()=>resumeOrRecover().catch(()=>{}),0);
+    const recovery=recoveryMeta();
+    if(resume&&recovery?.diagnosticSelfTest&&recovery?.userApprovedRemote)setTimeout(()=>runRemoteSelfTest().catch(()=>{}),0);
+    else if(resume&&autoRecoverEnabled()&&recovery)setTimeout(()=>resumeOrRecover().catch(()=>{}),0);
     else setTimeout(()=>{maybeAutoSend().catch(()=>{})},0);
     return data;
   }catch(error){
@@ -721,7 +723,7 @@ async function easyAction(){
   const active=lastJobId||localStorage.getItem(LS_JOB);
   const meta=recoveryMeta();
   if(active||meta&&['recovering','uploading','running','final','promoting','submitting'].includes(meta.phase)){
-    if(active){lastJobId=active;await holdWakeLock();poll(active);return}
+    if(active&&endpoint()&&token()){lastJobId=active;await holdWakeLock();poll(active);return}
     if(meta?.userApprovedRemote){await recoverNow();return}
   }
 
@@ -789,16 +791,7 @@ function openColab(){
   return true;
 }
 async function autoStart(){return easyAction()}
-async function testAll(){
-  if(!confirmRemoteCompute('Полная проверка WanGP + Blender + FFmpeg'))return;
-  let health=await connect({resume:false});
-  if(!health){
-    setAutoRecover(true);
-    await patchRecovery({userApprovedRemote:true,phase:'diagnostics'},buildJob());
-    setEasyState('ЗАПУСК COLAB','Worker не найден. NOVA открывает Colab; после возврата проверка продолжится.','busy');
-    openColab();
-    return;
-  }
+async function runRemoteSelfTest(){
   setEasyStep('render');
   setProgress(5);
   setStatus('Проверяю GPU, WanGP, Blender, FFmpeg и создание MP4…','busy');
@@ -808,8 +801,8 @@ async function testAll(){
     const bits=[
       r.gpu?.ok?'GPU ✓':'GPU —',
       r.wangp?.ok?'WanGP ✓':'WanGP —',
-      r.blender?.ok?'Blender ✓':'Blender —',
-      r.ffmpeg?.ok?'FFmpeg/H.264/AAC ✓':'FFmpeg —'
+      r.blender?.ok?'Blender MP4 ✓':'Blender —',
+      r.ffmpeg?.ok?'FFmpeg H.264/AAC ✓':'FFmpeg —'
     ];
     setProgress(result.ok?100:50);
     setStatus('Проверка: '+bits.join(' • '),result.ok?'ok':'error');
@@ -819,12 +812,28 @@ async function testAll(){
     }else{
       setEasyState('ЕСТЬ ОШИБКА','Один из компонентов не прошёл self-test. Смотри статус выше.','error');
     }
+    await patchRecovery({diagnosticSelfTest:false,userApprovedRemote:false,phase:'diagnostics-done'});
+    setAutoRecover(false);
     return result;
   }catch(error){
     setStatus('Self-test не прошёл: '+error.message,'error');
     setEasyState('ПРОВЕРКА НЕ ПРОШЛА','Перезапусти актуальный Colab notebook и повтори проверку.','error');
+    await patchRecovery({diagnosticSelfTest:false,userApprovedRemote:false,phase:'diagnostics-error'});
+    setAutoRecover(false);
     return null;
   }
+}
+async function testAll(){
+  if(!confirmRemoteCompute('Полная проверка WanGP + Blender + FFmpeg'))return;
+  setAutoRecover(true);
+  await patchRecovery({userApprovedRemote:true,diagnosticSelfTest:true,phase:'diagnostics'},buildJob());
+  const health=await connect({resume:false});
+  if(!health){
+    setEasyState('ЗАПУСК COLAB','Worker не найден. NOVA открывает Colab; после возврата self-test продолжится автоматически.','busy');
+    openColab();
+    return;
+  }
+  return runRemoteSelfTest();
 }
 
 async function testRender(){
@@ -945,7 +954,8 @@ async function restore(){
     if(refOk)cached.push('фото ✓');
     if(audioOk)cached.push('аудио ✓');
     setRecoveryStatus('Recovery загружен после перезапуска'+(cached.length?' • '+cached.join(' • '):'')+(meta?.userApprovedRemote?' • одобренный job продолжится автоматически.':'.'),'ok');
-    await resumeRunningJobAfterRestart();
+    const resumed=await resumeRunningJobAfterRestart();
+    if(meta?.userApprovedRemote&&!resumed)setTimeout(()=>recoverNow().catch(()=>{}),350);
   }
   if(videoParam){
     if(mediaOperationIntent()==='replace_audio')setEasyState('ЗАМЕНА ЗВУКА','Команда принята. Выбери видео + аудио и нажми «Сделать видео». NOVA автоматически выберет FFmpeg.','ok');
