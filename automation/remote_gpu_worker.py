@@ -912,6 +912,8 @@ def human_motion_options(job: dict[str, Any]) -> dict[str, Any]:
             mode = "walk"
         elif re.search(r"motion.?transfer|openpose|skeleton|pose.?control|скелет|поз[аы]|движени[ея] человека", prompt):
             mode = "motion-reference"
+        elif re.search(r"\b(animate|alive|move|moving|motion)\b|ожив|двига|движени|шевел", prompt):
+            mode = "natural"
         else:
             mode = "none"
     return {
@@ -1069,6 +1071,7 @@ def build_wangp_settings(
         "run": "Full-body natural running cycle with continuous forward locomotion, believable foot contacts, weight transfer, arm swing, and stable anatomy.",
         "dance": "Full-body coordinated dance motion with continuous body movement, planted foot contacts when appropriate, stable limbs, and consistent rhythm.",
         "motion-reference": "Follow the driving video's full-body motion and timing closely while preserving stable anatomy and continuous locomotion.",
+        "natural": "Natural living full-body motion: subtle breathing, blinking, head and shoulder movement, realistic weight shifts, and gentle hand/body movement while preserving identity.",
     }
     if motion["enabled"] and motion["mode"] in motion_prompts:
         prompt = (prompt + " " + motion_prompts[motion["mode"]]).strip()
@@ -1470,6 +1473,9 @@ async def health(request: Request):
             "video_transcode": command_exists("ffmpeg"),
             "iphone_h264_encode": command_exists("ffmpeg"),
             "human_motion_control": True,
+            "hybrid_image_to_video": True,
+            "single_photo_motion": True,
+            "hybrid_background_text_stability_prompt": True,
             "human_motion_preferred_t4": "VACE 1.3B",
         },
         "wangp_root": str(WANGP_ROOT),
