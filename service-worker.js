@@ -1,4 +1,4 @@
-const CACHE = 'nova-v70-free-call-easy-check-v1-20260904';
+const CACHE = 'nova-v71-media-command-ffmpeg-v1-20260905';
 const API_CACHE = 'nova-api-economy-v2';
 const METERED_NETLIFY_HOST = /(^|\\.)netlify\\.app$/i.test(self.location.hostname);
 const YOUTUBE_TTL_MS = 24 * 60 * 60 * 1000;
