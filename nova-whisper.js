@@ -531,8 +531,8 @@
     }
   }
 
-  async function localWhisperDub() {
-    const file = $('#novaLocalVideo')?.files?.[0];
+  async function localWhisperDub(fileOverride = null) {
+    const file = fileOverride instanceof Blob ? fileOverride : $('#novaLocalVideo')?.files?.[0];
     if (!file) throw new Error('Сначала выбери MP4/видео. SRT больше не обязателен.');
     clearDownloads();
     const resultNode = $('#novaDubResult');
@@ -585,6 +585,7 @@
     addDownload(srt, `${base}_WHISPER_EN.srt`, '⬇ English SRT · исходные тайминги');
     addDownload(rawSrt, `${base}_WHISPER_original.srt`, '⬇ Original transcript SRT');
     status(`✅ Готово локально: Whisper ${model}, Денис/Ирина по голосу, русский MP3 + English SRT. Тайминги не изменены. Платных AI-кредитов нет.`);
+    return { file, model, sourceLanguage: source, original, diarized, russian, english, mp3, srt, rawSrt };
   }
 
   ensureUi();
