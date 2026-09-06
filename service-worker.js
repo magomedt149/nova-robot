@@ -70,7 +70,15 @@ const YT_INVIDIOUS = [
 
 self.addEventListener('install', (event) => {
   self.skipWaiting();
-  event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(CORE)));
+  event.waitUntil((async () => {
+    const cache = await caches.open(CACHE);
+    const results = await Promise.allSettled(CORE.map((path) => cache.add(path)));
+    const failed = CORE.filter((_, index) => results[index].status === 'rejected');
+    if (failed.length) console.warn('[NOVA SW] Optional cache misses:', failed);
+    for (const critical of ['./index.html', './app.js', './styles.css']) {
+      if (!(await cache.match(critical, { ignoreSearch: true }))) await cache.add(critical);
+    }
+  })());
 });
 
 self.addEventListener('activate', (event) => {
