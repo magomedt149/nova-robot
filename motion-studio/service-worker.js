@@ -1,5 +1,6 @@
 const MOTION_VERSION = 'v30';
 const CACHE = 'tumsoev-motion-vfx-studio-v30-hybrid-image-motion';
+const PREVIOUS_CACHE = 'tumsoev-motion-vfx-studio-v29-music-fades';
 const ASSETS = [
   '/motion-studio/',
   '/motion-studio/index.html',
@@ -31,7 +32,7 @@ self.addEventListener('activate', event => {
     const keys = await caches.keys();
     await Promise.all(
       keys
-        .filter(key => /^tumsoev-motion-vfx-studio-/i.test(key) && key !== CACHE)
+        .filter(key => (key === PREVIOUS_CACHE || /^tumsoev-motion-vfx-studio-/i.test(key)) && key !== CACHE)
         .map(key => caches.delete(key))
     );
     await self.clients.claim();
