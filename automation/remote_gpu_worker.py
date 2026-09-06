@@ -306,7 +306,93 @@ def run_worker_self_test() -> dict[str, Any]:
             except Exception as exc:
                 results["wangp"] = {"ok": False, "error": str(exc), "api": str(wangp_api)}
 
-            ok = bool(results["gpu"]["ok"] and ffmpeg_ok and music_ok and blender_ok and wangp_ok)
+            hybrid_router_ok = False
+            try:
+                hybrid_dir = work / "hybrid-router"
+                hybrid_dir.mkdir(parents=True, exist_ok=True)
+                reference = hybrid_dir / "reference.png"
+                reference.write_bytes(b"NOVA-HYBRID-REFERENCE")
+
+                class HybridRouterSession:
+                    def get_default_settings(self, model_type):
+                        return {"negative_prompt": ""}
+
+                    def list_model_metadata(self, **kwargs):
+                        return [
+                            {
+                                "model_type": "fastwan-i2v-test",
+                                "name": "FastWan I2V Test",
+                                "metadata": {"inputs": ["image"], "main_output": "video"},
+                            },
+                            {
+                                "model_type": "text-only-test",
+                                "name": "Text Only Test",
+                                "metadata": {"inputs": ["text"], "main_output": "video"},
+                            },
+                        ]
+
+                hybrid_job = {
+                    "job_id": "NOVA_HYBRID_SELFTEST",
+                    "source_prompt": "Оживи человека естественно, сохрани фон и текст",
+                    "duration": 1,
+                    "ratio": "9:16",
+                    "fps": 24,
+                    "human_motion": {
+                        "enabled": True,
+                        "mode": "natural",
+                        "control_source": "prompt_only",
+                        "prefer_pose_control": True,
+                        "full_body": True,
+                    },
+                }
+                fake_session = HybridRouterSession()
+                selected = pick_wangp_model(
+                    fake_session,
+                    hybrid_job,
+                    has_source=False,
+                    has_reference=True,
+                )
+                settings = build_wangp_settings(
+                    fake_session,
+                    selected,
+                    hybrid_job,
+                    {
+                        "quality": "preview",
+                        "ratio": "9:16",
+                        "duration": 1.0,
+                        "fps": 24,
+                        "width": 432,
+                        "height": 768,
+                        "crf": "25",
+                        "preset": "veryfast",
+                    },
+                    None,
+                    hybrid_dir,
+                )
+                hybrid_router_ok = bool(
+                    settings.get("image_start") == str(reference)
+                    and "natural living full-body motion" in str(settings.get("prompt") or "").lower()
+                    and "text distortion" in str(settings.get("negative_prompt") or "").lower()
+                )
+                results["hybrid_router"] = {
+                    "ok": hybrid_router_ok,
+                    "model_type": selected.get("model_type"),
+                    "image_start": settings.get("image_start"),
+                    "natural_motion": True,
+                    "text_background_guard": True,
+                    "paid_generation": False,
+                }
+            except Exception as exc:
+                results["hybrid_router"] = {"ok": False, "error": str(exc), "paid_generation": False}
+
+            ok = bool(
+                results["gpu"]["ok"]
+                and ffmpeg_ok
+                and music_ok
+                and blender_ok
+                and wangp_ok
+                and hybrid_router_ok
+            )
             return {
                 "ok": ok,
                 "worker_version": WORKER_VERSION,
