@@ -122,15 +122,16 @@ function setFullAuto(enabled){
   localStorage.setItem(LS_FULLAUTO,on?'1':'0');
 }
 function autoRecoverEnabled(){
-  if(FREE_LOCK)return false;
+  const meta=recoveryMeta();
+  if(meta?.userApprovedRemote)return true;
   const stored=localStorage.getItem(LS_AUTORECOVER);
-  return $('remoteAutoRecover')?.checked ?? (stored!=='0');
+  return $('remoteAutoRecover')?.checked ?? (stored==='1');
 }
 function setAutoRecover(enabled){
-  const on=FREE_LOCK?false:Boolean(enabled);
+  const on=Boolean(enabled);
   if($('remoteAutoRecover'))$('remoteAutoRecover').checked=on;
   localStorage.setItem(LS_AUTORECOVER,on?'1':'0');
-  setRecoveryStatus(on?'Auto Recovery: включён.':'FREE LOCK: автоматическое Remote GPU восстановление выключено.',on?'ok':'');
+  setRecoveryStatus(on?'Auto Recovery: включён для одобренного задания.':'Auto Recovery: выключен.',on?'ok':'');
   if(on)requestRecoveryPersistence().catch(()=>{});
 }
 function confirmRemoteCompute(action='Remote GPU'){
@@ -198,17 +199,21 @@ async function canCacheSource(source){
   }catch(_){}
   return true;
 }
-async function beginRecovery(job,source,sourceName,characterRef=null){
+async function beginRecovery(job,source,sourceName,characterRef=null,audioRef=null,approvedRemote=false){
   const name=sourceName||source?.name||'source.mp4';
   const ref=characterRef||currentCharacterRef||$('remoteCharacterRef')?.files?.[0]||null;
+  const audio=audioRef||currentAudioFile||$('remoteAudio')?.files?.[0]||null;
   const refName=ref?.name||'character-reference.png';
+  const audioName=audio?.name||'audio.mp3';
+  const previous=recoveryMeta();
   const meta={
-    version:2,
+    version:3,
     phase:'prepared',
     job:{...job,defer_start:false},
     remoteJobId:'',
     workerUrl:endpoint(),
     workerSessionId:lastHealth?.session_id||'',
+    userApprovedRemote:Boolean(approvedRemote||previous?.userApprovedRemote),
     sourceName:name,
     sourceType:source?.type||'video/mp4',
     sourceSize:Number(source?.size||0),
@@ -217,27 +222,34 @@ async function beginRecovery(job,source,sourceName,characterRef=null){
     referenceType:ref?.type||'image/png',
     referenceSize:Number(ref?.size||0),
     referenceCached:false,
+    audioName,
+    audioType:audio?.type||'audio/mpeg',
+    audioSize:Number(audio?.size||0),
+    audioCached:false,
     updatedAt:Date.now()
   };
   saveRecoveryMeta(meta);
-  let cachedSource=null,cachedReference=null;
+  let cachedSource=null,cachedReference=null,cachedAudio=null;
   if(source&&await canCacheSource(source))cachedSource=source;
   if(ref&&await canCacheSource(ref))cachedReference=ref;
+  if(audio&&await canCacheSource(audio))cachedAudio=audio;
   try{
-    await dbPut({id:DB_KEY,job:meta.job,source:cachedSource,sourceName:name,sourceType:meta.sourceType,reference:cachedReference,referenceName:refName,referenceType:meta.referenceType,meta});
-    if(cachedSource||cachedReference){
+    await dbPut({id:DB_KEY,job:meta.job,source:cachedSource,sourceName:name,sourceType:meta.sourceType,reference:cachedReference,referenceName:refName,referenceType:meta.referenceType,audio:cachedAudio,audioName,audioType:meta.audioType,meta});
+    if(cachedSource||cachedReference||cachedAudio){
       meta.sourceCached=Boolean(cachedSource);
       meta.referenceCached=Boolean(cachedReference);
+      meta.audioCached=Boolean(cachedAudio);
       saveRecoveryMeta(meta);
-      await dbPut({id:DB_KEY,job:meta.job,source:cachedSource,sourceName:name,sourceType:meta.sourceType,reference:cachedReference,referenceName:refName,referenceType:meta.referenceType,meta});
+      await dbPut({id:DB_KEY,job:meta.job,source:cachedSource,sourceName:name,sourceType:meta.sourceType,reference:cachedReference,referenceName:refName,referenceType:meta.referenceType,audio:cachedAudio,audioName,audioType:meta.audioType,meta});
     }
     const parts=[];
     if(meta.sourceSize)parts.push(meta.sourceCached?'видео сохранено':'видео держится пока страница открыта');
     if(meta.referenceSize)parts.push(meta.referenceCached?'фото персонажа сохранено':'фото персонажа держится пока страница открыта');
+    if(meta.audioSize)parts.push(meta.audioCached?'аудио сохранено':'аудио держится пока страница открыта');
     setRecoveryStatus(parts.length?'Auto Recovery: '+parts.join(' • ')+'.':'Auto Recovery: Scene Pack сохранён.','ok');
     requestRecoveryPersistence().catch(()=>{});
   }catch(_){
-    meta.sourceCached=false;meta.referenceCached=false;saveRecoveryMeta(meta);
+    meta.sourceCached=false;meta.referenceCached=false;meta.audioCached=false;saveRecoveryMeta(meta);
     setRecoveryStatus('Auto Recovery: сохранены параметры job; локальный файл-кэш недоступен.','');
   }
   return meta;
@@ -265,7 +277,9 @@ async function getRecoveryBundle(){
     source:currentSourceFile||record?.source||null,
     sourceName:record?.sourceName||meta.sourceName||'source.mp4',
     reference:currentCharacterRef||record?.reference||null,
-    referenceName:record?.referenceName||meta.referenceName||'character-reference.png'
+    referenceName:record?.referenceName||meta.referenceName||'character-reference.png',
+    audio:currentAudioFile||record?.audio||null,
+    audioName:record?.audioName||meta.audioName||'audio.mp3'
   };
 }
 async function clearRecovery(){
@@ -273,6 +287,7 @@ async function clearRecovery(){
   await dbDelete();
   currentSourceFile=null;
   currentCharacterRef=null;
+  currentAudioFile=null;
   setRecoveryStatus('Auto Recovery: готов.','ok');
 }
 async function readClipboardCode(){
@@ -407,8 +422,8 @@ async function connect({resume=true}={}){
     const bits=[gpu,data.blender?'Blender ✓':'Blender —',data.ffmpeg?'FFmpeg ✓':'FFmpeg —',data.wangp_api_ready?'WanGP API ✓':'WanGP —',protocol,data.free_disk_gb!=null?data.free_disk_gb+' GB free':''];
     setStatus('Подключено: '+bits.filter(Boolean).join(' • '),'ok');
     if(data.drive_mounted&&autoRecoverEnabled()&&$('remoteMirrorDrive'))$('remoteMirrorDrive').checked=true;
-    if(Number(data.protocol_version||0)<3){
-      setRecoveryStatus('Auto Recovery: worker старой версии. Для полного восстановления перезапусти актуальный notebook.','error');
+    if(Number(data.protocol_version||0)<5){
+      setRecoveryStatus('Auto Recovery: worker старой версии. Для полного восстановления видео+аудио перезапусти актуальный notebook.','error');
     }else if(autoRecoverEnabled()){
       setRecoveryStatus('Auto Recovery: worker '+(data.session_id||'')+' на связи.'+(data.drive_mounted?' Drive checkpoint включён.':''),'ok');
     }
@@ -604,14 +619,20 @@ async function resubmitRecovery(){
   const bundle=await getRecoveryBundle();
   if(!bundle?.job)return false;
   const needsSource=Number(bundle.meta.sourceSize||0)>0;
+  const needsAudio=Number(bundle.meta.audioSize||0)>0;
   const source=bundle.source;
+  const audio=bundle.audio;
   if(needsSource&&!source){
     setRecoveryStatus('Auto Recovery сохранил job, но исходник слишком большой для iPhone-кэша. Выбери тот же видеофайл — отправка продолжится автоматически.','error');
     return false;
   }
+  if(needsAudio&&!audio){
+    setRecoveryStatus('Auto Recovery сохранил job, но аудио не осталось в iPhone-кэше. Выбери тот же аудиофайл — NOVA продолжит автоматически.','error');
+    return false;
+  }
   localStorage.removeItem(LS_JOB);lastJobId='';
   setRecoveryStatus('Auto Recovery: пересоздаю '+String(bundle.job.quality||'preview')+' job в новой Colab-сессии…','busy');
-  return submitPreparedJob({...bundle.job,job_id:undefined,defer_start:false},source,bundle.sourceName,{recovery:true,reference:bundle.reference,referenceName:bundle.referenceName});
+  return submitPreparedJob({...bundle.job,job_id:undefined,defer_start:false},source,bundle.sourceName,{recovery:true,reference:bundle.reference,referenceName:bundle.referenceName,audio,audioName:bundle.audioName});
 }
 async function resumeOrRecover(){
   if(!autoRecoverEnabled())return false;
@@ -690,53 +711,67 @@ async function runLocalEasy(){
   }
 }
 async function maybeAutoSend(){
-  // FREE LOCK: text changes, saved tokens and page restores never start remote compute.
-  return false;
+  const meta=recoveryMeta();
+  if(!meta?.userApprovedRemote||!autoRecoverEnabled()||localStorage.getItem(LS_JOB)||!endpoint()||!token()||!hasRenderableIntent())return false;
+  if(['submitting','uploading','running','final','recovering','promoting'].includes(meta.phase))return false;
+  await send(true);
+  return true;
 }
 async function easyAction(){
   const active=lastJobId||localStorage.getItem(LS_JOB);
   const meta=recoveryMeta();
   if(active||meta&&['recovering','uploading','running','final','promoting','submitting'].includes(meta.phase)){
-    if(endpoint()&&token()){
-      if(active){lastJobId=active;await holdWakeLock();poll(active);return}
-      await recoverNow();return;
-    }
+    if(active){lastJobId=active;await holdWakeLock();poll(active);return}
+    if(meta?.userApprovedRemote){await recoverNow();return}
   }
 
   const mediaAction=mediaOperationIntent();
-  if(mediaAction==='replace_audio'){
-    const source=$('remoteSource')?.files?.[0]||currentSourceFile||null;
-    const audio=$('remoteAudio')?.files?.[0]||currentAudioFile||null;
-    if(!source||!audio){
-      setEasyState('НУЖНЫ 2 ФАЙЛА','Выбери видео и аудио. После этого NOVA сама выберет FFmpeg.','error');
-      return;
-    }
-    if(endpoint()&&token()){
-      if(!confirmRemoteCompute('FFmpeg: наложить мой звук на видео'))return;
-      const health=await connect({resume:false});
-      if(health?.ffmpeg){
-        setEasyState('FFMPEG','Видео + аудио готовы. Запускаю замену звука и H.264/AAC кодирование.','busy');
-        await send(true);return;
-      }
-    }
-    document.getElementById('remoteAdvanced')?.setAttribute('open','');
-    setEasyState('НУЖЕН REMOTE WORKER','Для этой команды нужен подключённый Colab/Remote Worker с FFmpeg.','error');
-    setStatus('Подключи NOVA Remote GPU Worker, затем нажми одну кнопку ещё раз.','error');
+  const prompt=($('prompt')?.value||'').toLowerCase().replace(/ё/g,'е');
+  const source=$('remoteSource')?.files?.[0]||currentSourceFile||null;
+  const audio=$('remoteAudio')?.files?.[0]||currentAudioFile||null;
+  const reference=$('remoteCharacterRef')?.files?.[0]||currentCharacterRef||null;
+  const explicitFfmpeg=/ffmpeg|конверт|перекод|encode|transcod|upscale|апскейл/.test(prompt);
+  const explicitBlender=/blender|360|полный круг|orbit|облет|true.?3d|3d.?block|блокинг|blocking/.test(prompt);
+  const remoteNeeded=mediaAction==='replace_audio'||explicitFfmpeg||explicitBlender||isHeavyAiRequest();
+
+  if(mediaAction==='replace_audio'&&(!source||!audio)){
+    setEasyState('НУЖНЫ 2 ФАЙЛА','Выбери видео и аудио. После этого NOVA сама выберет FFmpeg.','error');
+    return;
+  }
+  if(explicitFfmpeg&&!source){
+    setEasyState('НУЖЕН ВИДЕОФАЙЛ','Для конвертации/кодирования выбери исходное видео.','error');
     return;
   }
 
-  if(isHeavyAiRequest()){
+  if(remoteNeeded){
+    const actionLabel=mediaAction==='replace_audio'
+      ?'FFmpeg: наложить мой звук на видео'
+      :explicitBlender?'Blender / 3D render'
+      :explicitFfmpeg?'FFmpeg media render'
+      :'WanGP / AI video';
+    if(!confirmRemoteCompute(actionLabel))return;
+
+    setAutoRecover(true);
+    const job=buildJob();
+    await beginRecovery(job,source,source?.name||'source.mp4',reference,audio,true);
+    await patchRecovery({userApprovedRemote:true,phase:'prepared'});
+    await requestRecoveryPersistence();
+
     if(endpoint()&&token()){
-      if(!confirmRemoteCompute('Тяжёлое AI‑видео'))return;
       const health=await connect({resume:false});
       if(health){
-        setEasyState('РУЧНОЙ GPU','Разрешение получено. Отправляю задачу только на указанный тобой Worker.','busy');
-        await send(true);return;
+        const engine=job.engine;
+        const ready=engine==='ffmpeg'?health.ffmpeg:engine==='blender'?health.blender:engine==='wangp'?health.wangp_api_ready:true;
+        if(ready){
+          setEasyState(engine==='ffmpeg'?'FFMPEG':engine==='blender'?'BLENDER':engine==='wangp'?'WANGP':'REMOTE GPU','Worker на связи. NOVA сама отправляет одобренное задание.','busy');
+          await send(true);
+          return;
+        }
       }
     }
-    document.getElementById('remoteAdvanced')?.setAttribute('open','');
-    setEasyState('НУЖЕН ПОСТОЯННЫЙ GPU','Эта команда просит генеративное AI‑видео. Чтобы обходиться без Run all, один раз подключи постоянный NOVA GPU Worker в дополнительных настройках.','error');
-    setStatus('Обычный режим Colab не открывает. Для тяжёлого AI нужен постоянно работающий GPU Worker.','error');
+
+    setEasyState('ЗАПУСК COLAB','Worker не найден или устарел. NOVA открывает наш Google Colab и сохраняет задание для автоматического продолжения.','busy');
+    openColab();
     return;
   }
 
@@ -753,10 +788,7 @@ function openColab(){
   location.assign(url);
   return true;
 }
-async function autoStart(){
-  setStatus('FREE LOCK: FULL AUTO GPU отключён. Используй локальный рендер или ручную отправку с подтверждением.','ok');
-  return false;
-}
+async function autoStart(){return easyAction()}
 async function testRender(){
   if(!confirmRemoteCompute('Тест Remote GPU 1 секунда'))return;
   const health=await connect({resume:false});if(!health)return;
@@ -777,7 +809,7 @@ async function send(approved=false){
   currentSourceFile=source;
   currentCharacterRef=reference;
   currentAudioFile=audio;
-  await beginRecovery(job,source,source?.name||'source.mp4',reference);
+  await beginRecovery(job,source,source?.name||'source.mp4',reference,audio,Boolean(approved||recoveryMeta()?.userApprovedRemote));
   await submitPreparedJob(job,source,source?.name||'source.mp4',{recovery:false,reference,referenceName:reference?.name||'',audio,audioName:audio?.name||''});
 }
 async function cancel(){
