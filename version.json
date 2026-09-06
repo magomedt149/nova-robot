@@ -1,7 +1,7 @@
 {
   "name": "NOVA",
-  "version": "27.19.0",
-  "pwa": "27.19.0",
+  "version": "27.20.0",
+  "pwa": "27.20.0",
   "mode": "free-only",
   "paidApis": false,
   "externalComputeRequiresConfirmation": true,
@@ -151,7 +151,7 @@
     "Colab fallback only after approval"
   ],
   "visionLive": true,
-  "visionLiveVersion": "1.5.0",
+  "visionLiveVersion": "1.6.0",
   "visionLiveFreeOnDevice": true,
   "visionLivePaidApi": false,
   "visionLiveCameraNarration": true,
@@ -283,5 +283,34 @@
   "visionCalmBeforeOverviewMs": 7000,
   "visionOverviewIntervalMs": 12000,
   "visionPriorityDeduplication": true,
-  "visionCalmOverviewSuppressedDuringMotionOrSceneChanges": true
+  "visionCalmOverviewSuppressedDuringMotionOrSceneChanges": true,
+  "visionAutoSwitchDelaySettings": true,
+  "visionAutoSwitchLossDelayDefaultMs": 3000,
+  "visionAutoSwitchRecoveryDelayDefaultMs": 2000,
+  "visionAutoSwitchDelayRangeMs": [
+    500,
+    10000
+  ],
+  "visionAutoSwitchDelayStepMs": 500,
+  "visionAutoSwitchDelayPersistent": true,
+  "visionAutoSwitchDelayStorage": "localStorage",
+  "visionAutoSwitchLossEventsRespectDelay": [
+    "MediaStreamTrack ended",
+    "MediaStreamTrack muted",
+    "camera device removed",
+    "WebRTC failed/closed/disconnected",
+    "video element error",
+    "video frame heartbeat timeout"
+  ],
+  "visionAutoSwitchRecoveryEventsRespectDelay": [
+    "external camera device connected",
+    "MediaStream bridge registered",
+    "MediaStreamTrack unmuted",
+    "WebRTC connected"
+  ],
+  "visionAutoSwitchDelayVoiceCommands": [
+    "Нова, задержка на телефон 5 секунд",
+    "Нова, задержка на очки 3 секунды"
+  ],
+  "visionAutoSwitchCountdownInConnectionStatus": true
 }
