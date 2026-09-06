@@ -236,6 +236,42 @@ def run_worker_self_test() -> dict[str, Any]:
                 ffmpeg_error = str(exc)
                 results["ffmpeg"] = {"ok": False, "error": ffmpeg_error}
 
+            music_ok = False
+            try:
+                music_wav = work / "music-test.wav"
+                music_mp3 = work / "music-test.mp3"
+                subprocess.run(
+                    [
+                        sys.executable, str(REPO_ROOT / "automation" / "nova_music.py"),
+                        "--chords", "Am,D,G,Em",
+                        "--bpm", "120",
+                        "--instrument", "guitar",
+                        "--beats-per-chord", "1",
+                        "--repeats", "1",
+                        "--out", str(music_wav),
+                    ],
+                    check=True, timeout=90, capture_output=True, text=True,
+                )
+                if not music_wav.is_file() or music_wav.stat().st_size <= 44:
+                    raise RuntimeError("Music WAV test failed")
+                ffmpeg_bin = shutil.which("ffmpeg")
+                if not ffmpeg_bin:
+                    raise RuntimeError("FFmpeg missing for music MP3 test")
+                subprocess.run(
+                    [ffmpeg_bin, "-y", "-hide_banner", "-loglevel", "error", "-i", str(music_wav), "-c:a", "libmp3lame", "-b:a", "128k", str(music_mp3)],
+                    check=True, timeout=60,
+                )
+                music_ok = music_mp3.is_file() and music_mp3.stat().st_size > 0
+                results["music"] = {
+                    "ok": music_ok,
+                    "chords": ["Am", "D", "G", "Em"],
+                    "instrument": "guitar",
+                    "wav_bytes": music_wav.stat().st_size,
+                    "mp3_bytes": music_mp3.stat().st_size if music_mp3.is_file() else 0,
+                }
+            except Exception as exc:
+                results["music"] = {"ok": False, "error": str(exc)}
+
             blender_ok = False
             try:
                 if not command_exists("blender"):
@@ -267,7 +303,7 @@ def run_worker_self_test() -> dict[str, Any]:
             except Exception as exc:
                 results["wangp"] = {"ok": False, "error": str(exc), "api": str(wangp_api)}
 
-            ok = bool(results["gpu"]["ok"] and ffmpeg_ok and blender_ok and wangp_ok)
+            ok = bool(results["gpu"]["ok"] and ffmpeg_ok and music_ok and blender_ok and wangp_ok)
             return {
                 "ok": ok,
                 "worker_version": WORKER_VERSION,
