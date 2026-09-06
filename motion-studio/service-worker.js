@@ -38,7 +38,7 @@ self.addEventListener('activate', event => {
 
     // A newly activated worker must not leave an already-open iPhone page
     // running the old JS in memory. Reload Motion Studio exactly once per
-    // service-worker activation; the next navigation is controlled by v29.
+    // service-worker activation; the next navigation is controlled by v30.
     const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
     await Promise.all(
       windows
@@ -76,7 +76,7 @@ self.addEventListener('fetch', event => {
   if (!isMotionAsset) return;
 
   // Network-first prevents stale v22/v23/v24 code from winning after restart.
-  // The v29 cache is only the offline fallback and is refreshed by successful fetches.
+  // The v30 cache is only the offline fallback and is refreshed by successful fetches.
   event.respondWith(
     fetch(event.request, { cache: 'no-store' })
       .then(response => {
