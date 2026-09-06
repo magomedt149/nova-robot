@@ -51,8 +51,8 @@ SELF_TEST_LOCK = threading.Lock()
 WANGP_JOBS: dict[str, Any] = {}
 DOWNLOAD_TICKETS: dict[str, dict[str, Any]] = {}
 DOWNLOAD_TICKET_TTL = int(os.environ.get("NOVA_REMOTE_DOWNLOAD_TTL", "600"))
-WORKER_VERSION = "1.9.0"
-PROTOCOL_VERSION = 6
+WORKER_VERSION = "2.0.0"
+PROTOCOL_VERSION = 7
 SESSION_ID = uuid.uuid4().hex[:12]
 
 app = FastAPI(title="NOVA Remote GPU Worker", version="1.0")
@@ -510,6 +510,82 @@ def replace_audio_track(job_id: str, source: Path, audio: Path, out: Path) -> Pa
         track_volumes=[1.0],
         master_volume=1.0,
     )
+
+
+def run_music_job(job_id: str, job: dict[str, Any], job_dir: Path) -> Path:
+    spec = job.get("music_spec") or {}
+    chords = spec.get("chords") or ["Am", "D", "G", "Em"]
+    if isinstance(chords, str):
+        chord_text = chords
+    else:
+        chord_text = ",".join(str(item) for item in chords if str(item).strip())
+    if not chord_text.strip():
+        raise RuntimeError("Music generation needs at least one chord")
+
+    bpm = max(30.0, min(240.0, float(spec.get("bpm") or 90.0)))
+    instrument = str(spec.get("instrument") or "guitar").lower().strip()
+    if instrument not in {"guitar", "piano", "accordion", "bass", "synth"}:
+        instrument = "guitar"
+    beats_per_chord = max(0.5, min(16.0, float(spec.get("beats_per_chord") or 4.0)))
+    repeats = max(1, min(32, int(spec.get("repeats") or 1)))
+    output_format = str(spec.get("format") or "wav").lower().strip()
+    if output_format not in {"wav", "mp3"}:
+        output_format = "wav"
+
+    wav_path = job_dir / "NOVA_music.wav"
+    update_status(job_id, progress=18, stage="music_synth", message=f"Создаю {instrument}: {chord_text} • {bpm:g} BPM.")
+    cmd = [
+        sys.executable,
+        str(REPO_ROOT / "automation" / "nova_music.py"),
+        "--chords", chord_text,
+        "--bpm", str(bpm),
+        "--instrument", instrument,
+        "--beats-per-chord", str(beats_per_chord),
+        "--repeats", str(repeats),
+        "--out", str(wav_path),
+    ]
+    run_command(job_id, cmd)
+    if not wav_path.is_file() or wav_path.stat().st_size <= 44:
+        raise RuntimeError("NOVA music synthesizer did not create WAV")
+
+    source = source_file(job_dir)
+    if source is not None and bool(spec.get("mix_into_video", True)):
+        out = job_dir / ("FINAL.mp4" if str(job.get("quality") or "preview").lower() == "final" else "preview.mp4")
+        mix_mode = str(spec.get("mix_mode") or "mix").lower()
+        include_original = mix_mode != "replace"
+        original_volume = clamp_volume(spec.get("original_volume"), 1.0)
+        music_volume = clamp_volume(spec.get("music_volume"), 0.6)
+        master_volume = clamp_volume(spec.get("master_volume"), 1.0)
+        update_status(job_id, progress=58, stage="music_mix", message="Подмешиваю созданную музыку в видео через FFmpeg.")
+        mix_audio_tracks(
+            job_id,
+            source,
+            [wav_path],
+            out,
+            include_original=include_original,
+            source_volume=original_volume,
+            track_volumes=[music_volume],
+            master_volume=master_volume,
+        )
+        update_status(job_id, progress=94, stage="encode", message="Музыка создана и MP4 собран: H.264 + AAC.")
+        return out
+
+    if output_format == "mp3":
+        if not command_exists("ffmpeg"):
+            raise RuntimeError("FFmpeg is required for MP3 export")
+        mp3_path = job_dir / "NOVA_music.mp3"
+        update_status(job_id, progress=72, stage="music_export", message="Конвертирую музыку в MP3.")
+        run_command(
+            job_id,
+            [
+                "ffmpeg", "-y", "-i", str(wav_path),
+                "-c:a", "libmp3lame", "-b:a", "192k",
+                str(mp3_path),
+            ],
+        )
+        return mp3_path
+
+    return wav_path
 
 
 def run_ffmpeg_job(job_id: str, job: dict[str, Any], job_dir: Path) -> Path:
@@ -1129,6 +1205,8 @@ def execute_job(job_id: str) -> None:
         )
         if engine == "ffmpeg":
             result = run_ffmpeg_job(job_id, job, job_dir)
+        elif engine == "music":
+            result = run_music_job(job_id, job, job_dir)
         elif engine == "blender":
             result = run_blender_job(job_id, job, job_dir)
         elif engine == "wangp":
@@ -1172,6 +1250,17 @@ async def save_upload(upload: UploadFile, destination: Path) -> int:
                 raise HTTPException(status_code=413, detail="Video exceeds worker upload limit")
             handle.write(chunk)
     return total
+
+
+def media_type_for(path: Path) -> str:
+    suffix = path.suffix.lower()
+    if suffix == ".mp3":
+        return "audio/mpeg"
+    if suffix == ".wav":
+        return "audio/wav"
+    if suffix in {".m4a", ".aac"}:
+        return "audio/mp4"
+    return "video/mp4"
 
 
 def new_download_ticket(job_id: str, filename: str) -> str:
@@ -1225,6 +1314,11 @@ async def health(request: Request):
             "multi_audio_tracks": 8,
             "volume_adjust": command_exists("ffmpeg"),
             "mp4_export": command_exists("ffmpeg"),
+            "music_chords": (REPO_ROOT / "automation" / "nova_music.py").is_file(),
+            "music_instruments": ["guitar", "piano", "accordion", "bass", "synth"],
+            "music_wav": True,
+            "music_mp3": command_exists("ffmpeg"),
+            "music_video_mix": command_exists("ffmpeg"),
             "video_transcode": command_exists("ffmpeg"),
             "iphone_h264_encode": command_exists("ffmpeg"),
             "human_motion_control": True,
@@ -1559,7 +1653,7 @@ async def download_with_ticket(ticket: str):
     path = JOB_ROOT / job_id / filename
     if not path.is_file():
         raise HTTPException(status_code=404, detail="Result file is missing")
-    return FileResponse(path, media_type="video/mp4", filename=path.name)
+    return FileResponse(path, media_type=media_type_for(path), filename=path.name)
 
 
 @app.get("/jobs/{job_id}/result")
@@ -1572,7 +1666,7 @@ async def get_result(job_id: str, request: Request):
     path = JOB_ROOT / job_id / name
     if not path.is_file():
         raise HTTPException(status_code=404, detail="Result file is missing")
-    return FileResponse(path, media_type="video/mp4", filename=path.name)
+    return FileResponse(path, media_type=media_type_for(path), filename=path.name)
 
 
 @app.post("/jobs/{job_id}/finalize")
