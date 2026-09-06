@@ -1,5 +1,5 @@
-const MOTION_VERSION = 'v29';
-const CACHE = 'tumsoev-motion-vfx-studio-v29-music-fades';
+const MOTION_VERSION = 'v30';
+const CACHE = 'tumsoev-motion-vfx-studio-v30-hybrid-image-motion';
 const ASSETS = [
   '/motion-studio/',
   '/motion-studio/index.html',
