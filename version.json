@@ -1,7 +1,7 @@
 {
   "name": "NOVA",
-  "version": "27.6.0",
-  "pwa": "27.6.0",
+  "version": "27.7.0",
+  "pwa": "27.7.0",
   "mode": "free-only",
   "paidApis": false,
   "externalComputeRequiresConfirmation": true,
@@ -49,5 +49,18 @@
   "novaCallLaunchCheck": "./nova-call-check.html",
   "novaCallRequiresVpsForBasicFreeCalls": false,
   "novaCallBasicFreeMode": "public WebRTC fallback; self-hosted optional",
-  "novaCallLaunchCheckPaidActions": false
+  "novaCallLaunchCheckPaidActions": false,
+  "motionStudioVersion": "25",
+  "remoteGpuWorkerVersion": "1.7.0",
+  "remoteGpuProtocolVersion": 4,
+  "ffmpegAudioReplace": true,
+  "voiceMediaCommand": true,
+  "voiceMediaCommandExample": "Нова, наложи мой звук на видео",
+  "zeroCreditMediaPipeline": [
+    "FFmpeg audio replace",
+    "H.264 encode",
+    "AAC encode",
+    "WanGP generation",
+    "Blender blocking"
+  ]
 }
