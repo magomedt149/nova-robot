@@ -415,11 +415,44 @@ function musicSpecFromPrompt(){
   };
 }
 
+function audioFadeConfig(){
+  const q=($('prompt')?.value||'').toLowerCase().replace(/ё/g,'е');
+  let fadeIn=Math.max(0,Math.min(60,Number($('remoteMusicFadeIn')?.value||0)));
+  let fadeOut=Math.max(0,Math.min(60,Number($('remoteMusicFadeOut')?.value||0)));
+  const read=(patterns,fallback)=>{
+    for(const re of patterns){
+      const m=q.match(re);
+      if(m)return Math.max(0,Math.min(60,Number(String(m[1]).replace(',','.'))));
+    }
+    return fallback;
+  };
+  const both=q.match(/(?:появлен\w*|вход\w*|fade\s*in).{0,30}(?:затухан\w*|выход\w*|fade\s*out).{0,20}(?:по\s*)?(\d+(?:[.,]\d+)?)\s*(?:сек|с\b)/)
+    || q.match(/(?:плавн\w*).{0,20}(?:вход|выход|появ|затух).{0,25}(?:по\s*)?(\d+(?:[.,]\d+)?)\s*(?:сек|с\b)/);
+  if(both){
+    const v=Math.max(0,Math.min(60,Number(String(both[1]).replace(',','.'))));
+    fadeIn=v;fadeOut=v;
+  }
+  fadeIn=read([
+    /(?:плавн\w*\s*)?(?:появлен\w*|появля\w*|нарастан\w*|вход\w*|fade\s*in)\D{0,24}(\d+(?:[.,]\d+)?)\s*(?:сек|с\b)/,
+    /(?:за\s*)?(\d+(?:[.,]\d+)?)\s*(?:сек|с\b).{0,18}(?:появлен\w*|появля\w*|fade\s*in)/
+  ],fadeIn);
+  fadeOut=read([
+    /(?:плавн\w*\s*)?(?:затухан\w*|затух\w*|исчезнов\w*|выход\w*|fade\s*out)\D{0,24}(\d+(?:[.,]\d+)?)\s*(?:сек|с\b)/,
+    /(?:за\s*)?(\d+(?:[.,]\d+)?)\s*(?:сек|с\b).{0,18}(?:затухан\w*|затух\w*|fade\s*out)/
+  ],fadeOut);
+  if(/плавн\w*\s*появ|fade\s*in/.test(q)&&!fadeIn)fadeIn=2;
+  if(/плавн\w*\s*затух|плавн\w*\s*исчез|fade\s*out/.test(q)&&!fadeOut)fadeOut=2;
+  if($('remoteMusicFadeIn'))$('remoteMusicFadeIn').value=String(fadeIn);
+  if($('remoteMusicFadeOut'))$('remoteMusicFadeOut').value=String(fadeOut);
+  return {fade_in:fadeIn,fade_out:fadeOut};
+}
+
 function mediaOperationIntent(){
   const q=($('prompt')?.value||'').toLowerCase().replace(/ё/g,'е');
   if(/смеш|смикс|миксуй|микс|mix.{0,25}(?:audio|track|music)|(?:добав|налож).{0,25}(?:музык|аудио|дорожк).{0,25}(?:к|с).*?(?:звук|аудио).*видео/.test(q))return 'mix_audio';
   if(/(?:замен|подмен|постав|подстав).{0,30}(?:музык|звук|аудио).{0,30}(?:в|на).*видео|(?:налож).{0,30}(?:мой |новый )?(?:звук|аудио).{0,30}(?:на|в).{0,15}видео|replace.{0,20}(?:audio|music)|put.{0,20}audio.{0,20}(?:on|into).{0,20}video/.test(q))return 'replace_audio';
   if(/громк|тише|громче|volume|убав.*звук|прибав.*звук|(?:музык\w*|оригинал\w*|звук видео|дорожк(?:а|и)?\s*\d+)\D{0,18}\d{1,3}\s*%/.test(q))return 'volume_adjust';
+  if(/плавн\w*.{0,20}(?:появ|затух|исчез)|fade\s*(?:in|out)|нарастан\w*.{0,12}музык|затухан\w*.{0,12}музык/.test(q))return 'mix_audio';
   if(/экспорт|сохран.*mp4|готов.*mp4|сделай.*mp4|выведи.*mp4|export.*mp4|save.*mp4/.test(q))return 'export_mp4';
   return 'none';
 }
@@ -504,7 +537,10 @@ function buildJob(){
     render_policy:{preview_first:true,paid_generation:false,max_paid_tests:1}
   };
   const audioMix=audioMixConfig();
+  const fades=audioFadeConfig();
   const musicSpec=musicSpecFromPrompt();
+  musicSpec.fade_in=fades.fade_in;
+  musicSpec.fade_out=fades.fade_out;
   return {
     schema:'nova.remote-job.v1',created_at:new Date().toISOString(),
     source_prompt:prompt||'TUMSOEV cinematic scene',engine:chosenEngine(),quality,
@@ -512,6 +548,8 @@ function buildJob(){
     source_volume:audioMix.source_volume,
     track_volumes:audioMix.track_volumes,
     master_volume:audioMix.master_volume,
+    track_fade_in:fades.fade_in,
+    track_fade_out:fades.fade_out,
     music_spec:musicSpec,
     duration:Number(pack.duration||5),ratio:pack.format||'9:16',fps:quality==='preview'?24:30,
     style:pack.style,motion:pack.motion,camera:pack.camera,vfx:pack.vfx,
@@ -544,8 +582,8 @@ async function connect({resume=true}={}){
     const bits=[gpu,data.blender?'Blender ✓':'Blender —',data.ffmpeg?'FFmpeg ✓':'FFmpeg —',data.capabilities?.music_chords?'Music ✓':'Music —',data.wangp_api_ready?'WanGP API ✓':'WanGP —',protocol,data.free_disk_gb!=null?data.free_disk_gb+' GB free':''];
     setStatus('Подключено: '+bits.filter(Boolean).join(' • '),'ok');
     if(data.drive_mounted&&autoRecoverEnabled()&&$('remoteMirrorDrive'))$('remoteMirrorDrive').checked=true;
-    if(Number(data.protocol_version||0)<7){
-      setRecoveryStatus('Auto Recovery: worker старой версии. Для генератора музыки перезапусти актуальный notebook.','error');
+    if(Number(data.protocol_version||0)<8){
+      setRecoveryStatus('Auto Recovery: worker старой версии. Для fade-in/fade-out перезапусти актуальный notebook.','error');
     }else if(autoRecoverEnabled()){
       setRecoveryStatus('Auto Recovery: worker '+(data.session_id||'')+' на связи.'+(data.drive_mounted?' Drive checkpoint включён.':''),'ok');
     }
@@ -1176,7 +1214,7 @@ $('remoteAudio')?.addEventListener('change',async e=>{
   const params=new URLSearchParams(location.search);
   if(params.get('auto')==='1'&&['replace_audio','mix_audio'].includes(mediaOperationIntent())&&currentSourceFile&&currentAudioFiles.length)setTimeout(()=>easyAction().catch(()=>{}),120);
 });
-['remoteOriginalVolume','remoteAddedVolume','remoteMasterVolume','remoteMusicEnabled','remoteMusicChords','remoteMusicBpm','remoteMusicInstrument','remoteMusicFormat','remoteMusicBeats','remoteMusicRepeats','remoteMusicVolume','remoteMusicMixVideo'].forEach(id=>{
+['remoteOriginalVolume','remoteAddedVolume','remoteMasterVolume','remoteMusicEnabled','remoteMusicChords','remoteMusicBpm','remoteMusicInstrument','remoteMusicFormat','remoteMusicBeats','remoteMusicRepeats','remoteMusicVolume','remoteMusicFadeIn','remoteMusicFadeOut','remoteMusicMixVideo'].forEach(id=>{
   $(id)?.addEventListener('change',()=>{buildJob();refreshEasyState()});
 });
 $('remoteConnect')?.addEventListener('click',()=>connect());
