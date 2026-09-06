@@ -1,7 +1,7 @@
 {
   "name": "NOVA",
-  "version": "27.13.0",
-  "pwa": "27.13.0",
+  "version": "27.14.0",
+  "pwa": "27.14.0",
   "mode": "free-only",
   "paidApis": false,
   "externalComputeRequiresConfirmation": true,
@@ -24,7 +24,11 @@
   "videoProVersion": "31.2.0",
   "hybridAnimate": true,
   "hybridAnimateVersion": "1.0.0",
-  "hybridModes": ["Exact", "Human", "Hybrid"],
+  "hybridModes": [
+    "Exact",
+    "Human",
+    "Hybrid"
+  ],
   "hybridSinglePhotoImageToVideo": true,
   "hybridAutoBridgeVideoProToMotion": true,
   "hybridNaturalMotion": true,
@@ -145,5 +149,25 @@
     "Local 5s Video PRO preview",
     "Media Library save",
     "Colab fallback only after approval"
+  ],
+  "visionLive": true,
+  "visionLiveVersion": "1.0.0",
+  "visionLiveFreeOnDevice": true,
+  "visionLivePaidApi": false,
+  "visionLiveCameraNarration": true,
+  "visionLiveVideoRecording": true,
+  "visionLiveMediaLibrarySave": true,
+  "visionLiveGlassesMode": true,
+  "visionLiveObjectDetector": "TensorFlow.js COCO-SSD lite_mobilenet_v2; model download required on first use",
+  "visionLiveGlassesCompatibility": "Works when glasses expose a camera as a browser video input; Bluetooth audio follows the device OS route.",
+  "visionLiveVoiceCommands": [
+    "Нова, включи камеру",
+    "Нова, что ты видишь?",
+    "Нова, режим очков",
+    "Нова, начни запись видео",
+    "Нова, останови запись",
+    "Нова, переключи камеру",
+    "Нова, говори что видишь",
+    "Нова, выключи камеру"
   ]
 }
