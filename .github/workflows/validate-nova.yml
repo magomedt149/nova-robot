@@ -6,6 +6,12 @@ on:
     branches: [main]
     paths:
       - "app.js"
+      - "index.html"
+      - "service-worker.js"
+      - "nova-health.js"
+      - "nova-auto-montage.js"
+      - "nova-whisper.js"
+      - "automation/validate_frontend.py"
       - "motion-studio/**"
       - "automation/remote_gpu_worker.py"
       - "automation/nova_music.py"
@@ -39,6 +45,8 @@ jobs:
           node --check motion-studio/remote-gpu.js
           node --check service-worker.js
           node --check motion-studio/service-worker.js
+      - name: Frontend structure
+        run: python automation/validate_frontend.py
       - name: Notebook JSON
         run: |
           python - <<'PY'
