@@ -1,7 +1,7 @@
 {
   "name": "NOVA",
-  "version": "27.15.0",
-  "pwa": "27.15.0",
+  "version": "27.16.0",
+  "pwa": "27.16.0",
   "mode": "free-only",
   "paidApis": false,
   "externalComputeRequiresConfirmation": true,
@@ -151,7 +151,7 @@
     "Colab fallback only after approval"
   ],
   "visionLive": true,
-  "visionLiveVersion": "1.1.0",
+  "visionLiveVersion": "1.2.0",
   "visionLiveFreeOnDevice": true,
   "visionLivePaidApi": false,
   "visionLiveCameraNarration": true,
@@ -191,5 +191,33 @@
     "Нова, переключи источник",
     "Нова, режим очков"
   ],
-  "visionGlassesIntegrationNote": "NOVA can consume a glasses MediaStream/WebRTC stream when the glasses companion/browser bridge exposes it; proprietary vendor cameras still require that vendor bridge to supply the stream."
+  "visionGlassesIntegrationNote": "NOVA can consume a glasses MediaStream/WebRTC stream when the glasses companion/browser bridge exposes it; proprietary vendor cameras still require that vendor bridge to supply the stream.",
+  "visionContinuousSceneNarration": true,
+  "visionSpatialZones": [
+    "left",
+    "ahead",
+    "right"
+  ],
+  "visionObjectMotionTracking": true,
+  "visionFrameDeltaNarration": true,
+  "visionChangeEvents": [
+    "object appeared",
+    "object disappeared",
+    "zone changed",
+    "object moving",
+    "approaching",
+    "moving away"
+  ],
+  "visionAnalysisIntervalMs": 1500,
+  "visionNarrationMinIntervalMs": 3300,
+  "visionNarrationHeartbeatMs": 9000,
+  "visionMotionMethod": "COCO-SSD detections + temporal bbox matching (class, IoU, normalized center displacement, bbox area change)",
+  "visionMotionCaveat": "Camera/head movement can create apparent object motion because this version does not yet use optical-flow or IMU global-motion compensation.",
+  "visionContinuousVoiceCommands": [
+    "Нова, непрерывное описание",
+    "Нова, описывай всё время",
+    "Нова, что ты видишь",
+    "Нова, пауза описания",
+    "Нова, говори что видишь"
+  ]
 }
