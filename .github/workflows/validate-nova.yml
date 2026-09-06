@@ -3,6 +3,10 @@ name: Validate NOVA
 on:
   workflow_dispatch:
   push:
+    branches:
+      - main
+      - "fix/**"
+  pull_request:
     branches: [main]
     paths:
       - "app.js"
