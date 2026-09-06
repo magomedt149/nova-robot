@@ -1,7 +1,7 @@
 (() => {
   'use strict';
 
-  const VERSION = '27.13.0';
+  const VERSION = '27.14.0';
   const $ = (selector) => document.querySelector(selector);
   const $$ = (selector) => [...document.querySelectorAll(selector)];
 
@@ -145,6 +145,7 @@
       'action.english': 'Английский',
       'action.remoteGpu': 'Сделать видео',
       'action.freeCall': 'FREE CALL',
+      'action.vision': 'КАМЕРА',
       'lesson.title': 'Учим английский',
       'lesson.listen': 'Слушать',
       'lesson.quiz': 'Проверка',
@@ -267,6 +268,7 @@
       'action.english': 'English',
       'action.remoteGpu': 'Make Video',
       'action.freeCall': 'FREE CALL',
+      'action.vision': 'CAMERA',
       'lesson.title': 'Learn English',
       'lesson.listen': 'Listen',
       'lesson.quiz': 'Quiz',
@@ -1608,7 +1610,8 @@
       cat: performCatScene,
       english: startEnglishLesson,
       remoteGpu: performRemoteGpu,
-      freeCall: performFreeInternetCall
+      freeCall: performFreeInternetCall,
+      vision: () => window.NovaVisionLive?.open?.()
     };
     if (actions[action]) actions[action]();
   }
@@ -2531,6 +2534,8 @@
       performFreeInternetCall();
       return;
     }
+
+    if (window.NovaVisionLive?.handleCommand?.(text)) return;
 
     if (await handleAutocallsCommand(text)) return;
 
