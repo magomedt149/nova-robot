@@ -2565,14 +2565,14 @@
         secureContext: window.isSecureContext
       };
       const message = language === 'en'
-        ? `NOVA ${report.version || VERSION}. FREE LOCK is on. Remote auto-run is off. PWA: ${report.serviceWorker ? 'ready' : 'unavailable'}. Network: ${report.online ? 'online' : 'offline'}. Metered Netlify auto-check: ${report.meteredNetlifyHost ? 'off' : 'not used'}.`
-        : `NOVA ${report.version || VERSION}. FREE LOCK включён. Автозапуск Remote GPU выключен. PWA: ${report.serviceWorker ? 'готово' : 'недоступно'}. Сеть: ${report.online ? 'online' : 'offline'}. Автопроверка через Netlify: ${report.meteredNetlifyHost ? 'выключена' : 'не используется'}.`;
+        ? `NOVA ${report.version || VERSION}. FREE LOCK is on. Approved-job auto-resume is enabled. PWA: ${report.serviceWorker ? 'ready' : 'unavailable'}. Network: ${report.online ? 'online' : 'offline'}. Metered Netlify auto-check: ${report.meteredNetlifyHost ? 'off' : 'not used'}.`
+        : `NOVA ${report.version || VERSION}. FREE LOCK включён. Автовосстановление разрешено только для уже подтверждённого задания. PWA: ${report.serviceWorker ? 'готово' : 'недоступно'}. Сеть: ${report.online ? 'online' : 'offline'}. Автопроверка через Netlify: ${report.meteredNetlifyHost ? 'выключена' : 'не используется'}.`;
       respond(message);
       return;
     }
 
-    if (/motion\s*\+?\s*vfx|motion studio|remote gpu|gpu render|google colab|colab|колаб|удал[её]нн.*gpu|рендер.*gpu|gpu.*рендер|запусти.*gpu|gpu.*запусти|сделай.*видео|создай.*видео|сгенерируй.*видео|сделать.*видео|создать.*видео|налож.*(?:звук|аудио).*видео|(?:замен|подстав|постав).*(?:звук|аудио).*видео|make.*video|create.*video|generate.*video|render.*video|replace.*audio.*video|put.*audio.*video/.test(lower)) {
-      const videoAuto = /remote gpu|gpu render|google colab|colab|колаб|удал[её]нн.*gpu|рендер.*gpu|gpu.*рендер|запусти.*gpu|gpu.*запусти|сделай.*видео|создай.*видео|сгенерируй.*видео|сделать.*видео|создать.*видео|налож.*(?:звук|аудио).*видео|(?:замен|подстав|постав).*(?:звук|аудио).*видео|make.*video|create.*video|generate.*video|render.*video|replace.*audio.*video|put.*audio.*video/.test(lower);
+    if (/motion\s*\+?\s*vfx|motion studio|remote gpu|gpu render|google colab|colab|колаб|удал[её]нн.*gpu|рендер.*gpu|gpu.*рендер|запусти.*gpu|gpu.*запусти|сделай.*видео|создай.*видео|сгенерируй.*видео|сделать.*видео|создать.*видео|налож.*(?:звук|аудио|музык).*видео|(?:замен|подмен|подстав|постав).*(?:музык|звук|аудио).*видео|смеш.*(?:дорож|аудио|музык|звук)|смикс.*(?:дорож|аудио|музык|звук)|(?:музык|оригинал|звук видео).*(?:громк|тише|громче|\d{1,3}\s*%)|экспорт.*mp4|сохран.*mp4|готов.*mp4|make.*video|create.*video|generate.*video|render.*video|replace.*(?:audio|music).*video|mix.*(?:audio|track|music)|export.*mp4|save.*mp4/.test(lower)) {
+      const videoAuto = /remote gpu|gpu render|google colab|colab|колаб|удал[её]нн.*gpu|рендер.*gpu|gpu.*рендер|запусти.*gpu|gpu.*запусти|сделай.*видео|создай.*видео|сгенерируй.*видео|сделать.*видео|создать.*видео|налож.*(?:звук|аудио|музык).*видео|(?:замен|подмен|подстав|постав).*(?:музык|звук|аудио).*видео|смеш.*(?:дорож|аудио|музык|звук)|смикс.*(?:дорож|аудио|музык|звук)|(?:музык|оригинал|звук видео).*(?:громк|тише|громче|\d{1,3}\s*%)|экспорт.*mp4|сохран.*mp4|готов.*mp4|make.*video|create.*video|generate.*video|render.*video|replace.*(?:audio|music).*video|mix.*(?:audio|track|music)|export.*mp4|save.*mp4/.test(lower);
       if (videoAuto) performRemoteGpu(text);
       else respond(language === 'en' ? 'Opening Motion and VFX Studio.' : 'Открываю Motion + VFX Studio.', { onEnd: () => window.location.assign('./motion-studio/') });
       return;
