@@ -537,7 +537,7 @@ async function connect({resume=true}={}){
     lastHealth=data;pollFailures=0;recoveryAttempt=0;clearRecoveryTimer();setWaitingColab(false);
     const gpu=data.gpu?.available?(data.gpu.name||'NVIDIA GPU'):'GPU не обнаружен';
     const protocol=data.protocol_version!=null?'P'+data.protocol_version:'old';
-    const bits=[gpu,data.blender?'Blender ✓':'Blender —',data.ffmpeg?'FFmpeg ✓':'FFmpeg —',data.wangp_api_ready?'WanGP API ✓':'WanGP —',protocol,data.free_disk_gb!=null?data.free_disk_gb+' GB free':''];
+    const bits=[gpu,data.blender?'Blender ✓':'Blender —',data.ffmpeg?'FFmpeg ✓':'FFmpeg —',data.capabilities?.music_chords?'Music ✓':'Music —',data.wangp_api_ready?'WanGP API ✓':'WanGP —',protocol,data.free_disk_gb!=null?data.free_disk_gb+' GB free':''];
     setStatus('Подключено: '+bits.filter(Boolean).join(' • '),'ok');
     if(data.drive_mounted&&autoRecoverEnabled()&&$('remoteMirrorDrive'))$('remoteMirrorDrive').checked=true;
     if(Number(data.protocol_version||0)<7){
@@ -954,13 +954,14 @@ async function runRemoteSelfTest(){
       r.gpu?.ok?'GPU ✓':'GPU —',
       r.wangp?.ok?'WanGP ✓':'WanGP —',
       r.blender?.ok?'Blender MP4 ✓':'Blender —',
-      r.ffmpeg?.ok?'FFmpeg H.264/AAC ✓':'FFmpeg —'
+      r.ffmpeg?.ok?'FFmpeg H.264/AAC ✓':'FFmpeg —',
+      r.music?.ok?'Music WAV/MP3 ✓':'Music —'
     ];
     setProgress(result.ok?100:50);
     setStatus('Проверка: '+bits.join(' • '),result.ok?'ok':'error');
     if(result.ok){
       setEasyStep('final');
-      setEasyState('ВСЁ РАБОТАЕТ','Remote stack прошёл self-test: GPU, WanGP API, Blender preview MP4 и FFmpeg H.264/AAC.','ok');
+      setEasyState('ВСЁ РАБОТАЕТ','Remote stack прошёл self-test: GPU, NOVA Music WAV/MP3, WanGP API, Blender MP4 и FFmpeg H.264/AAC.','ok');
     }else{
       setEasyState('ЕСТЬ ОШИБКА','Один из компонентов не прошёл self-test. Смотри статус выше.','error');
     }
