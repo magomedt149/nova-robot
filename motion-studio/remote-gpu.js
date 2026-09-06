@@ -548,7 +548,7 @@ async function uploadVideoChunks(jobId,file,filename,startIndex=0){
     await patchRecovery({phase:'uploading',uploadPart:index+1,uploadTotal:total});
   }
 }
-async function submitPreparedJob(inputJob,source,sourceName,{recovery=false,reference=null,referenceName='',audio=null,audioName=''}={}){
+async function submitPreparedJob(inputJob,source,sourceName,{recovery=false,reference=null,referenceName='',audio=null,audioName='',audioTracks=null}={}){
   if(sendBusy)return false;
   if(!endpoint()||!token())throw new Error('Colab worker не подключён');
   sendBusy=true;await holdWakeLock();
@@ -558,16 +558,17 @@ async function submitPreparedJob(inputJob,source,sourceName,{recovery=false,refe
     const job={...inputJob};
     job.engine=await preflight(job.engine||'auto',Boolean(source));
     if(job.engine==='ffmpeg'&&!source)throw new Error('Для FFmpeg нужен исходный файл.');
-    const audioFile=audio||currentAudioFile||$('remoteAudio')?.files?.[0]||null;
-    if(job.media_action==='replace_audio'&&!audioFile)throw new Error('Для замены звука выбери аудиофайл.');
-    if(audioFile)currentAudioFile=audioFile;
+    const audioList=(Array.isArray(audioTracks)&&audioTracks.length?audioTracks:(audio?[audio]:selectedAudioFiles())).slice(0,8);
+    if(['replace_audio','mix_audio'].includes(job.media_action)&&!audioList.length)throw new Error('Для этой аудио-команды выбери хотя бы один аудиофайл.');
+    currentAudioFiles=audioList;
+    currentAudioFile=audioList[0]||null;
     if(source)job.defer_start=true;
     await patchRecovery({workerUrl:endpoint(),workerSessionId:lastHealth?.session_id||'',phase:'submitting'},job);
     const characterRef=reference||currentCharacterRef||$('remoteCharacterRef')?.files?.[0]||null;
     if(characterRef)currentCharacterRef=characterRef;
     const fd=new FormData();fd.append('job_json',JSON.stringify(job));
     if(characterRef)fd.append('reference',characterRef,referenceName||characterRef.name||'character-reference.png');
-    if(audioFile)fd.append('audio',audioFile,audioName||audioFile.name||'audio.mp3');
+    for(const [index,file] of audioList.entries())fd.append('audio_tracks',file,file.name||('audio-track-'+(index+1)+'.mp3'));
     setProgress(1);setStatus(recovery?'Auto Recovery: создаю job в новой Colab-сессии…':'Создаю задачу на Colab GPU…','busy');
     const data=await jsonFetch(endpoint()+'/jobs',{method:'POST',headers:authHeaders(),body:fd});
     lastJobId=data.job_id;localStorage.setItem(LS_JOB,lastJobId);
@@ -683,18 +684,19 @@ async function resubmitRecovery(){
   const needsSource=Number(bundle.meta.sourceSize||0)>0;
   const needsAudio=Number(bundle.meta.audioSize||0)>0;
   const source=bundle.source;
-  const audio=bundle.audio;
+  const audioTracks=(bundle.audioTracks||[]).slice(0,8);
+  const audio=bundle.audio||audioTracks[0]||null;
   if(needsSource&&!source){
     setRecoveryStatus('Auto Recovery сохранил job, но исходник слишком большой для iPhone-кэша. Выбери тот же видеофайл — отправка продолжится автоматически.','error');
     return false;
   }
-  if(needsAudio&&!audio){
-    setRecoveryStatus('Auto Recovery сохранил job, но аудио не осталось в iPhone-кэше. Выбери тот же аудиофайл — NOVA продолжит автоматически.','error');
+  if(needsAudio&&!audioTracks.length&&!audio){
+    setRecoveryStatus('Auto Recovery сохранил job, но аудиодорожки не остались в iPhone-кэше. Выбери те же файлы — NOVA продолжит автоматически.','error');
     return false;
   }
   localStorage.removeItem(LS_JOB);lastJobId='';
   setRecoveryStatus('Auto Recovery: пересоздаю '+String(bundle.job.quality||'preview')+' job в новой Colab-сессии…','busy');
-  return submitPreparedJob({...bundle.job,job_id:undefined,defer_start:false},source,bundle.sourceName,{recovery:true,reference:bundle.reference,referenceName:bundle.referenceName,audio,audioName:bundle.audioName});
+  return submitPreparedJob({...bundle.job,job_id:undefined,defer_start:false},source,bundle.sourceName,{recovery:true,reference:bundle.reference,referenceName:bundle.referenceName,audio,audioName:bundle.audioName,audioTracks});
 }
 async function resumeOrRecover(){
   if(!autoRecoverEnabled())return false;
@@ -790,14 +792,19 @@ async function easyAction(){
   const mediaAction=mediaOperationIntent();
   const prompt=($('prompt')?.value||'').toLowerCase().replace(/ё/g,'е');
   const source=$('remoteSource')?.files?.[0]||currentSourceFile||null;
-  const audio=$('remoteAudio')?.files?.[0]||currentAudioFile||null;
+  const audioTracks=selectedAudioFiles();
+  const audio=audioTracks[0]||null;
   const reference=$('remoteCharacterRef')?.files?.[0]||currentCharacterRef||null;
   const explicitFfmpeg=/ffmpeg|конверт|перекод|encode|transcod|upscale|апскейл/.test(prompt);
   const explicitBlender=/blender|360|полный круг|orbit|облет|true.?3d|3d.?block|блокинг|blocking/.test(prompt);
-  const remoteNeeded=mediaAction==='replace_audio'||explicitFfmpeg||explicitBlender||isHeavyAiRequest();
+  const remoteNeeded=['replace_audio','mix_audio','volume_adjust','export_mp4'].includes(mediaAction)||explicitFfmpeg||explicitBlender||isHeavyAiRequest();
 
-  if(mediaAction==='replace_audio'&&(!source||!audio)){
-    setEasyState('НУЖНЫ 2 ФАЙЛА','Выбери видео и аудио. После этого NOVA сама выберет FFmpeg.','error');
+  if(['replace_audio','mix_audio'].includes(mediaAction)&&(!source||!audioTracks.length)){
+    setEasyState('НУЖНЫ ФАЙЛЫ','Выбери видео и хотя бы одну аудиодорожку. NOVA поддерживает до 8 дорожек.','error');
+    return;
+  }
+  if(['volume_adjust','export_mp4'].includes(mediaAction)&&!source){
+    setEasyState('НУЖНО ВИДЕО','Выбери видео, к которому применить громкость или экспорт MP4.','error');
     return;
   }
   if(explicitFfmpeg&&!source){
@@ -807,15 +814,21 @@ async function easyAction(){
 
   if(remoteNeeded){
     const actionLabel=mediaAction==='replace_audio'
-      ?'FFmpeg: наложить мой звук на видео'
-      :explicitBlender?'Blender / 3D render'
-      :explicitFfmpeg?'FFmpeg media render'
-      :'WanGP / AI video';
+      ?'FFmpeg: заменить музыку в видео'
+      :mediaAction==='mix_audio'
+        ?'FFmpeg: смешать аудиодорожки'
+        :mediaAction==='volume_adjust'
+          ?'FFmpeg: изменить громкость'
+          :mediaAction==='export_mp4'
+            ?'FFmpeg: экспортировать MP4'
+            :explicitBlender?'Blender / 3D render'
+            :explicitFfmpeg?'FFmpeg media render'
+            :'WanGP / AI video';
     if(!confirmRemoteCompute(actionLabel))return;
 
     setAutoRecover(true);
     const job=buildJob();
-    await beginRecovery(job,source,source?.name||'source.mp4',reference,audio,true);
+    await beginRecovery(job,source,source?.name||'source.mp4',reference,audioTracks,true);
     await patchRecovery({userApprovedRemote:true,phase:'prepared'});
     await requestRecoveryPersistence();
 
@@ -912,12 +925,14 @@ async function send(approved=false){
   const job=buildJob();
   const source=$('remoteSource')?.files?.[0]||currentSourceFile||null;
   const reference=$('remoteCharacterRef')?.files?.[0]||currentCharacterRef||null;
-  const audio=$('remoteAudio')?.files?.[0]||currentAudioFile||null;
+  const audioTracks=selectedAudioFiles();
+  const audio=audioTracks[0]||null;
   currentSourceFile=source;
   currentCharacterRef=reference;
+  currentAudioFiles=audioTracks;
   currentAudioFile=audio;
-  await beginRecovery(job,source,source?.name||'source.mp4',reference,audio,Boolean(approved||recoveryMeta()?.userApprovedRemote));
-  await submitPreparedJob(job,source,source?.name||'source.mp4',{recovery:false,reference,referenceName:reference?.name||'',audio,audioName:audio?.name||''});
+  await beginRecovery(job,source,source?.name||'source.mp4',reference,audioTracks,Boolean(approved||recoveryMeta()?.userApprovedRemote));
+  await submitPreparedJob(job,source,source?.name||'source.mp4',{recovery:false,reference,referenceName:reference?.name||'',audio,audioName:audio?.name||'',audioTracks});
 }
 async function cancel(){
   const jobId=lastJobId||localStorage.getItem(LS_JOB);
@@ -932,7 +947,8 @@ async function restoreCachedInputs(){
   if(!bundle)return null;
   currentSourceFile=bundle.source||null;
   currentCharacterRef=bundle.reference||null;
-  currentAudioFile=bundle.audio||null;
+  currentAudioFiles=(bundle.audioTracks||[]).slice(0,8);
+  currentAudioFile=bundle.audio||currentAudioFiles[0]||null;
   const parts=[];
   if(currentSourceFile)parts.push('видео восстановлено из iPhone-кэша');
   else if(bundle.meta?.sourceSize)parts.push('видео не найдено в iPhone-кэше');
@@ -1010,7 +1026,7 @@ async function restore(){
   if(saved||meta||bundle){
     const sourceOk=Boolean(bundle?.source);
     const refOk=Boolean(bundle?.reference);
-    const audioOk=Boolean(bundle?.audio);
+    const audioOk=Boolean(bundle?.audio||(bundle?.audioTracks||[]).length);
     const cached=[];
     if(sourceOk)cached.push('видео ✓');
     if(refOk)cached.push('фото ✓');
