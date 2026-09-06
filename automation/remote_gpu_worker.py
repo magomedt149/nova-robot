@@ -51,7 +51,7 @@ SELF_TEST_LOCK = threading.Lock()
 WANGP_JOBS: dict[str, Any] = {}
 DOWNLOAD_TICKETS: dict[str, dict[str, Any]] = {}
 DOWNLOAD_TICKET_TTL = int(os.environ.get("NOVA_REMOTE_DOWNLOAD_TTL", "600"))
-WORKER_VERSION = "2.1.0"
+WORKER_VERSION = "2.2.0"
 PROTOCOL_VERSION = 8
 SESSION_ID = uuid.uuid4().hex[:12]
 
