@@ -1,7 +1,7 @@
 {
   "name": "NOVA",
-  "version": "27.9.1",
-  "pwa": "27.9.1",
+  "version": "27.10.0",
+  "pwa": "27.10.0",
   "mode": "free-only",
   "paidApis": false,
   "externalComputeRequiresConfirmation": true,
@@ -50,9 +50,9 @@
   "novaCallRequiresVpsForBasicFreeCalls": false,
   "novaCallBasicFreeMode": "public WebRTC fallback; self-hosted optional",
   "novaCallLaunchCheckPaidActions": false,
-  "motionStudioVersion": "27",
-  "remoteGpuWorkerVersion": "1.9.0",
-  "remoteGpuProtocolVersion": 6,
+  "motionStudioVersion": "28",
+  "remoteGpuWorkerVersion": "2.0.0",
+  "remoteGpuProtocolVersion": 7,
   "ffmpegAudioReplace": true,
   "voiceMediaCommand": true,
   "voiceMediaCommandExample": "Нова, наложи мой звук на видео",
@@ -71,6 +71,7 @@
   "remoteFullSelfTest": true,
   "remoteFullSelfTestComponents": [
     "GPU",
+    "NOVA Music chord synth WAV/MP3",
     "WanGP API",
     "Blender preview MP4",
     "FFmpeg audio replacement",
@@ -91,5 +92,25 @@
     "Нова, дорожка 1 70%, дорожка 2 30%",
     "Нова, экспортируй готовый MP4"
   ],
-  "audioCommandRelease": "multi-track-voice-v2"
+  "audioCommandRelease": "multi-track-voice-v2",
+  "freeChordMusic": true,
+  "freeChordMusicBackend": "pure-python-stdlib + FFmpeg",
+  "freeChordMusicPaidApi": false,
+  "freeChordMusicInstruments": [
+    "guitar",
+    "piano",
+    "accordion",
+    "bass",
+    "synth"
+  ],
+  "freeChordMusicFormats": [
+    "wav",
+    "mp3"
+  ],
+  "freeChordMusicVideoMix": true,
+  "freeChordMusicVoiceExamples": [
+    "Нова, создай гитару Am D G Em, 90 BPM, MP3",
+    "Нова, создай аккордеон Am D G Em, 100 BPM, WAV",
+    "Нова, сделай музыку по аккордам Am D G Em и подмешай в видео на 35%"
+  ]
 }
