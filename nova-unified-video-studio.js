@@ -69,6 +69,15 @@
       .nova-text-video-quick textarea{width:100%;min-height:96px;box-sizing:border-box;border:1px solid rgba(255,255,255,.14);border-radius:13px;background:#061027;color:#fff;padding:11px;font:inherit;resize:vertical}
       .nova-text-video-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px}.nova-text-video-actions button{border:0;border-radius:12px;padding:10px 13px;background:linear-gradient(135deg,#157bff,#7346ff);color:#fff;font-weight:900}.nova-text-video-actions span{font-size:11px;color:#8faad0}
       .nova-hidden-legacy-launch{display:none!important}
+      .nova-generation-center{position:sticky;bottom:0;z-index:18;margin:12px 0 0;padding:11px;border:1px solid rgba(110,174,255,.24);border-radius:18px;background:rgba(4,10,27,.94);backdrop-filter:blur(18px);box-shadow:0 -10px 35px rgba(0,0,0,.28)}
+      .nova-generation-center[hidden]{display:none!important}.nova-generation-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:9px}.nova-generation-head b{font-size:15px}.nova-generation-head span{font-size:10px;color:#7af0c4;border:1px solid rgba(54,232,164,.22);background:rgba(31,201,130,.10);border-radius:999px;padding:4px 7px}
+      .nova-generation-jobs{display:grid;gap:9px}.nova-generation-job{border:1px solid rgba(255,255,255,.10);border-radius:15px;padding:10px;background:linear-gradient(135deg,rgba(28,61,118,.20),rgba(58,35,111,.12))}
+      .nova-job-top{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}.nova-job-status{font-weight:900;font-size:12px;letter-spacing:.04em}.nova-job-percent{font-size:28px;font-weight:900;line-height:1;color:#dbe9ff}.nova-job-stage{margin-top:4px;font-size:12px;color:#a7bfdf}.nova-job-eta{font-size:11px;color:#88a7d0;margin-top:3px}
+      .nova-job-progress{height:7px;border-radius:999px;overflow:hidden;background:rgba(255,255,255,.08);margin:9px 0}.nova-job-progress>i{display:block;height:100%;width:0;background:linear-gradient(90deg,#3d8cff,#8f66ff);transition:width .22s ease}
+      .nova-job-preview{margin-top:8px;border-radius:13px;overflow:hidden;min-height:96px;background:radial-gradient(circle at 25% 20%,rgba(72,131,255,.26),transparent 40%),#050a18;display:grid;place-items:center}.nova-job-preview img,.nova-job-preview video{width:100%;max-height:220px;object-fit:cover;display:block}.nova-job-preview .nova-job-placeholder{padding:24px;text-align:center;font-size:30px}.nova-job-preview .nova-job-placeholder small{display:block;font-size:11px;color:#91afd6;margin-top:7px}
+      .nova-job-meta{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;font-size:10px;color:#97b1d3}.nova-job-meta span{padding:4px 6px;border-radius:999px;background:rgba(255,255,255,.055)}.nova-job-error{margin-top:8px;padding:8px;border-radius:10px;background:rgba(194,49,69,.12);border:1px solid rgba(255,94,115,.22);color:#ffbec6;font-size:11px}
+      .nova-job-actions{display:flex;gap:7px;flex-wrap:wrap;margin-top:9px}.nova-job-actions button{border:1px solid rgba(111,166,255,.22);border-radius:10px;background:rgba(255,255,255,.07);color:#edf4ff;padding:8px 10px;font-weight:850}.nova-job-actions button.primary{border:0;background:linear-gradient(135deg,#157bff,#7346ff)}.nova-job-actions button.warn{border-color:rgba(255,145,85,.30);color:#ffd0b1}
+      .nova-generation-job[data-state="completed"]{border-color:rgba(66,224,163,.28)}.nova-generation-job[data-state="failed"]{border-color:rgba(255,92,112,.28)}.nova-generation-job[data-state="canceled"]{opacity:.84}
       @media(max-width:760px){
         #novaMediaModal{padding:5px}.nova-media-card{padding:12px!important;border-radius:18px!important}
         .nova-unified-tabs{display:flex}.nova-unified-tab{flex:0 0 auto;min-width:142px}
@@ -287,7 +296,7 @@
       <h3>✍️ Просто напиши, какое видео хочешь</h3>
       <p>Фото и видео загружать необязательно. Без reference NOVA бесплатно создаст локальный motion-клип с твоим текстом на экране. Если reference загружен — этот текст станет prompt для движения и стиля.</p>
       <textarea id="novaSimpleVideoPrompt" placeholder="Например: Ночной город, дождь, неон, плавное приближение камеры, кинематографический стиль"></textarea>
-      <div class="nova-text-video-actions"><button id="novaSimpleVideoCreate" type="button">🎬 Создать 5 сек</button><span>FREE · LOCAL · без платных API</span></div>`;
+      <div class="nova-text-video-actions"><button id="novaSimpleVideoCreate" type="button">🎬 Запустить генерацию</button><span>FREE · LOCAL · 0 кредитов</span></div>`;
     const note = $('.nova-media-note', pane);
     (note || pane.firstElementChild)?.insertAdjacentElement('afterend', box);
 
@@ -309,6 +318,156 @@
       const render = $('#novaProMotion');
       if (!render) return status('Video PRO ещё загружается.');
       render.click();
+    });
+  }
+
+  const generationJobs = new Map();
+
+  function formatJobEta(seconds) {
+    const value = Math.max(0, Number(seconds || 0));
+    if (!value) return 'Осталось: почти готово';
+    if (value < 60) return `Осталось: ≈ ${Math.max(1, Math.ceil(value))} сек`;
+    return `Осталось: ≈ ${Math.ceil(value / 60)} мин`;
+  }
+
+  function generationStatusLabel(state) {
+    return ({
+      preparing: 'ПОДГОТОВКА',
+      queued: 'В ОЧЕРЕДИ',
+      uploading: 'ЗАГРУЗКА',
+      generating: 'СОЗДАЁМ ВИДЕО',
+      processing: 'ОБРАБОТКА',
+      exporting: 'ЭКСПОРТ MP4',
+      validating: 'ПРОВЕРКА',
+      completed: 'ГОТОВО ✓',
+      failed: 'ОШИБКА',
+      canceling: 'ОСТАНАВЛИВАЕМ',
+      canceled: 'ОТМЕНЕНО',
+      retrying: 'ПОВТОР'
+    })[state] || String(state || 'ЗАДАЧА').toUpperCase();
+  }
+
+  function currentGenerationPreview() {
+    const image = $('#novaProImagePreview');
+    if (image?.src && !image.hidden) return { kind: 'image', src: image.src };
+    const video = $('#novaProPlayer');
+    if (video?.src && !video.hidden) return { kind: 'video', src: video.src };
+    return null;
+  }
+
+  function ensureGenerationCenter() {
+    const pane = $('#novaProPane');
+    if (!pane) return null;
+    let center = $('#novaGenerationCenter');
+    if (center) return center;
+    center = document.createElement('section');
+    center.id = 'novaGenerationCenter';
+    center.className = 'nova-generation-center';
+    center.hidden = true;
+    center.innerHTML = `
+      <div class="nova-generation-head"><b>🎬 Задания NOVA</b><span>FREE · 0 кредитов</span></div>
+      <div id="novaGenerationJobs" class="nova-generation-jobs"></div>`;
+    const quick = $('#novaTextVideoQuick', pane);
+    if (quick) quick.insertAdjacentElement('afterend', center);
+    else pane.prepend(center);
+
+    center.addEventListener('click', (event) => {
+      const button = event.target.closest('button[data-job-action]');
+      if (!button) return;
+      const card = button.closest('.nova-generation-job');
+      const id = card?.dataset.jobId;
+      const action = button.dataset.jobAction;
+      if (action === 'cancel') {
+        const job = generationJobs.get(id);
+        if (job) {
+          job.status = 'canceling';
+          job.stage = 'Останавливаем генерацию…';
+          renderGenerationJob(job);
+        }
+        $('#novaProStopRender')?.click();
+      } else if (action === 'retry') {
+        $('#novaProMotion')?.click();
+      } else if (action === 'library') {
+        setActive('library');
+      } else if (action === 'remove') {
+        generationJobs.delete(id);
+        card?.remove();
+        if (!generationJobs.size) center.hidden = true;
+      }
+    });
+    return center;
+  }
+
+  function renderGenerationJob(job) {
+    const center = ensureGenerationCenter();
+    const host = $('#novaGenerationJobs', center || document);
+    if (!center || !host || !job?.id) return;
+    center.hidden = false;
+
+    let card = host.querySelector(`[data-job-id="${CSS.escape(job.id)}"]`);
+    if (!card) {
+      card = document.createElement('article');
+      card.className = 'nova-generation-job';
+      card.dataset.jobId = job.id;
+      host.prepend(card);
+    }
+    card.dataset.state = job.status || 'preparing';
+
+    const progress = Math.max(0, Math.min(100, Number(job.progress ?? 0)));
+    const terminal = ['completed', 'failed', 'canceled'].includes(job.status);
+    const active = !terminal;
+    const preview = job.preview || null;
+    const previewHtml = preview?.kind === 'image'
+      ? `<img src="${preview.src}" alt="Превью задания NOVA">`
+      : preview?.kind === 'video'
+        ? `<video src="${preview.src}" muted playsinline preload="metadata"></video>`
+        : `<div class="nova-job-placeholder">🎞️<small>Превью появится в процессе генерации</small></div>`;
+
+    const meta = [
+      job.duration ? `${job.duration} сек` : '',
+      job.ratio || '',
+      job.style || '',
+      job.cost || '0 кредитов'
+    ].filter(Boolean).map((x) => `<span>${String(x).replace(/[<>]/g, '')}</span>`).join('');
+
+    card.innerHTML = `
+      <div class="nova-job-top">
+        <div><div class="nova-job-status">${generationStatusLabel(job.status)}</div><div class="nova-job-stage">${String(job.stage || '').replace(/[<>]/g, '')}</div><div class="nova-job-eta">${job.status === 'completed' ? 'Сохранено в Медиатеке' : terminal ? '' : formatJobEta(job.etaSeconds)}</div></div>
+        <div class="nova-job-percent">${job.status === 'failed' ? '!' : job.status === 'canceled' ? '×' : `${Math.round(progress)}%`}</div>
+      </div>
+      <div class="nova-job-progress"><i style="width:${progress}%"></i></div>
+      <div class="nova-job-preview">${previewHtml}</div>
+      <div class="nova-job-meta">${meta}</div>
+      ${job.name ? `<div class="nova-job-stage">📄 ${String(job.name).replace(/[<>]/g, '')}</div>` : ''}
+      ${job.error ? `<div class="nova-job-error">${String(job.error).replace(/[<>]/g, '')}</div>` : ''}
+      <div class="nova-job-actions">
+        ${active ? '<button class="warn" type="button" data-job-action="cancel">⏹ Отменить</button>' : ''}
+        ${terminal ? '<button type="button" data-job-action="retry">↻ Повторить</button>' : ''}
+        ${job.status === 'completed' ? '<button class="primary" type="button" data-job-action="library">🗂 Открыть в Медиатеке</button>' : ''}
+        ${terminal ? '<button type="button" data-job-action="remove">Скрыть</button>' : ''}
+      </div>`;
+  }
+
+  function wireGenerationJobs() {
+    ensureGenerationCenter();
+    if (document.documentElement.dataset.novaGenerationJobsWired === '1') return;
+    document.documentElement.dataset.novaGenerationJobsWired = '1';
+    window.addEventListener('nova-video-job', (event) => {
+      const next = event.detail || {};
+      if (!next.id) return;
+      const prev = generationJobs.get(next.id) || {
+        id: next.id,
+        status: 'preparing',
+        progress: 0,
+        preview: currentGenerationPreview()
+      };
+      const merged = { ...prev, ...next };
+      if (!merged.preview) merged.preview = currentGenerationPreview();
+      generationJobs.set(merged.id, merged);
+      renderGenerationJob(merged);
+      if (merged.status === 'completed') status('✅ Видео готово и уже находится в Медиатеке.');
+      else if (merged.status === 'failed') status(`Ошибка генерации: ${merged.error || 'неизвестная ошибка'}`);
+      else if (merged.status === 'canceled') status('Генерация отменена.');
     });
   }
 
@@ -418,6 +577,7 @@
     ensureMotionPane(modal);
     ensureIrinaPanel();
     ensureTextVideoQuick();
+    wireGenerationJobs();
     ensureEditorTools();
     wireHybridBridge();
     wireLaunchers(modal);
