@@ -138,7 +138,7 @@
     "Нова, смешай музыку с видео, fade in 2 seconds, fade out 3 seconds"
   ],
   "healthRuntime": true,
-  "healthRuntimeVersion": "27.13.0",
+  "healthRuntimeVersion": "27.25.0",
   "autoMontage": true,
   "autoMontageVersion": "1.0.0",
   "autoMontageMode": "local-first 5-second preview; remote compute only after approval",
@@ -481,6 +481,7 @@
     "turning off until-acknowledged restores timer for an already visible alert",
     "disabling visual alerts closes an already visible alert",
     "central-corridor crossing profile expires and returns to center profile",
-    "threshold changes clear active tracks to avoid mixing old and new criteria"
+    "threshold changes clear active tracks to avoid mixing old and new criteria",
+    "health runtime build and cache-busting query synchronized to NOVA 27.25.0"
   ]
 }
