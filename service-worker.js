@@ -1,4 +1,4 @@
-const CACHE = 'nova-v90-camera-delay-presets-20260906';
+const CACHE = 'nova-v91-camera-alert-8s-20260906';
 const API_CACHE = 'nova-api-economy-v2';
 const METERED_NETLIFY_HOST = /(^|\\.)netlify\\.app$/i.test(self.location.hostname);
 const YOUTUBE_TTL_MS = 24 * 60 * 60 * 1000;
