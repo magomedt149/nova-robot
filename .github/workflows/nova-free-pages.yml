@@ -20,7 +20,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout NOVA
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Verify critical files
         shell: bash
@@ -50,6 +50,12 @@ jobs:
           set -euo pipefail
           python3 automation/validate_frontend.py
 
+      - name: Run dependency-free regression tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tests/run_static_tests.py
+
       - name: Enforce FREE LOCK
         shell: bash
         run: |
@@ -65,7 +71,7 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - name: Checkout NOVA
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Prepare static site
         shell: bash

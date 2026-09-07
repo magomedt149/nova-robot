@@ -30,7 +30,7 @@ python youtube/authorize_device.py
 - `YOUTUBE_CLIENT_SECRET`
 - `YOUTUBE_REFRESH_TOKEN`
 
-После этого workflow **Daily YouTube Short - FREE** начнёт выполнять шаг YouTube upload.
+После этого workflow **Publish Approved YouTube Short** сможет загрузить только тот preview, для которого владелец отдельно установил `approved=true`, правильную дату и `content_id`. Ежедневный workflow **Daily YouTube Short - PREVIEW ONLY** никогда не публикует автоматически.
 
 ## 4. Безопасный первый тест
 
