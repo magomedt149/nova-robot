@@ -1,4 +1,4 @@
-const CACHE = 'nova-v94-vision-settings-health-sync-20260906';
+const CACHE = 'nova-v95-generation-ux-20260907';
 const API_CACHE = 'nova-api-economy-v2';
 const METERED_NETLIFY_HOST = /(^|\\.)netlify\\.app$/i.test(self.location.hostname);
 const YOUTUBE_TTL_MS = 24 * 60 * 60 * 1000;
@@ -37,6 +37,7 @@ const CORE = [
   './nova-3d-director.js',
   './nova-blender-camera.js',
   './nova-unified-video-studio.js',
+  './nova-generation-ux.js',
   './motion-studio/index.html',
   './motion-studio/styles.css',
   './motion-studio/app.js',
