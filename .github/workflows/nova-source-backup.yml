@@ -1,0 +1,55 @@
+name: NOVA source backup
+
+on:
+  push:
+    paths:
+      - '.github/workflows/nova-source-backup.yml'
+      - '.nova-backup-request'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout current repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Create source snapshot
+        shell: bash
+        run: |
+          set -euo pipefail
+          SHA="$(git rev-parse HEAD)"
+          mkdir -p backup_meta
+          printf '%s\n' "$SHA" > backup_meta/COMMIT_SHA.txt
+          printf '%s\n' "main" > backup_meta/BRANCH.txt
+          git ls-files > backup_meta/TRACKED_FILES.txt
+          cat > backup_meta/README_RESTORE.txt <<'EOF'
+          NOVA source backup
+          Repository: magomedt149/nova-robot
+
+          This archive is a clean snapshot of the current tracked source tree.
+          It intentionally does not include GitHub secrets, Actions secrets, local .env files,
+          or any untracked files that are not committed to the repository.
+
+          Restore:
+          1. Unzip NOVA_SOURCE_SNAPSHOT.zip into a new folder.
+          2. Create a new Git repository if needed: git init
+          3. Add the files and commit them.
+          EOF
+          git archive --format=zip --output=NOVA_SOURCE_SNAPSHOT.zip HEAD
+          sha256sum NOVA_SOURCE_SNAPSHOT.zip > backup_meta/SHA256SUMS.txt
+
+      - name: Upload NOVA backup
+        uses: actions/upload-artifact@v4
+        with:
+          name: NOVA_SOURCE_BACKUP
+          path: |
+            NOVA_SOURCE_SNAPSHOT.zip
+            backup_meta/
+          retention-days: 30
+          if-no-files-found: error
