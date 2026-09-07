@@ -34,6 +34,18 @@
     if (global) global.textContent = message;
   }
 
+  function emitVideoJob(detail = {}) {
+    try {
+      window.dispatchEvent(new CustomEvent('nova-video-job', {
+        detail: { at: Date.now(), ...detail }
+      }));
+    } catch (_) {}
+  }
+
+  function createVideoJobId() {
+    return `nova-video-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  }
+
   function clean(value) {
     return String(value || '').replace(/\s+/g, ' ').trim();
   }
@@ -579,7 +591,10 @@
       recorder.ondataavailable = (event) => { if (event.data?.size) chunks.push(event.data); };
       const stopped = new Promise((resolve) => { recorder.onstop = resolve; });
       const motion = parseMotion(prompt, negative);
+      const jobId = options.jobId || '';
+      let lastJobPercent = -1;
       const began = performance.now();
+      if (jobId) emitVideoJob({ id: jobId, status: 'generating', progress: 10, etaSeconds: duration, stage: 'Генерация движения' });
       recorder.start(250);
       try { await audioContext?.resume?.(); } catch (_) {}
       if (media.kind === 'video' && !extend) await media.element.play().catch(() => {});
@@ -588,6 +603,19 @@
         const tick = (now) => {
           const elapsed = (now - began) / 1000;
           const progress = clamp(elapsed / duration, 0, 1);
+          if (jobId) {
+            const percent = Math.min(88, Math.round(10 + progress * 78));
+            if (percent !== lastJobPercent) {
+              lastJobPercent = percent;
+              emitVideoJob({
+                id: jobId,
+                status: 'generating',
+                progress: percent,
+                etaSeconds: Math.max(0, duration - elapsed),
+                stage: 'Генерация движения'
+              });
+            }
+          }
           ctx.fillStyle = '#000'; ctx.fillRect(0, 0, width, height);
           drawCover(ctx, media.element, width, height, progress, motion, style, exactMode);
           if (options.showPrompt) drawPromptBadge(ctx, width, height, prompt);
@@ -605,6 +633,11 @@
       try { await audioContext?.close?.(); } catch (_) {}
       canvasStream.getTracks().forEach((t) => t.stop());
       stream.getTracks().forEach((t) => t.stop());
+      if (state.abort) {
+        const abortError = new Error('Генерация отменена.');
+        abortError.name = 'AbortError';
+        throw abortError;
+      }
       if (!chunks.length) throw new Error('Рендер не создал видео.');
       const type = recorder.mimeType || mime || 'video/webm';
       return { blob: new Blob(chunks, { type }), type, extension: extensionFor(type), prompt, negative, style, exactMode, duration };
@@ -630,27 +663,88 @@
     }
     host.prepend(box);
     installPlayerBar($('video', box), name);
-    saveToLibrary(blob, name, source).then(() => storageInfo()).catch(() => {});
+    return saveToLibrary(blob, name, source).then(async (saved) => {
+      await storageInfo();
+      return saved;
+    });
   }
 
   async function renderOneFromPro(extend = false) {
+    const jobId = createVideoJobId();
     syncSharedInputs();
     const duration = clamp($('#novaProDuration')?.value || 5, 1, 15);
     const style = $('#novaProStyle')?.value || 'motion';
     const ratio = $('#novaProRatio')?.value || '9:16';
-    let source = currentSource();
-    if (!source) {
-      if (extend) throw new Error('Для Extend сначала нужен исходный ролик.');
-      source = await makeTextPromptSource(state.prompt, ratio);
-      status('TEXT → VIDEO: создал локальный кадр из текста, начинаю motion-рендер…');
-    } else {
-      status(`${extend ? 'Extend' : 'Motion'}: локальный рендер…`);
+    emitVideoJob({
+      id: jobId,
+      status: 'preparing',
+      progress: 3,
+      etaSeconds: duration + 2,
+      stage: 'Подготавливаем проект',
+      title: extend ? 'Продолжение видео' : 'Генерация видео',
+      prompt: state.prompt,
+      duration,
+      ratio,
+      style,
+      cost: '0 кредитов'
+    });
+    try {
+      let source = currentSource();
+      if (!source) {
+        if (extend) throw new Error('Для Extend сначала нужен исходный ролик.');
+        emitVideoJob({ id: jobId, status: 'preparing', progress: 7, etaSeconds: duration + 1, stage: 'Создаём исходный кадр из текста' });
+        source = await makeTextPromptSource(state.prompt, ratio);
+        status('TEXT → VIDEO: создал локальный кадр из текста, начинаю motion-рендер…');
+      } else {
+        status(`${extend ? 'Extend' : 'Motion'}: локальный рендер…`);
+      }
+
+      const result = await renderLocalClip({
+        source, duration, style, ratio, prompt: state.prompt, negative: state.negative,
+        refMode: state.refMode, extend, jobId
+      });
+
+      emitVideoJob({ id: jobId, status: 'processing', progress: 92, etaSeconds: 1.5, stage: 'Собираем финальный файл' });
+      const src = source.generatedFromText ? 'NOVA_TEXT' : (source.file?.name?.replace(/\.[^.]+$/, '') || 'NOVA');
+      const name = `${safeName(src)}_${extend ? 'EXTEND' : 'MOTION'}_${style.toUpperCase()}_${duration}s.${result.extension}`;
+
+      emitVideoJob({ id: jobId, status: 'validating', progress: 97, etaSeconds: 1, stage: 'Проверяем видео и сохраняем в Медиатеку', name });
+      await addOutput(
+        result.blob,
+        name,
+        $('#novaProOutputs'),
+        source.generatedFromText ? 'NOVA Text to Video FREE' : (extend ? 'NOVA Extend' : 'NOVA Motion Control')
+      );
+      try { await window.NovaMediaLibrary?.refresh?.(); } catch (_) {}
+
+      emitVideoJob({
+        id: jobId,
+        status: 'completed',
+        progress: 100,
+        etaSeconds: 0,
+        stage: 'Готово',
+        name,
+        duration,
+        ratio,
+        style,
+        sizeBytes: result.blob.size,
+        type: result.blob.type
+      });
+      status(`✅ ${source.generatedFromText ? 'TEXT → VIDEO' : (extend ? 'Extend' : 'Motion')} готов и сохранён в Медиатеке.`);
+      return { ...result, name, jobId };
+    } catch (error) {
+      const canceled = error?.name === 'AbortError' || state.abort;
+      emitVideoJob({
+        id: jobId,
+        status: canceled ? 'canceled' : 'failed',
+        progress: canceled ? 0 : undefined,
+        etaSeconds: 0,
+        stage: canceled ? 'Генерация остановлена' : 'Ошибка генерации',
+        error: error?.message || String(error),
+        retryable: !canceled
+      });
+      throw error;
     }
-    const result = await renderLocalClip({ source, duration, style, ratio, prompt: state.prompt, negative: state.negative, refMode: state.refMode, extend });
-    const src = source.generatedFromText ? 'NOVA_TEXT' : (source.file?.name?.replace(/\.[^.]+$/, '') || 'NOVA');
-    const name = `${safeName(src)}_${extend ? 'EXTEND' : 'MOTION'}_${style.toUpperCase()}_${duration}s.${result.extension}`;
-    addOutput(result.blob, name, $('#novaProOutputs'), source.generatedFromText ? 'NOVA Text to Video FREE' : (extend ? 'NOVA Extend' : 'NOVA Motion Control'));
-    status(`✅ ${source.generatedFromText ? 'TEXT → VIDEO' : (extend ? 'Extend' : 'Motion')} готов и сохранён в Медиатеке.`);
   }
 
   function sceneRows(root = document) {
@@ -843,7 +937,7 @@
           <div class="nova-media-field"><label>Negative prompt</label><textarea id="novaProNegative" placeholder="no face change, no extra people, no flicker, no warped hands, no text"></textarea></div>
           <div class="nova-media-grid"><div class="nova-media-field"><label>Style</label><select id="novaProStyle"><option value="motion">Motion Control</option><option value="cinema">Cinema</option><option value="threed">2.5D look · не Orbit</option><option value="hologram">Hologram</option><option value="action">Action</option></select></div><div class="nova-media-field"><label>Ratio</label><select id="novaProRatio"><option value="9:16">9:16 Shorts</option><option value="16:9">16:9 Cinema</option></select></div></div>
           <div class="nova-media-field"><label>Duration</label><select id="novaProDuration"><option>3</option><option selected>5</option><option>8</option><option>10</option><option>15</option></select></div>
-          <div class="nova-media-actions"><button class="nova-media-btn primary" id="novaProMotion" type="button">🎬 Motion</button><button class="nova-media-btn" id="novaProExtend" type="button">➕ Extend</button><button class="nova-media-btn warn" id="novaProStopRender" type="button">⏹ Stop render</button></div>
+          <div class="nova-media-actions"><button class="nova-media-btn primary" id="novaProMotion" type="button">🎬 Запустить генерацию</button><button class="nova-media-btn" id="novaProExtend" type="button">➕ Extend</button><button class="nova-media-btn warn" id="novaProStopRender" type="button">⏹ Stop render</button></div>
         </div>
       </div>
       <div class="nova-pro-section"><div class="nova-pro-title"><b>Timeline Editor · 5 scenes</b><span>assets → preview → prompts → timeline</span></div><div class="nova-pro-scenes" id="novaProScenes">${[0,1,2,3,4].map(sceneHtml).join('')}</div><div class="nova-media-actions"><button class="nova-media-btn primary" id="novaProRenderTimeline" type="button">🎞 Render selected scenes</button><button class="nova-media-btn" id="novaProOpenShorts" type="button">📱 Открыть Multi Shorts</button></div></div>
