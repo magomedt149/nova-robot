@@ -175,7 +175,7 @@
     if ($('#novaGenerationUxStyles')) return;
     const style = document.createElement('style');
     style.id = 'novaGenerationUxStyles';
-    style.textContent = \`
+    style.textContent = `
       .nova-generation-dialog{position:fixed;inset:0;z-index:10080;display:grid;place-items:center;padding:18px;background:rgba(1,4,13,.72);backdrop-filter:blur(14px)}
       .nova-generation-dialog[hidden]{display:none!important}
       .nova-generation-dialog-card{width:min(620px,100%);max-height:min(88vh,760px);overflow:auto;border:1px solid rgba(119,176,255,.28);border-radius:22px;background:linear-gradient(155deg,rgba(12,24,52,.98),rgba(5,10,24,.99));box-shadow:0 28px 90px rgba(0,0,0,.56);color:#eff6ff;padding:17px}
@@ -198,7 +198,7 @@
       .nova-job-ux-finance{margin-top:7px;font-size:11px;color:#c1d2e9}.nova-job-ux-actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:9px}.nova-job-ux-actions button{border:1px solid rgba(111,166,255,.22);border-radius:10px;background:rgba(255,255,255,.06);color:#edf5ff;padding:8px 10px;font-weight:800}.nova-job-ux-actions .primary{background:rgba(62,121,255,.25)}.nova-job-ux-details{margin-top:7px;padding:7px;border-radius:9px;background:rgba(0,0,0,.18);font-size:10px;color:#9db2d2;white-space:pre-wrap;word-break:break-word}
       .nova-generation-job[data-state="failed"]>.nova-job-actions,.nova-generation-job[data-state="canceled"]>.nova-job-actions{display:none}
       @media(max-width:560px){.nova-review-grid,.nova-job-ux-summary{grid-template-columns:1fr}.nova-generation-dialog-card{padding:14px;border-radius:18px}}
-    \`;
+    `;
     document.head.appendChild(style);
   }
 
@@ -237,7 +237,7 @@
     try {
       button.click();
       status(snapshot.mode === 'paid'
-        ? \`Генерация запускается за \${snapshot.costCredits} кредитов…\`
+        ? `Генерация запускается за ${snapshot.costCredits} кредитов…`
         : 'Генерация запускается бесплатно…');
     } finally {
       button.removeAttribute(BYPASS_ATTR);
@@ -247,39 +247,39 @@
   function renderReview(dialog, snapshot, check) {
     const source = snapshot.files.video?.name || snapshot.files.image?.name || (snapshot.prompt ? 'Текст → видео' : 'Не выбран');
     const billingHtml = snapshot.mode === 'paid'
-      ? \`<div class="nova-review-billing paid"><b>Платная генерация · \${escapeHtml(snapshot.costCredits)} кредитов</b><span>\${snapshot.balanceCredits === null ? 'Баланс будет проверен перед запуском.' : \`Доступно: \${escapeHtml(snapshot.balanceCredits)} · После запуска: \${escapeHtml(Math.max(0, snapshot.balanceCredits - snapshot.costCredits))}\`}</span></div>\`
+      ? `<div class="nova-review-billing paid"><b>Платная генерация · ${escapeHtml(snapshot.costCredits)} кредитов</b><span>${snapshot.balanceCredits === null ? 'Баланс будет проверен перед запуском.' : `Доступно: ${escapeHtml(snapshot.balanceCredits)} · После запуска: ${escapeHtml(Math.max(0, snapshot.balanceCredits - snapshot.costCredits))}`}</span></div>`
       : '<div class="nova-review-billing"><b>Бесплатный режим · $0 · 0 кредитов</b><span>До запуска и после отмены NOVA не списывает кредиты.</span></div>';
 
     const launchDisabled = !['ready'].includes(check.state);
     const launchText = snapshot.mode === 'paid'
-      ? \`Запустить за \${snapshot.costCredits} кредитов\`
+      ? `Запустить за ${snapshot.costCredits} кредитов`
       : 'Запустить бесплатно';
 
-    dialog.innerHTML = \`
+    dialog.innerHTML = `
       <div class="nova-generation-dialog-card">
         <div class="nova-generation-dialog-head">
           <div><h3>Проверить перед запуском</h3><p>NOVA показывает все важные параметры до начала генерации.</p></div>
           <button class="nova-generation-dialog-close" type="button" data-review-action="close" aria-label="Закрыть">×</button>
         </div>
-        <div class="nova-review-state" data-state="\${escapeHtml(check.state)}"><b>\${escapeHtml(check.title)}</b><span>\${escapeHtml(check.message)}\${check.fileName ? \` Файл: \${escapeHtml(check.fileName)}\` : ''}</span></div>
+        <div class="nova-review-state" data-state="${escapeHtml(check.state)}"><b>${escapeHtml(check.title)}</b><span>${escapeHtml(check.message)}${check.fileName ? ` Файл: ${escapeHtml(check.fileName)}` : ''}</span></div>
         <div class="nova-review-grid">
-          <div class="nova-review-item"><small>Задание</small><b>\${escapeHtml(snapshot.title)}</b></div>
-          <div class="nova-review-item"><small>Источник</small><b>\${escapeHtml(source)}</b></div>
-          <div class="nova-review-item"><small>Провайдер</small><b>\${escapeHtml(snapshot.provider)}</b></div>
-          <div class="nova-review-item"><small>Модель</small><b>\${escapeHtml(snapshot.model)}</b></div>
-          <div class="nova-review-item"><small>Длительность</small><b>\${escapeHtml(snapshot.duration)} сек</b></div>
-          <div class="nova-review-item"><small>Формат</small><b>\${escapeHtml(snapshot.ratio)}</b></div>
-          <div class="nova-review-item"><small>Стиль</small><b>\${escapeHtml(styleLabel(snapshot.style))}</b></div>
-          <div class="nova-review-item"><small>Ожидаемое время</small><b>≈ \${escapeHtml(Math.max(2, Math.ceil(snapshot.duration + 2)))} сек локально</b></div>
+          <div class="nova-review-item"><small>Задание</small><b>${escapeHtml(snapshot.title)}</b></div>
+          <div class="nova-review-item"><small>Источник</small><b>${escapeHtml(source)}</b></div>
+          <div class="nova-review-item"><small>Провайдер</small><b>${escapeHtml(snapshot.provider)}</b></div>
+          <div class="nova-review-item"><small>Модель</small><b>${escapeHtml(snapshot.model)}</b></div>
+          <div class="nova-review-item"><small>Длительность</small><b>${escapeHtml(snapshot.duration)} сек</b></div>
+          <div class="nova-review-item"><small>Формат</small><b>${escapeHtml(snapshot.ratio)}</b></div>
+          <div class="nova-review-item"><small>Стиль</small><b>${escapeHtml(styleLabel(snapshot.style))}</b></div>
+          <div class="nova-review-item"><small>Ожидаемое время</small><b>≈ ${escapeHtml(Math.max(2, Math.ceil(snapshot.duration + 2)))} сек локально</b></div>
         </div>
-        \${billingHtml}
+        ${billingHtml}
         <div class="nova-generation-dialog-actions">
-          <button class="primary" type="button" data-review-action="launch" \${launchDisabled ? 'disabled' : ''}>\${escapeHtml(launchText)}</button>
+          <button class="primary" type="button" data-review-action="launch" ${launchDisabled ? 'disabled' : ''}>${escapeHtml(launchText)}</button>
           <button type="button" data-review-action="edit">Изменить настройки</button>
-          \${check.state === 'file-error' ? '<button type="button" data-review-action="pick-file">Загрузить заново</button>' : ''}
+          ${check.state === 'file-error' ? '<button type="button" data-review-action="pick-file">Загрузить заново</button>' : ''}
           <button type="button" data-review-action="close">Отмена</button>
         </div>
-      </div>\`;
+      </div>`;
 
     dialog.onclick = (event) => {
       const action = event.target.closest('[data-review-action]')?.dataset.reviewAction;
@@ -302,11 +302,11 @@
     const dialog = ensureReviewDialog();
     pendingLaunchButton = button;
     dialog.hidden = false;
-    dialog.innerHTML = \`
+    dialog.innerHTML = `
       <div class="nova-generation-dialog-card">
         <div class="nova-generation-dialog-head"><div><h3>Проверяем настройки…</h3><p>NOVA проверяет файлы, модель, провайдера и стоимость.</p></div></div>
         <div class="nova-review-state" data-state="checking"><b>Проверка</b><span>Проверка аудио и файлов… Проверка модели… Проверка провайдера… Расчёт стоимости…</span></div>
-      </div>\`;
+      </div>`;
     requestAnimationFrame(() => {
       if (pendingLaunchButton !== button || dialog.hidden) return;
       const snapshot = currentReviewSnapshot(button);
@@ -401,16 +401,16 @@
     const refunded = readNumber(job.refundedCredits, 0);
     const finalCost = Math.max(0, charged - refunded);
     if (state === 'canceled' && job.refundPending) {
-      return \`Списано: \${charged} · Возврат обрабатывается.\`;
+      return `Списано: ${charged} · Возврат обрабатывается.`;
     }
     if (state === 'canceled' && refunded > 0) {
-      return \`Списано: \${charged} · Возвращено: \${refunded} · Итог: \${finalCost} кредитов.\`;
+      return `Списано: ${charged} · Возвращено: ${refunded} · Итог: ${finalCost} кредитов.`;
     }
-    return \`Списано: \${charged} кредитов.\`;
+    return `Списано: ${charged} кредитов.`;
   }
 
   function enhanceJobCard(job) {
-    const card = document.querySelector(\`.nova-generation-job[data-job-id="\${CSS.escape(job.id)}"]\`);
+    const card = document.querySelector(`.nova-generation-job[data-job-id="${CSS.escape(job.id)}"]`);
     if (!card) return;
 
     let summary = $('.nova-job-ux-summary', card);
@@ -421,11 +421,11 @@
       (meta || $('.nova-job-progress', card))?.insertAdjacentElement('afterend', summary);
     }
     if (summary) {
-      summary.innerHTML = \`
-        <span>Провайдер<b>\${escapeHtml(job.provider || 'NOVA Local')}</b></span>
-        <span>Модель<b>\${escapeHtml(job.model || 'Local Motion')}</b></span>
-        <span>Режим<b>\${job.mode === 'paid' ? 'Платный' : 'Бесплатный'}</b></span>
-        <span>Кредиты<b>\${job.mode === 'paid' ? escapeHtml(job.costCredits || 0) : '0 · $0'}</b></span>\`;
+      summary.innerHTML = `
+        <span>Провайдер<b>${escapeHtml(job.provider || 'NOVA Local')}</b></span>
+        <span>Модель<b>${escapeHtml(job.model || 'Local Motion')}</b></span>
+        <span>Режим<b>${job.mode === 'paid' ? 'Платный' : 'Бесплатный'}</b></span>
+        <span>Кредиты<b>${job.mode === 'paid' ? escapeHtml(job.costCredits || 0) : '0 · $0'}</b></span>`;
     }
 
     card.querySelectorAll('.nova-job-ux-panel').forEach((node) => node.remove());
@@ -434,16 +434,16 @@
       const info = errorInfo(job.error);
       const panel = document.createElement('section');
       panel.className = 'nova-job-ux-panel error';
-      panel.innerHTML = \`
-        <h4>\${escapeHtml(info.title)}</h4>
-        <p>\${escapeHtml(info.message)}</p>
-        <div class="nova-job-ux-finance">\${escapeHtml(financeText(job, 'failed'))}</div>
+      panel.innerHTML = `
+        <h4>${escapeHtml(info.title)}</h4>
+        <p>${escapeHtml(info.message)}</p>
+        <div class="nova-job-ux-finance">${escapeHtml(financeText(job, 'failed'))}</div>
         <div class="nova-job-ux-actions">
-          <button class="primary" type="button" data-nova-ux-action="\${escapeHtml(info.action)}" data-job-id="\${escapeHtml(job.id)}">\${escapeHtml(info.actionLabel)}</button>
-          <button type="button" data-nova-ux-action="edit" data-job-id="\${escapeHtml(job.id)}">Изменить и повторить</button>
-          <button type="button" data-nova-ux-action="details" data-job-id="\${escapeHtml(job.id)}">Показать детали</button>
+          <button class="primary" type="button" data-nova-ux-action="${escapeHtml(info.action)}" data-job-id="${escapeHtml(job.id)}">${escapeHtml(info.actionLabel)}</button>
+          <button type="button" data-nova-ux-action="edit" data-job-id="${escapeHtml(job.id)}">Изменить и повторить</button>
+          <button type="button" data-nova-ux-action="details" data-job-id="${escapeHtml(job.id)}">Показать детали</button>
         </div>
-        <div class="nova-job-ux-details" hidden>\${escapeHtml(job.error || 'Неизвестная ошибка')}</div>\`;
+        <div class="nova-job-ux-details" hidden>${escapeHtml(job.error || 'Неизвестная ошибка')}</div>`;
       card.appendChild(panel);
     } else if (job.status === 'canceling') {
       const panel = document.createElement('section');
@@ -454,22 +454,22 @@
       const stopped = readNumber(job.stoppedAtProgress, 0);
       const panel = document.createElement('section');
       panel.className = 'nova-job-ux-panel canceled';
-      panel.innerHTML = \`
+      panel.innerHTML = `
         <h4>Генерация отменена</h4>
-        <p>\${stopped > 0 ? \`Задание остановлено примерно на \${Math.round(stopped)}%.\` : 'Задание успешно остановлено.'}</p>
-        <div class="nova-job-ux-finance">\${escapeHtml(financeText(job, 'canceled'))}</div>
+        <p>${stopped > 0 ? `Задание остановлено примерно на ${Math.round(stopped)}%.` : 'Задание успешно остановлено.'}</p>
+        <div class="nova-job-ux-finance">${escapeHtml(financeText(job, 'canceled'))}</div>
         <div class="nova-job-ux-actions">
-          <button class="primary" type="button" data-nova-ux-action="retry" data-job-id="\${escapeHtml(job.id)}">Повторить генерацию</button>
-          <button type="button" data-nova-ux-action="edit" data-job-id="\${escapeHtml(job.id)}">Изменить и повторить</button>
-        </div>\`;
+          <button class="primary" type="button" data-nova-ux-action="retry" data-job-id="${escapeHtml(job.id)}">Повторить генерацию</button>
+          <button type="button" data-nova-ux-action="edit" data-job-id="${escapeHtml(job.id)}">Изменить и повторить</button>
+        </div>`;
       card.appendChild(panel);
     } else if (job.status === 'completed') {
       const panel = document.createElement('section');
       panel.className = 'nova-job-ux-panel success';
-      panel.innerHTML = \`
+      panel.innerHTML = `
         <h4>Видео готово</h4>
         <p>Ролик успешно создан и сохранён в Медиатеке.</p>
-        <div class="nova-job-ux-finance">\${escapeHtml(financeText(job, 'completed'))}</div>\`;
+        <div class="nova-job-ux-finance">${escapeHtml(financeText(job, 'completed'))}</div>`;
       card.appendChild(panel);
     }
   }
@@ -512,7 +512,7 @@
       return {
         title: 'Остановить генерацию?',
         message: 'Провайдер уже получил задание.',
-        finance: \`Списано: \${charged} кредитов. Ожидаемый возврат: \${charged} кредитов.\`,
+        finance: `Списано: ${charged} кредитов. Ожидаемый возврат: ${charged} кредитов.`,
         confirm: 'Остановить генерацию'
       };
     }
@@ -520,14 +520,14 @@
       return {
         title: 'Остановить генерацию?',
         message: 'Провайдер уже начал работу. Возврат не гарантирован.',
-        finance: \`Списано: \${charged} кредитов.\`,
+        finance: `Списано: ${charged} кредитов.`,
         confirm: 'Остановить без гарантии возврата'
       };
     }
     return {
       title: 'Остановить генерацию?',
       message: 'Провайдер уже начал работу. NOVA покажет фактический возврат после подтверждения провайдера.',
-      finance: \`Списано: \${charged} кредитов. Возможен полный, частичный или нулевой возврат.\`,
+      finance: `Списано: ${charged} кредитов. Возможен полный, частичный или нулевой возврат.`,
       confirm: 'Остановить генерацию'
     };
   }
@@ -538,24 +538,24 @@
     const copy = cancelCopy(job);
     const dialog = ensureCancelDialog();
     dialog.hidden = false;
-    dialog.innerHTML = \`
+    dialog.innerHTML = `
       <div class="nova-generation-dialog-card">
         <div class="nova-generation-dialog-head">
-          <div><h3>\${escapeHtml(copy.title)}</h3><p>\${escapeHtml(copy.message)}</p></div>
+          <div><h3>${escapeHtml(copy.title)}</h3><p>${escapeHtml(copy.message)}</p></div>
           <button class="nova-generation-dialog-close" type="button" data-cancel-action="close" aria-label="Закрыть">×</button>
         </div>
         <div class="nova-review-grid">
-          <div class="nova-review-item"><small>Статус</small><b>\${escapeHtml(job.status || 'generating')}</b></div>
-          <div class="nova-review-item"><small>Прогресс</small><b>\${Math.round(readNumber(job.progress, 0))}%</b></div>
-          <div class="nova-review-item"><small>Провайдер</small><b>\${escapeHtml(job.provider || 'NOVA Local')}</b></div>
-          <div class="nova-review-item"><small>Модель</small><b>\${escapeHtml(job.model || 'Local Motion')}</b></div>
+          <div class="nova-review-item"><small>Статус</small><b>${escapeHtml(job.status || 'generating')}</b></div>
+          <div class="nova-review-item"><small>Прогресс</small><b>${Math.round(readNumber(job.progress, 0))}%</b></div>
+          <div class="nova-review-item"><small>Провайдер</small><b>${escapeHtml(job.provider || 'NOVA Local')}</b></div>
+          <div class="nova-review-item"><small>Модель</small><b>${escapeHtml(job.model || 'Local Motion')}</b></div>
         </div>
-        <div class="nova-review-billing \${job.mode === 'paid' ? 'paid' : ''}"><b>\${escapeHtml(copy.finance)}</b><span>NOVA не запускает новое платное задание автоматически после отмены.</span></div>
+        <div class="nova-review-billing ${job.mode === 'paid' ? 'paid' : ''}"><b>${escapeHtml(copy.finance)}</b><span>NOVA не запускает новое платное задание автоматически после отмены.</span></div>
         <div class="nova-generation-dialog-actions">
-          <button class="danger" type="button" data-cancel-action="confirm">\${escapeHtml(copy.confirm)}</button>
+          <button class="danger" type="button" data-cancel-action="confirm">${escapeHtml(copy.confirm)}</button>
           <button class="primary" type="button" data-cancel-action="close">Продолжить генерацию</button>
         </div>
-      </div>\`;
+      </div>`;
     dialog.onclick = (event) => {
       const action = event.target.closest('[data-cancel-action]')?.dataset.cancelAction;
       if (!action) return;
@@ -607,7 +607,7 @@
       window.NovaUnifiedVideoStudio?.open?.('create');
       const launch = $('#novaProMotion');
       if (launch) openReview(launch);
-      else status(\`Не удалось повторить задание \${jobId || ''}.\`);
+      else status(`Не удалось повторить задание ${jobId || ''}.`);
     }
   }
 
@@ -619,7 +619,7 @@
       requestAnimationFrame(() => enhanceJobCard(job));
       if (detail.status === 'preparing') {
         status(job.mode === 'paid'
-          ? \`Генерация запущена · \${job.costCredits || 0} кредитов.\`
+          ? `Генерация запущена · ${job.costCredits || 0} кредитов.`
           : 'Генерация запущена · $0 · 0 кредитов.');
       } else if (detail.status === 'canceled') {
         status(job.mode === 'paid' && job.refundPending
