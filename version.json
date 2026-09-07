@@ -1,7 +1,7 @@
 {
   "name": "NOVA",
-  "version": "27.22.0",
-  "pwa": "27.22.0",
+  "version": "27.23.0",
+  "pwa": "27.23.0",
   "mode": "free-only",
   "paidApis": false,
   "externalComputeRequiresConfirmation": true,
@@ -151,7 +151,7 @@
     "Colab fallback only after approval"
   ],
   "visionLive": true,
-  "visionLiveVersion": "1.8.0",
+  "visionLiveVersion": "1.9.0",
   "visionLiveFreeOnDevice": true,
   "visionLivePaidApi": false,
   "visionLiveCameraNarration": true,
@@ -353,5 +353,33 @@
     "detection confidence consistency"
   ],
   "visionFastApproachFalsePositiveReduction": true,
-  "visionFastApproachCaveat": "Visual heuristic only. Camera motion, zoom, lens changes, or partial occlusion can still affect apparent size growth; this is not physical distance, TTC, or collision measurement."
+  "visionFastApproachCaveat": "Visual heuristic only. Camera motion, zoom, lens changes, or partial occlusion can still affect apparent size growth; this is not physical distance, TTC, or collision measurement.",
+  "visionAutoSwitchDelayPresets": true,
+  "visionAutoSwitchDelayPresetDefault": "balanced",
+  "visionAutoSwitchDelayPresetValues": {
+    "fast": {
+      "lossToPhoneMs": 1500,
+      "recoveryToGlassesMs": 1000
+    },
+    "balanced": {
+      "lossToPhoneMs": 3000,
+      "recoveryToGlassesMs": 2000
+    },
+    "stable": {
+      "lossToPhoneMs": 6000,
+      "recoveryToGlassesMs": 4000
+    }
+  },
+  "visionAutoSwitchDelayPresetLabels": {
+    "fast": "Быстро",
+    "balanced": "Сбалансированно",
+    "stable": "Стабильно"
+  },
+  "visionAutoSwitchDelayPresetPersistent": true,
+  "visionAutoSwitchDelayPresetManualOverride": true,
+  "visionAutoSwitchDelayPresetVoiceCommands": [
+    "Нова, пресет задержки быстро",
+    "Нова, пресет задержки сбалансированно",
+    "Нова, пресет задержки стабильно"
+  ]
 }
