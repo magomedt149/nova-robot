@@ -1,7 +1,7 @@
 {
   "name": "NOVA",
-  "version": "27.24.0",
-  "pwa": "27.24.0",
+  "version": "27.25.0",
+  "pwa": "27.25.0",
   "mode": "free-only",
   "paidApis": false,
   "externalComputeRequiresConfirmation": true,
@@ -151,7 +151,7 @@
     "Colab fallback only after approval"
   ],
   "visionLive": true,
-  "visionLiveVersion": "1.10.0",
+  "visionLiveVersion": "1.11.0",
   "visionLiveFreeOnDevice": true,
   "visionLivePaidApi": false,
   "visionLiveCameraNarration": true,
@@ -418,5 +418,69 @@
   ],
   "visionFastApproachCrossingPersistenceFrames": 4,
   "visionFastApproachProfileExposedInState": true,
-  "visionFastApproachProfileCaveat": "Zone-specific thresholds are visual heuristics based on bounding-box growth and temporal tracking; they do not measure physical distance or collision time."
+  "visionFastApproachProfileCaveat": "Zone-specific thresholds are visual heuristics based on bounding-box growth and temporal tracking; they do not measure physical distance or collision time.",
+  "visionSettingsSuite": true,
+  "visionSettingsSuiteRelease": "unified-camera-and-approach-controls",
+  "visionApproachThresholdUi": true,
+  "visionApproachThresholdUiProfiles": [
+    "center",
+    "crossing",
+    "edge"
+  ],
+  "visionApproachThresholdUiEditableFields": [
+    "growthRatePerSec",
+    "minSignalStability",
+    "minApproachStreak",
+    "minAreaShare"
+  ],
+  "visionApproachThresholdPersistence": "localStorage",
+  "visionApproachThresholdReset": true,
+  "visionApproachCurrentValuesVisible": true,
+  "visionCrossingProfileLimitedWindow": true,
+  "visionCrossingProfileMaxFrames": 3,
+  "visionCameraAlertDurationSetting": true,
+  "visionCameraAlertDurationDefaultMs": 8000,
+  "visionCameraAlertDurationRangeMs": [
+    2000,
+    30000
+  ],
+  "visionCameraAlertUntilAcknowledged": true,
+  "visionCameraAlertAcknowledgementLabel": "Понятно",
+  "visionCameraAlertSettingsPersistent": true,
+  "visionCustomDelayPreset": true,
+  "visionCustomDelayPresetSaveCurrent": true,
+  "visionDelayPresetExactValuesVisible": true,
+  "visionDelayPresetValues": {
+    "fast": {
+      "lossToPhoneMs": 1500,
+      "recoveryToGlassesMs": 1000
+    },
+    "balanced": {
+      "lossToPhoneMs": 3000,
+      "recoveryToGlassesMs": 2000
+    },
+    "stable": {
+      "lossToPhoneMs": 6000,
+      "recoveryToGlassesMs": 4000
+    },
+    "custom": "user-saved current values"
+  },
+  "visionDelayPresetLegacyMigration": true,
+  "visionSettingsVoiceCommands": [
+    "Нова, пресет задержки быстро",
+    "Нова, пресет задержки сбалансированно",
+    "Нова, пресет задержки стабильно",
+    "Нова, пресет задержки мой",
+    "Нова, сохрани задержки как мой",
+    "Нова, покажи пороги приближения",
+    "Нова, уведомление 8 секунд",
+    "Нова, уведомление до подтверждения"
+  ],
+  "visionSettingsFixes": [
+    "legacy 3s/2s values migrate to Balanced preset",
+    "turning off until-acknowledged restores timer for an already visible alert",
+    "disabling visual alerts closes an already visible alert",
+    "central-corridor crossing profile expires and returns to center profile",
+    "threshold changes clear active tracks to avoid mixing old and new criteria"
+  ]
 }
