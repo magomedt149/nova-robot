@@ -1,7 +1,7 @@
 {
   "name": "NOVA",
-  "version": "27.23.1",
-  "pwa": "27.23.1",
+  "version": "27.24.0",
+  "pwa": "27.24.0",
   "mode": "free-only",
   "paidApis": false,
   "externalComputeRequiresConfirmation": true,
@@ -151,7 +151,7 @@
     "Colab fallback only after approval"
   ],
   "visionLive": true,
-  "visionLiveVersion": "1.9.1",
+  "visionLiveVersion": "1.10.0",
   "visionLiveFreeOnDevice": true,
   "visionLivePaidApi": false,
   "visionLiveCameraNarration": true,
@@ -381,5 +381,42 @@
     "Нова, пресет задержки быстро",
     "Нова, пресет задержки сбалансированно",
     "Нова, пресет задержки стабильно"
-  ]
+  ],
+  "visionFastApproachZoneProfiles": true,
+  "visionFastApproachProfiles": {
+    "center": {
+      "label": "central zone",
+      "corridor": [
+        0.36,
+        0.64
+      ],
+      "growthRatePerSec": 0.16,
+      "minApproachStreak": 2,
+      "minSignalStability": 0.62,
+      "minAreaShare": 0.05
+    },
+    "crossing": {
+      "label": "crossing central corridor",
+      "growthRatePerSec": 0.22,
+      "minApproachStreak": 2,
+      "minSignalStability": 0.68,
+      "minAreaShare": 0.045,
+      "detectsEntryOrJumpAcrossCorridor": true
+    },
+    "edge": {
+      "label": "frame edges",
+      "growthRatePerSec": 0.34,
+      "minApproachStreak": 3,
+      "minSignalStability": 0.76,
+      "minAreaShare": 0.09
+    }
+  },
+  "visionFastApproachProfileOrder": [
+    "center",
+    "crossing",
+    "edge"
+  ],
+  "visionFastApproachCrossingPersistenceFrames": 4,
+  "visionFastApproachProfileExposedInState": true,
+  "visionFastApproachProfileCaveat": "Zone-specific thresholds are visual heuristics based on bounding-box growth and temporal tracking; they do not measure physical distance or collision time."
 }
