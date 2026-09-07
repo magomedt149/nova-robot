@@ -12,7 +12,7 @@ NOVA 27.2 uses a free-only default policy.
 - Every manual Remote GPU submit, test, or recovery requires an explicit on-screen confirmation.
 - Netlify production deploys only when `.netlify-release` changes.
 - Netlify Deploy Preview and branch deploys are skipped automatically.
-- GitHub Actions workflows are manual-only; ordinary pushes do not start runners.
+- Public-repository checks and GitHub Pages deployment may run on pushes, and the local-only YouTube preview may run on its daily schedule. Workflows that can spend credits, start Remote GPU compute, make real calls, or publish externally remain manual/approval-gated.
 - A paid deploy, paid API, credit-consuming render, or other billable action must not be started without the owner's explicit permission.
 - Autocalls real phone calls are hard-disabled by NOVA FREE CALL LOCK because Autocalls telephony is usage-billed; no confirmation phrase can override this lock.
 - NOVA may use Autocalls development conversations with `type: "test"`, which Autocalls documents as free, but NOVA must never describe those as real telephone calls.

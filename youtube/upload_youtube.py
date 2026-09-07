@@ -94,6 +94,9 @@ video_id = response["id"]
 result = {
     "date": meta.get("date"),
     "title": meta.get("title"),
+    "content_id": meta.get("content_id"),
+    "content_fingerprint": meta.get("content_fingerprint"),
+    "voice_id": meta.get("render", {}).get("voice_id"),
     "video_id": video_id,
     "privacy_status_requested": requested_privacy,
     "channel_id": channel_id,
