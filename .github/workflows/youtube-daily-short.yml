@@ -8,6 +8,11 @@ on:
         required: false
         default: false
         type: boolean
+  schedule:
+    # GitHub cron is UTC. Run at both possible UTC times for 22:00 America/Los_Angeles;
+    # the timezone gate below allows only the real 22:00 local run (handles DST automatically).
+    - cron: '0 5 * * *'
+    - cron: '0 6 * * *'
   push:
     branches:
       - main
@@ -36,7 +41,23 @@ jobs:
         with:
           python-version: '3.11'
 
+      - name: Gate scheduled run to 22:00 Los Angeles
+        id: timegate
+        run: |
+          python - <<'PY'
+          import os
+          from datetime import datetime
+          from zoneinfo import ZoneInfo
+          event = os.environ.get('GITHUB_EVENT_NAME', '')
+          hour = datetime.now(ZoneInfo('America/Los_Angeles')).hour
+          ok = event != 'schedule' or hour == 22
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
+              f.write('allowed=' + str(ok).lower() + '\n')
+          print('event:', event, 'LA hour:', hour, 'allowed:', ok)
+          PY
+
       - name: Install free dependencies
+        if: ${{ steps.timegate.outputs.allowed == 'true' }}
         run: |
           sudo apt-get update
           sudo apt-get install -y ffmpeg fonts-dejavu-core
@@ -44,6 +65,7 @@ jobs:
           python -m pip install pillow piper-tts
 
       - name: Check queue date
+        if: ${{ steps.timegate.outputs.allowed == 'true' }}
         id: queue
         env:
           FORCE: ${{ inputs.force }}
@@ -63,15 +85,51 @@ jobs:
           PY
 
       - name: Download locked Irina voice
-        if: ${{ steps.queue.outputs.ready == 'true' }}
+        if: ${{ steps.timegate.outputs.allowed == 'true' && steps.queue.outputs.ready == 'true' }}
         run: python -m piper.download_voices ru_RU-irina-medium
 
       - name: Render 9x16 Short with exact Irina
-        if: ${{ steps.queue.outputs.ready == 'true' }}
+        if: ${{ steps.timegate.outputs.allowed == 'true' && steps.queue.outputs.ready == 'true' }}
         run: python youtube/render_short.py
 
+      - name: Validate final MP4 and package
+        if: ${{ steps.timegate.outputs.allowed == 'true' && steps.queue.outputs.ready == 'true' }}
+        run: |
+          test -s youtube_output/short.mp4
+          test -s youtube_output/thumbnail.jpg
+          test -s youtube_output/metadata.json
+          python - <<'PY'
+          import json, subprocess, sys
+          p='youtube_output/short.mp4'
+          raw=subprocess.check_output([
+            'ffprobe','-v','error','-show_entries',
+            'stream=codec_type,codec_name,width,height,r_frame_rate:format=duration,size',
+            '-of','json',p
+          ], text=True)
+          info=json.loads(raw)
+          streams=info.get('streams',[])
+          v=next((s for s in streams if s.get('codec_type')=='video'),None)
+          a=next((s for s in streams if s.get('codec_type')=='audio'),None)
+          errors=[]
+          if not v: errors.append('missing video stream')
+          else:
+            if v.get('codec_name')!='h264': errors.append('video codec must be h264')
+            if (v.get('width'),v.get('height'))!=(1080,1920): errors.append('video must be 1080x1920')
+          if not a: errors.append('missing audio stream')
+          elif a.get('codec_name')!='aac': errors.append('audio codec must be aac')
+          duration=float(info.get('format',{}).get('duration') or 0)
+          size=int(info.get('format',{}).get('size') or 0)
+          if duration <= 0: errors.append('duration must be > 0')
+          if size <= 0: errors.append('file size must be > 0')
+          print(json.dumps(info, ensure_ascii=False, indent=2))
+          if errors:
+            print('VALIDATION FAILED:', '; '.join(errors), file=sys.stderr)
+            sys.exit(1)
+          print('VALIDATION OK')
+          PY
+
       - name: Upload preview package
-        if: ${{ steps.queue.outputs.ready == 'true' }}
+        if: ${{ steps.timegate.outputs.allowed == 'true' && steps.queue.outputs.ready == 'true' }}
         uses: actions/upload-artifact@v4
         with:
           name: daily-youtube-short-preview
