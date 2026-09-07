@@ -9,10 +9,8 @@ on:
         default: false
         type: boolean
   schedule:
-    # GitHub cron is UTC. Run at both possible UTC times for 22:00 America/Los_Angeles;
-    # the timezone gate below allows only the real 22:00 local run (handles DST automatically).
-    - cron: '0 5 * * *'
-    - cron: '0 6 * * *'
+    - cron: '0 22 * * *'
+      timezone: 'America/Los_Angeles'
   push:
     branches:
       - main
@@ -41,59 +39,43 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Gate scheduled run to 22:00 Los Angeles
-        id: timegate
-        run: |
-          python - <<'PY'
-          import os
-          from datetime import datetime
-          from zoneinfo import ZoneInfo
-          event = os.environ.get('GITHUB_EVENT_NAME', '')
-          hour = datetime.now(ZoneInfo('America/Los_Angeles')).hour
-          ok = event != 'schedule' or hour == 22
-          with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
-              f.write('allowed=' + str(ok).lower() + '\n')
-          print('event:', event, 'LA hour:', hour, 'allowed:', ok)
-          PY
-
       - name: Install free dependencies
-        if: ${{ steps.timegate.outputs.allowed == 'true' }}
         run: |
           sudo apt-get update
           sudo apt-get install -y ffmpeg fonts-dejavu-core
           python -m pip install --upgrade pip
           python -m pip install pillow piper-tts
 
-      - name: Check queue date
-        if: ${{ steps.timegate.outputs.allowed == 'true' }}
+      - name: Check queue date — stale queue is an error
         id: queue
         env:
           FORCE: ${{ inputs.force }}
         run: |
           python - <<'PY'
-          import json, os
+          import json, os, sys
           from datetime import datetime
           from zoneinfo import ZoneInfo
           data = json.load(open('youtube_queue/today.json', encoding='utf-8'))
           today = datetime.now(ZoneInfo('America/Los_Angeles')).date().isoformat()
           force = os.environ.get('FORCE', 'false').lower() == 'true'
-          ok = (data.get('date') == today) or force
+          queue_date = str(data.get('date', ''))
+          ok = (queue_date == today) or force
           with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
               f.write('ready=' + str(ok).lower() + '\n')
-              f.write('queue_date=' + str(data.get('date', '')) + '\n')
-          print('California today:', today, 'queue:', data.get('date'), 'ready:', ok)
+              f.write('queue_date=' + queue_date + '\n')
+          print('California today:', today, 'queue:', queue_date, 'ready:', ok)
+          if not ok:
+              print(f'ERROR: stale queue date {queue_date}; expected {today}. Refusing false-success run.', file=sys.stderr)
+              sys.exit(1)
           PY
 
       - name: Download locked Irina voice
-        if: ${{ steps.timegate.outputs.allowed == 'true' && steps.queue.outputs.ready == 'true' }}
         run: python -m piper.download_voices ru_RU-irina-medium
 
       - name: Render 9x16 Short with exact Irina
-        if: ${{ steps.timegate.outputs.allowed == 'true' && steps.queue.outputs.ready == 'true' }}
         run: python youtube/render_short.py
 
       - name: Validate final MP4 and package
-        if: ${{ steps.timegate.outputs.allowed == 'true' && steps.queue.outputs.ready == 'true' }}
         run: |
           test -s youtube_output/short.mp4
           test -s youtube_output/thumbnail.jpg
@@ -111,25 +93,27 @@ jobs:
           v=next((s for s in streams if s.get('codec_type')=='video'),None)
           a=next((s for s in streams if s.get('codec_type')=='audio'),None)
           errors=[]
-          if not v: errors.append('missing video stream')
+          if not v:
+              errors.append('missing video stream')
           else:
-            if v.get('codec_name')!='h264': errors.append('video codec must be h264')
-            if (v.get('width'),v.get('height'))!=(1080,1920): errors.append('video must be 1080x1920')
-          if not a: errors.append('missing audio stream')
-          elif a.get('codec_name')!='aac': errors.append('audio codec must be aac')
+              if v.get('codec_name') != 'h264': errors.append('video codec must be h264')
+              if (v.get('width'), v.get('height')) != (1080, 1920): errors.append('video must be 1080x1920')
+          if not a:
+              errors.append('missing audio stream')
+          elif a.get('codec_name') != 'aac':
+              errors.append('audio codec must be aac')
           duration=float(info.get('format',{}).get('duration') or 0)
           size=int(info.get('format',{}).get('size') or 0)
           if duration <= 0: errors.append('duration must be > 0')
           if size <= 0: errors.append('file size must be > 0')
           print(json.dumps(info, ensure_ascii=False, indent=2))
           if errors:
-            print('VALIDATION FAILED:', '; '.join(errors), file=sys.stderr)
-            sys.exit(1)
+              print('VALIDATION FAILED:', '; '.join(errors), file=sys.stderr)
+              sys.exit(1)
           print('VALIDATION OK')
           PY
 
       - name: Upload preview package
-        if: ${{ steps.timegate.outputs.allowed == 'true' && steps.queue.outputs.ready == 'true' }}
         uses: actions/upload-artifact@v4
         with:
           name: daily-youtube-short-preview
