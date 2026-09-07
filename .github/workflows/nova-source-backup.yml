@@ -1,9 +1,8 @@
 name: NOVA source backup
 
 on:
-  push:
+  pull_request:
     paths:
-      - '.github/workflows/nova-source-backup.yml'
       - '.nova-backup-request'
   workflow_dispatch:
 
@@ -31,15 +30,9 @@ jobs:
           cat > backup_meta/README_RESTORE.txt <<'EOF'
           NOVA source backup
           Repository: magomedt149/nova-robot
-
-          This archive is a clean snapshot of the current tracked source tree.
-          It intentionally does not include GitHub secrets, Actions secrets, local .env files,
-          or any untracked files that are not committed to the repository.
-
-          Restore:
-          1. Unzip NOVA_SOURCE_SNAPSHOT.zip into a new folder.
-          2. Create a new Git repository if needed: git init
-          3. Add the files and commit them.
+          This archive is a clean snapshot of the tracked source tree.
+          It does not include GitHub Actions secrets, local .env files, or other untracked files.
+          Restore by unzipping NOVA_SOURCE_SNAPSHOT.zip into a new folder.
           EOF
           git archive --format=zip --output=NOVA_SOURCE_SNAPSHOT.zip HEAD
           sha256sum NOVA_SOURCE_SNAPSHOT.zip > backup_meta/SHA256SUMS.txt
