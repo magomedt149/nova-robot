@@ -1,7 +1,7 @@
 {
   "name": "NOVA",
-  "version": "27.23.0",
-  "pwa": "27.23.0",
+  "version": "27.23.1",
+  "pwa": "27.23.1",
   "mode": "free-only",
   "paidApis": false,
   "externalComputeRequiresConfirmation": true,
@@ -151,7 +151,7 @@
     "Colab fallback only after approval"
   ],
   "visionLive": true,
-  "visionLiveVersion": "1.9.0",
+  "visionLiveVersion": "1.9.1",
   "visionLiveFreeOnDevice": true,
   "visionLivePaidApi": false,
   "visionLiveCameraNarration": true,
@@ -315,7 +315,7 @@
   "visionAutoSwitchCountdownInConnectionStatus": true,
   "visionAutoSwitchVoiceNotifications": true,
   "visionAutoSwitchVisualNotifications": true,
-  "visionAutoSwitchVisualNotificationDurationMs": 4800,
+  "visionAutoSwitchVisualNotificationDurationMs": 8000,
   "visionAutoSwitchNotificationReason": true,
   "visionAutoSwitchNotificationEvent": "nova-vision-auto-camera-switch",
   "visionAutoSwitchNotificationPriority": "P2 informational; P3 danger narration remains higher priority",
