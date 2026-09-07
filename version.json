@@ -1,7 +1,7 @@
 {
   "name": "NOVA",
-  "version": "27.25.0",
-  "pwa": "27.25.0",
+  "version": "27.26.0",
+  "pwa": "27.26.0",
   "mode": "free-only",
   "paidApis": false,
   "externalComputeRequiresConfirmation": true,
@@ -483,5 +483,47 @@
     "central-corridor crossing profile expires and returns to center profile",
     "threshold changes clear active tracks to avoid mixing old and new criteria",
     "health runtime build and cache-busting query synchronized to NOVA 27.25.0"
+  ],
+  "generationUx": true,
+  "generationUxVersion": "1.0.0",
+  "generationReviewCard": true,
+  "generationReviewChecks": [
+    "source file",
+    "browser local render support",
+    "provider",
+    "model",
+    "duration",
+    "aspect ratio",
+    "billing mode",
+    "credit balance when paid"
+  ],
+  "generationJobProviderVisible": true,
+  "generationJobModelVisible": true,
+  "generationJobEtaVisible": true,
+  "generationJobCreditsVisible": true,
+  "generationErrorScreen": true,
+  "generationErrorTypes": [
+    "provider",
+    "network",
+    "model",
+    "file",
+    "saving"
+  ],
+  "generationCancellationFlow": true,
+  "generationCancellationStates": [
+    "confirmation",
+    "queued/preparing",
+    "generating",
+    "canceling",
+    "canceled",
+    "refund pending"
+  ],
+  "generationPaidModeRequiresExplicitPriceConfirmation": true,
+  "generationNoAutomaticPaidFallback": true,
+  "generationFreeModeCost": "$0 / 0 credits",
+  "generationCreditLedgerLabels": [
+    "charged",
+    "refunded",
+    "final cost"
   ]
 }
