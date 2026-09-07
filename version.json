@@ -1,7 +1,7 @@
 {
   "name": "NOVA",
-  "version": "27.21.0",
-  "pwa": "27.21.0",
+  "version": "27.22.0",
+  "pwa": "27.22.0",
   "mode": "free-only",
   "paidApis": false,
   "externalComputeRequiresConfirmation": true,
@@ -151,7 +151,7 @@
     "Colab fallback only after approval"
   ],
   "visionLive": true,
-  "visionLiveVersion": "1.7.0",
+  "visionLiveVersion": "1.8.0",
   "visionLiveFreeOnDevice": true,
   "visionLivePaidApi": false,
   "visionLiveCameraNarration": true,
@@ -332,5 +332,26 @@
   "visionAutoSwitchNotificationExamples": [
     "Переключаюсь на камеру телефона. Причина: WebRTC-соединение с очками прервано.",
     "Переключаюсь на камеру очков. Причина: камера очков снова подключена."
-  ]
+  ],
+  "visionFastApproachDetectionV2": true,
+  "visionFastApproachUsesTimeNormalizedGrowth": true,
+  "visionFastApproachGrowthMetric": "log(bbox area ratio) per second, EMA-smoothed",
+  "visionFastApproachGrowthEmaAlpha": 0.42,
+  "visionFastApproachCentralZone": [
+    0.36,
+    0.64
+  ],
+  "visionFastApproachRequiresTemporalStability": true,
+  "visionFastApproachMinApproachStreak": 2,
+  "visionFastApproachMinTrackAge": 3,
+  "visionFastApproachMinSignalStability": 0.6,
+  "visionFastApproachPrimaryGrowthRatePerSec": 0.18,
+  "visionFastApproachHighGrowthRatePerSec": 0.3,
+  "visionFastApproachStabilityInputs": [
+    "consecutive positive size-growth frames",
+    "central-zone persistence",
+    "detection confidence consistency"
+  ],
+  "visionFastApproachFalsePositiveReduction": true,
+  "visionFastApproachCaveat": "Visual heuristic only. Camera motion, zoom, lens changes, or partial occlusion can still affect apparent size growth; this is not physical distance, TTC, or collision measurement."
 }
