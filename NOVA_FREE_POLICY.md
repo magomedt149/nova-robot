@@ -31,3 +31,13 @@ Current policy version: **NOVA 27.2.1**
 - Automatic fallback to Netlify Functions is disabled in FREE mode.
 - A local command such as “диагностика NOVA” reports FREE LOCK/PWA/network status without a network request.
 - GitHub Pages is prepared for zero-build branch publishing with `.nojekyll`.
+
+
+## MCP Bridge
+
+- NOVA 27.27.0 includes `nova-mcp.js` as a browser MCP client bridge.
+- MCP does not auto-connect on startup.
+- External MCP `tools/call` is never automatic; each call requires explicit owner confirmation.
+- MCP bearer tokens are session-only and are not stored in `localStorage` or committed to GitHub.
+- GitHub Pages hosts only the NOVA client. A real MCP Streamable HTTP server must run separately, use HTTPS (except localhost development), and allow the NOVA web origin with CORS.
+- Adding MCP does not override NOVA FREE LOCK: paid APIs and billable external actions remain disabled by default.
