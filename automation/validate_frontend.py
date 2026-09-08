@@ -99,13 +99,28 @@ def main() -> int:
     version = str(version_data.get("version", "")).strip()
     if not version:
         fail("version.json has no version")
+    if version_data.get("pwa") != version:
+        fail(f"version.json pwa is not synchronized with version ({version})")
+    if version_data.get("healthRuntimeVersion") != version:
+        fail(f"version.json healthRuntimeVersion is not synchronized with version ({version})")
     if f"NOVA {version}" not in index:
         fail(f"index title is not synchronized with version.json ({version})")
+    if f'<span class="version">v{version}</span>' not in index:
+        fail(f"visible version badge is not synchronized with version.json ({version})")
+    if f"styles.css?v={version}" not in index:
+        fail(f"stylesheet cache marker is not synchronized with version.json ({version})")
+    if f"app.js?v={version}" not in index:
+        fail(f"app cache marker is not synchronized with version.json ({version})")
     app = (ROOT / "app.js").read_text(encoding="utf-8")
     if f"const VERSION = '{version}';" not in app:
         fail(f"app.js runtime version is not synchronized with version.json ({version})")
     if "versionBadge.textContent = `v${VERSION}`" not in app:
         fail("app.js does not synchronize the visible version badge at runtime")
+    health = (ROOT / "nova-health.js").read_text(encoding="utf-8")
+    if f"const BUILD = '{version}';" not in health:
+        fail(f"nova-health.js build is not synchronized with version.json ({version})")
+    if f"const APP_VERSION = '{version}';" not in sw:
+        fail(f"service-worker cache version is not synchronized with version.json ({version})")
 
     script_order = [local_path(src) for src in parser.scripts]
     for required in ("nova-health.js", "nova-auto-montage.js", "app.js"):

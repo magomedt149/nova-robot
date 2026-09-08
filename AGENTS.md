@@ -37,11 +37,12 @@ Treat GitHub Actions failures as a release-blocking signal, not as a reason to i
 1. Before declaring a NOVA update complete, inspect the latest `Validate NOVA` and `NOVA FREE — Check & GitHub Pages` runs for the current `main` head.
 2. If a validation job fails, inspect the failed step and its logs first. Apply the smallest repository fix that addresses the actual cause; do not blindly re-run a broken job.
 3. After a fix, confirm a fresh `Validate NOVA` run succeeds. A run cancelled only because a newer commit superseded it is not itself a product failure.
-4. Keep version metadata synchronized whenever the NOVA version changes: `version.json.version`, `version.json.pwa`, `version.json.healthRuntimeVersion`, `app.js` runtime VERSION, `nova-health.js` BUILD, and any cache/version marker required by the validator.
+4. Change the NOVA release number only with `python automation/bump_nova_version.py X.Y.Z`. It synchronizes `version.json`, `index.html`, `app.js`, `nova-health.js`, and the service-worker cache marker, then validates the result. Commit every generated change together in one atomic commit; never publish the version files as separate GitHub commits.
 5. Never weaken, skip, or delete a regression check merely to make CI green unless the check is demonstrably obsolete and the replacement provides equal or stronger protection.
 6. Preserve NOVA FREE LOCK: no paid API, paid render, credit use, or external paid compute may be enabled as part of an automatic repair.
 7. Prefer minimal, reversible fixes and preserve existing working behavior.
 8. When a failure is already fixed by a newer commit, do not revert the newer working state just to repair the historical failed run.
+9. Before pushing any release commit, run `python automation/bump_nova_version.py --check`, `python automation/validate_frontend.py`, and `python tests/run_static_tests.py` locally. Do not push when any command fails.
 
 ## User command: «добавь и допиши»
 
