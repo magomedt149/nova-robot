@@ -1,4 +1,4 @@
-const CACHE = 'nova-v96-credit-history-20260907';
+const CACHE = 'nova-v97-mcp-20260908';
 const API_CACHE = 'nova-api-economy-v2';
 const METERED_NETLIFY_HOST = /(^|\\.)netlify\\.app$/i.test(self.location.hostname);
 const YOUTUBE_TTL_MS = 24 * 60 * 60 * 1000;
@@ -11,6 +11,7 @@ const CORE = [
   './version.json',
   './styles.css',
   './app.js',
+  './nova-mcp.js',
   './nova-health.js',
   './nova-auto-montage.js',
   './english-lessons.js',
@@ -79,7 +80,7 @@ self.addEventListener('install', (event) => {
     const results = await Promise.allSettled(CORE.map((path) => cache.add(path)));
     const failed = CORE.filter((_, index) => results[index].status === 'rejected');
     if (failed.length) console.warn('[NOVA SW] Optional cache misses:', failed);
-    for (const critical of ['./index.html', './app.js', './styles.css']) {
+    for (const critical of ['./index.html', './app.js', './nova-mcp.js', './styles.css']) {
       if (!(await cache.match(critical, { ignoreSearch: true }))) await cache.add(critical);
     }
   })());
