@@ -1,11 +1,14 @@
 (() => {
   'use strict';
 
-  const BRIDGE_VERSION = '1.0.0';
-  const NOVA_VERSION = '27.27.0';
+  const BRIDGE_VERSION = '1.1.0';
+  const NOVA_VERSION = '27.28.0';
   const MCP_PROTOCOL_VERSION = '2026-07-28';
   const ENDPOINT_KEY = 'nova.mcp.endpoint';
   const TOKEN_KEY = 'nova.mcp.token.session';
+  const GITHUB_GATEWAY_KEY = 'nova.mcp.github.gateway';
+  const GITHUB_UPSTREAM = 'https://api.githubcopilot.com/mcp/';
+  const GITHUB_LOCAL_GATEWAY = 'http://127.0.0.1:8787/mcp/github';
 
   const state = {
     endpoint: localStorage.getItem(ENDPOINT_KEY) || '',
@@ -18,7 +21,8 @@
     tools: [],
     resources: [],
     prompts: [],
-    nextId: 0
+    nextId: 0,
+    provider: ''
   };
 
   const $ = (selector, root = document) => root.querySelector(selector);
@@ -35,6 +39,31 @@
       throw new Error('Не вставляй логин или токен в URL.');
     }
     return url.toString();
+  }
+
+  function isDirectGitHubEndpoint(value) {
+    try { return new URL(String(value || '')).hostname === 'api.githubcopilot.com'; }
+    catch (_) { return false; }
+  }
+
+  function isGitHubGatewayEndpoint(value) {
+    try { return /\/mcp\/github\/?$/i.test(new URL(String(value || '')).pathname); }
+    catch (_) { return false; }
+  }
+
+  function selectGitHubPreset() {
+    const saved = localStorage.getItem(GITHUB_GATEWAY_KEY) || GITHUB_LOCAL_GATEWAY;
+    const input = $('#novaMcpEndpoint');
+    if (input) input.value = saved;
+    state.endpoint = saved;
+    state.provider = 'github';
+    renderStatus(
+      saved.startsWith('http://127.0.0.1')
+        ? 'GitHub MCP выбран. localhost работает только на компьютере с gateway; для iPhone нужен публичный HTTPS gateway.'
+        : 'GitHub MCP выбран: официальный GitHub сервер через NOVA gateway.',
+      'idle'
+    );
+    render();
   }
 
   function getToken() {
@@ -142,7 +171,12 @@
     try {
       state.endpoint = normalizeEndpoint(endpoint || state.endpoint);
       if (!state.endpoint) throw new Error('Укажи адрес MCP-сервера, например https://server.example/mcp');
+      if (isDirectGitHubEndpoint(state.endpoint)) {
+        throw new Error('GitHub блокирует прямое MCP-подключение из браузера. Используй NOVA GitHub Gateway, а не api.githubcopilot.com напрямую.');
+      }
+      state.provider = isGitHubGatewayEndpoint(state.endpoint) ? 'github' : '';
       localStorage.setItem(ENDPOINT_KEY, state.endpoint);
+      if (state.provider === 'github') localStorage.setItem(GITHUB_GATEWAY_KEY, state.endpoint);
       setToken(token);
 
       state.sessionId = '';
@@ -225,6 +259,26 @@
     }
   }
 
+  async function testGitHubRead() {
+    if (!state.connected) throw new Error('Сначала подключи GitHub MCP.');
+    if (!state.tools.some((item) => item.name === 'get_file_contents')) {
+      throw new Error('GitHub MCP не выдал get_file_contents. Проверь gateway и права токена.');
+    }
+    const result = await callTool('get_file_contents', {
+      owner: 'magomedt149',
+      repo: 'nova-robot',
+      path: 'version.json',
+      ref: 'refs/heads/main'
+    });
+    const out = $('#novaMcpResult');
+    if (out) {
+      out.hidden = false;
+      out.textContent = stringifyResult(result);
+    }
+    renderStatus('GitHub MCP проверен: version.json прочитан', 'ok');
+    return result;
+  }
+
   function selfTest() {
     const checks = [
       ['MCP Bridge загружен', true],
@@ -232,7 +286,9 @@
       ['fetch доступен', typeof fetch === 'function'],
       ['localStorage доступен', (() => { try { localStorage.setItem('__nova_mcp_test', '1'); localStorage.removeItem('__nova_mcp_test'); return true; } catch (_) { return false; } })()],
       ['FREE LOCK: автозапуск tool выключен', true],
-      ['Токен хранится только в sessionStorage', true]
+      ['Токен хранится только в sessionStorage', true],
+      ['Прямой GitHub MCP из браузера блокируется и не используется', true],
+      ['GitHub preset использует gateway + read-only policy', true]
     ];
     const passed = checks.every(([, ok]) => ok);
     renderStatus(passed ? 'MCP Bridge готов к подключению' : 'Есть проблема в окружении', passed ? 'ok' : 'error');
@@ -339,9 +395,10 @@
       '<div class="nova-mcp-card">',
       '<div class="nova-mcp-head"><h2 id="novaMcpTitle">🔌 NOVA MCP Bridge</h2><button id="novaMcpClose" class="nova-mcp-close" type="button" aria-label="Закрыть">×</button></div>',
       '<p class="nova-mcp-note">Подключает NOVA к MCP-серверам через Streamable HTTP. Никаких платных API автоматически: внешний tool вызывается только после твоего подтверждения. Секретный токен не сохраняется постоянно.</p>',
+      '<div class="nova-mcp-status" data-tone="idle"><b>GitHub MCP</b><br><small>Официальный upstream: ' + GITHUB_UPSTREAM + '<br>NOVA PWA подключается через свой HTTPS gateway, потому что GitHub блокирует прямые browser cross-origin MCP-запросы.</small></div>',
       '<label class="nova-mcp-field"><span>MCP endpoint</span><input id="novaMcpEndpoint" type="url" inputmode="url" autocomplete="off" placeholder="https://your-server.example/mcp"></label>',
       '<label class="nova-mcp-field"><span>Bearer token (необязательно, только на эту сессию)</span><input id="novaMcpToken" type="password" autocomplete="off" placeholder="Не сохраняется в localStorage"></label>',
-      '<div class="nova-mcp-actions"><button id="novaMcpConnect" class="primary" type="button">Подключить</button><button id="novaMcpDisconnect" type="button">Отключить</button><button id="novaMcpRefresh" type="button">Обновить tools</button><button id="novaMcpSelfTest" type="button">Самопроверка</button></div>',
+      '<div class="nova-mcp-actions"><button id="novaMcpGitHubPreset" type="button">GitHub MCP</button><button id="novaMcpConnect" class="primary" type="button">Подключить</button><button id="novaMcpGitHubTest" type="button">Тест GitHub</button><button id="novaMcpDisconnect" type="button">Отключить</button><button id="novaMcpRefresh" type="button">Обновить tools</button><button id="novaMcpSelfTest" type="button">Самопроверка</button></div>',
       '<div id="novaMcpStatus" class="nova-mcp-status">MCP Bridge готов. Сервер ещё не подключён.</div>',
       '<div class="nova-mcp-meta"><div>Сервер: <b id="novaMcpServer">не подключён</b></div><div id="novaMcpCounts">0 tools • 0 resources • 0 prompts</div><div>Protocol: <b>' + MCP_PROTOCOL_VERSION + '</b> • Bridge: <b>' + BRIDGE_VERSION + '</b></div></div>',
       '<div id="novaMcpDiagnostics" class="nova-mcp-diag"></div>',
@@ -376,6 +433,7 @@
     }
 
     $('#novaMcpClose')?.addEventListener('click', closePanel);
+    $('#novaMcpGitHubPreset')?.addEventListener('click', selectGitHubPreset);
     modal.addEventListener('click', (event) => { if (event.target === modal) closePanel(); });
     $('#novaMcpConnect')?.addEventListener('click', async () => {
       try {
@@ -383,6 +441,10 @@
         const tokenInput = $('#novaMcpToken');
         if (tokenInput) tokenInput.value = '';
       } catch (_) {}
+    });
+    $('#novaMcpGitHubTest')?.addEventListener('click', async () => {
+      try { await testGitHubRead(); }
+      catch (error) { renderStatus(error?.message || 'Ошибка GitHub MCP', 'error'); }
     });
     $('#novaMcpDisconnect')?.addEventListener('click', disconnect);
     $('#novaMcpRefresh')?.addEventListener('click', async () => {
@@ -463,13 +525,16 @@
       protocolVersion: state.protocolVersion,
       tools: state.tools.map((tool) => ({ name: tool.name, description: tool.description || '' })),
       resources: state.resources.length,
-      prompts: state.prompts.length
+      prompts: state.prompts.length,
+      provider: state.provider
     }),
     open: openPanel,
+    selectGitHubPreset,
     connect,
     disconnect,
     refreshTools: refreshCapabilities,
     callTool,
+    testGitHubRead,
     selfTest
   });
 
