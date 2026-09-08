@@ -9,6 +9,11 @@
   const BYPASS_ATTR = 'data-nova-generation-ux-bypass';
   let pendingLaunchButton = null;
 
+  const CREDIT_LEDGER_KEY = 'nova.creditLedger.v1';
+  const CREDIT_LEDGER_LIMIT = 500;
+  let creditLedger = loadCreditLedger();
+  let creditHistoryFilters = { jobId: 'all', type: 'all', status: 'all' };
+
   function escapeHtml(value) {
     return String(value ?? '')
       .replace(/&/g, '&amp;')
@@ -474,6 +479,335 @@
     }
   }
 
+
+  function loadCreditLedger() {
+    try {
+      const parsed = JSON.parse(localStorage.getItem(CREDIT_LEDGER_KEY) || '[]');
+      return Array.isArray(parsed) ? parsed.filter((row) => row && row.id && row.jobId).slice(0, CREDIT_LEDGER_LIMIT) : [];
+    } catch (_) {
+      return [];
+    }
+  }
+
+  function saveCreditLedger() {
+    try {
+      localStorage.setItem(CREDIT_LEDGER_KEY, JSON.stringify(creditLedger.slice(0, CREDIT_LEDGER_LIMIT)));
+    } catch (_) {}
+  }
+
+  function operationLabel(type) {
+    return ({
+      charge: 'Списание',
+      refund: 'Возврат',
+      final: 'Итоговая стоимость'
+    })[type] || 'Операция';
+  }
+
+  function operationStatusLabel(value) {
+    return ({
+      pending: 'Ожидает',
+      processing: 'Обрабатывается',
+      completed: 'Готово',
+      failed: 'Ошибка'
+    })[value] || String(value || 'Ожидает');
+  }
+
+  function formatCreditAmount(row) {
+    const amount = Math.max(0, readNumber(row?.amount, 0));
+    if (row?.type === 'refund') return `+${amount} кр.`;
+    if (row?.type === 'charge') return `−${amount} кр.`;
+    return `${amount} кр.`;
+  }
+
+  function formatLedgerTime(value) {
+    const date = new Date(readNumber(value, Date.now()));
+    try {
+      return date.toLocaleString('ru-RU', {
+        day: '2-digit',
+        month: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+    } catch (_) {
+      return date.toISOString();
+    }
+  }
+
+  function upsertCreditLedger(entry) {
+    const next = {
+      id: String(entry.id || `${entry.jobId || 'job'}:${entry.type || 'operation'}`),
+      jobId: String(entry.jobId || 'unknown'),
+      type: ['charge', 'refund', 'final'].includes(entry.type) ? entry.type : 'final',
+      amount: Math.max(0, readNumber(entry.amount, 0)),
+      status: ['pending', 'processing', 'completed', 'failed'].includes(entry.status) ? entry.status : 'pending',
+      provider: entry.provider || 'NOVA Local',
+      model: entry.model || 'Local Motion',
+      note: entry.note || '',
+      createdAt: readNumber(entry.createdAt, Date.now()),
+      updatedAt: Date.now()
+    };
+    const index = creditLedger.findIndex((row) => row.id === next.id);
+    if (index >= 0) {
+      next.createdAt = creditLedger[index].createdAt || next.createdAt;
+      creditLedger[index] = { ...creditLedger[index], ...next };
+    } else {
+      creditLedger.unshift(next);
+    }
+    creditLedger = creditLedger
+      .sort((a, b) => readNumber(b.updatedAt || b.createdAt, 0) - readNumber(a.updatedAt || a.createdAt, 0))
+      .slice(0, CREDIT_LEDGER_LIMIT);
+    saveCreditLedger();
+    try {
+      window.dispatchEvent(new CustomEvent('nova-credit-ledger-updated', { detail: { entry: { ...next } } }));
+    } catch (_) {}
+    if (!$('#novaCreditHistoryDialog')?.hidden) renderCreditHistory();
+    return { ...next };
+  }
+
+  function syncCreditLedgerFromJob(job, detail = {}) {
+    if (!job?.id) return;
+    const paid = job.mode === 'paid';
+    const expected = Math.max(0, readNumber(job.costCredits, parseCredits(job.cost)));
+    const charged = Math.max(0, readNumber(job.chargedCredits, 0));
+    const refunded = Math.max(0, readNumber(job.refundedCredits, 0));
+    const terminal = ['completed', 'failed', 'canceled'].includes(job.status);
+
+    if (paid && (expected > 0 || charged > 0)) {
+      const chargeStatus = charged > 0
+        ? 'completed'
+        : (terminal && ['failed', 'canceled'].includes(job.status) ? 'failed' : 'processing');
+      upsertCreditLedger({
+        id: `${job.id}:charge`,
+        jobId: job.id,
+        type: 'charge',
+        amount: charged || expected,
+        status: chargeStatus,
+        provider: job.provider,
+        model: job.model,
+        note: charged > 0
+          ? 'Списание подтверждено.'
+          : (chargeStatus === 'failed' ? 'Фактическое списание не подтверждено.' : 'Ожидаем подтверждение фактического списания.')
+      });
+    }
+
+    if (job.refundPending || refunded > 0 || detail.refundStatus) {
+      const refundStatus = refunded > 0
+        ? 'completed'
+        : (detail.refundStatus === 'failed' ? 'failed' : 'processing');
+      upsertCreditLedger({
+        id: `${job.id}:refund`,
+        jobId: job.id,
+        type: 'refund',
+        amount: refunded || charged || expected,
+        status: refundStatus,
+        provider: job.provider,
+        model: job.model,
+        note: refunded > 0
+          ? 'Возврат подтверждён.'
+          : (refundStatus === 'failed' ? 'Возврат не подтверждён провайдером.' : 'Возврат обрабатывается.')
+      });
+    }
+
+    if (terminal) {
+      let finalAmount = 0;
+      let finalStatus = 'completed';
+      let note = '';
+      if (!paid) {
+        finalAmount = 0;
+        note = 'Бесплатное задание · $0 · 0 кредитов.';
+      } else if (charged > 0) {
+        finalAmount = Math.max(0, charged - refunded);
+        if (job.refundPending && refunded <= 0) {
+          finalStatus = 'processing';
+          note = 'Итог изменится после подтверждения возврата.';
+        } else {
+          note = 'Итог рассчитан по подтверждённым операциям.';
+        }
+      } else if (job.status === 'completed' && expected > 0) {
+        finalAmount = expected;
+        finalStatus = 'processing';
+        note = 'Ожидаем подтверждение фактического списания.';
+      } else {
+        finalAmount = 0;
+        note = 'Списание не подтверждено.';
+      }
+      upsertCreditLedger({
+        id: `${job.id}:final`,
+        jobId: job.id,
+        type: 'final',
+        amount: finalAmount,
+        status: finalStatus,
+        provider: job.provider,
+        model: job.model,
+        note
+      });
+    }
+  }
+
+  function ensureCreditHistoryStyles() {
+    if ($('#novaCreditHistoryStyles')) return;
+    const style = document.createElement('style');
+    style.id = 'novaCreditHistoryStyles';
+    style.textContent = `
+      .nova-credit-history-open{border:1px solid rgba(88,220,170,.22);border-radius:10px;background:rgba(31,180,126,.11);color:#9ff1d0;padding:7px 9px;font-weight:850;font-size:11px}
+      .nova-credit-card-open{margin-top:7px;border:1px solid rgba(88,220,170,.18);border-radius:9px;background:rgba(31,180,126,.08);color:#a6efd3;padding:7px 9px;font-size:10px;font-weight:800}
+      .nova-credit-summary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin:12px 0}.nova-credit-summary article{padding:10px;border-radius:13px;border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.045)}.nova-credit-summary small{display:block;color:#8fa8cc;font-size:10px}.nova-credit-summary b{display:block;margin-top:4px;font-size:16px}
+      .nova-credit-filters{display:grid;grid-template-columns:1.3fr 1fr 1fr auto;gap:7px;margin:10px 0}.nova-credit-filters select,.nova-credit-filters button{min-width:0;border:1px solid rgba(255,255,255,.12);border-radius:11px;background:#071027;color:#eef5ff;padding:9px;font:inherit;font-size:11px}.nova-credit-filters button{font-weight:800}
+      .nova-credit-table{display:grid;gap:7px}.nova-credit-row{display:grid;grid-template-columns:minmax(120px,1.4fr) minmax(90px,.8fr) minmax(86px,.7fr) minmax(100px,.8fr);gap:8px;align-items:center;padding:10px;border-radius:13px;border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.035)}.nova-credit-row-main b{display:block;font-size:12px}.nova-credit-row-main span,.nova-credit-row small{display:block;margin-top:3px;color:#8fa9cf;font-size:10px}.nova-credit-amount{font-weight:900;font-size:13px}.nova-credit-status{display:inline-flex;justify-content:center;padding:5px 7px;border-radius:999px;font-size:10px;font-weight:850;border:1px solid rgba(255,255,255,.10)}.nova-credit-status[data-status="completed"]{color:#91ecc8;background:rgba(25,171,112,.10);border-color:rgba(65,225,160,.20)}.nova-credit-status[data-status="processing"],.nova-credit-status[data-status="pending"]{color:#ffd495;background:rgba(188,117,26,.10);border-color:rgba(255,192,93,.22)}.nova-credit-status[data-status="failed"]{color:#ffb5c0;background:rgba(188,43,63,.10);border-color:rgba(255,91,112,.22)}.nova-credit-empty{padding:28px;text-align:center;color:#91abd0;border:1px dashed rgba(255,255,255,.12);border-radius:14px}.nova-credit-note{grid-column:1/-1;color:#9bb0d0;font-size:10px}
+      @media(max-width:620px){.nova-credit-summary{grid-template-columns:1fr 1fr}.nova-credit-filters{grid-template-columns:1fr 1fr}.nova-credit-row{grid-template-columns:1fr 1fr}.nova-credit-note{grid-column:1/-1}}
+    `;
+    document.head.appendChild(style);
+  }
+
+  function ensureCreditHistoryDialog() {
+    let dialog = $('#novaCreditHistoryDialog');
+    if (dialog) return dialog;
+    dialog = document.createElement('section');
+    dialog.id = 'novaCreditHistoryDialog';
+    dialog.className = 'nova-generation-dialog';
+    dialog.hidden = true;
+    dialog.setAttribute('role', 'dialog');
+    dialog.setAttribute('aria-modal', 'true');
+    document.body.appendChild(dialog);
+    return dialog;
+  }
+
+  function creditRowsForJob(jobId) {
+    return creditLedger.filter((row) => jobId === 'all' || row.jobId === jobId);
+  }
+
+  function creditHistorySummary(jobId = 'all') {
+    const rows = creditRowsForJob(jobId);
+    const charges = rows.filter((row) => row.type === 'charge' && row.status === 'completed')
+      .reduce((sum, row) => sum + readNumber(row.amount, 0), 0);
+    const refunds = rows.filter((row) => row.type === 'refund' && row.status === 'completed')
+      .reduce((sum, row) => sum + readNumber(row.amount, 0), 0);
+    const finalsByJob = new Map();
+    rows.filter((row) => row.type === 'final').forEach((row) => {
+      const prev = finalsByJob.get(row.jobId);
+      if (!prev || readNumber(row.updatedAt, 0) >= readNumber(prev.updatedAt, 0)) finalsByJob.set(row.jobId, row);
+    });
+    const finalCost = [...finalsByJob.values()].reduce((sum, row) => sum + readNumber(row.amount, 0), 0);
+    const processing = rows.filter((row) => ['pending', 'processing'].includes(row.status)).length;
+    return { charges, refunds, finalCost, processing };
+  }
+
+  function filteredCreditLedger() {
+    return creditLedger.filter((row) => {
+      if (creditHistoryFilters.jobId !== 'all' && row.jobId !== creditHistoryFilters.jobId) return false;
+      if (creditHistoryFilters.type !== 'all' && row.type !== creditHistoryFilters.type) return false;
+      if (creditHistoryFilters.status !== 'all' && row.status !== creditHistoryFilters.status) return false;
+      return true;
+    });
+  }
+
+  function renderCreditHistory() {
+    const dialog = ensureCreditHistoryDialog();
+    const jobIds = [...new Set(creditLedger.map((row) => row.jobId))];
+    if (creditHistoryFilters.jobId !== 'all' && !jobIds.includes(creditHistoryFilters.jobId)) creditHistoryFilters.jobId = 'all';
+    const summary = creditHistorySummary(creditHistoryFilters.jobId);
+    const rows = filteredCreditLedger();
+
+    const jobOptions = ['<option value="all">Все задания</option>']
+      .concat(jobIds.map((id) => `<option value="${escapeHtml(id)}" ${creditHistoryFilters.jobId === id ? 'selected' : ''}>${escapeHtml(id)}</option>`))
+      .join('');
+
+    const body = rows.length
+      ? rows.map((row) => `
+          <article class="nova-credit-row">
+            <div class="nova-credit-row-main"><b>${escapeHtml(operationLabel(row.type))}</b><span>${escapeHtml(row.jobId)} · ${escapeHtml(formatLedgerTime(row.updatedAt || row.createdAt))}</span></div>
+            <div><small>Провайдер</small><b>${escapeHtml(row.provider || 'NOVA Local')}</b></div>
+            <div class="nova-credit-amount">${escapeHtml(formatCreditAmount(row))}</div>
+            <div><span class="nova-credit-status" data-status="${escapeHtml(row.status)}">${escapeHtml(operationStatusLabel(row.status))}</span></div>
+            <div class="nova-credit-note">${escapeHtml(row.model || 'Local Motion')}${row.note ? ` · ${escapeHtml(row.note)}` : ''}</div>
+          </article>`).join('')
+      : '<div class="nova-credit-empty">По выбранным фильтрам операций пока нет.</div>';
+
+    dialog.innerHTML = `
+      <div class="nova-generation-dialog-card">
+        <div class="nova-generation-dialog-head">
+          <div><h3>💳 История операций с кредитами</h3><p>Списания, возвраты и итоговая стоимость по заданиям NOVA. Локальная история хранится на этом устройстве.</p></div>
+          <button class="nova-generation-dialog-close" type="button" data-credit-action="close" aria-label="Закрыть">×</button>
+        </div>
+        <div class="nova-credit-summary">
+          <article><small>Списано</small><b>${summary.charges} кр.</b></article>
+          <article><small>Возвращено</small><b>${summary.refunds} кр.</b></article>
+          <article><small>Итоговая стоимость</small><b>${summary.finalCost} кр.</b></article>
+          <article><small>В обработке</small><b>${summary.processing}</b></article>
+        </div>
+        <div class="nova-credit-filters">
+          <select data-credit-filter="jobId" aria-label="Фильтр по заданию">${jobOptions}</select>
+          <select data-credit-filter="type" aria-label="Фильтр по операции">
+            <option value="all" ${creditHistoryFilters.type === 'all' ? 'selected' : ''}>Все операции</option>
+            <option value="charge" ${creditHistoryFilters.type === 'charge' ? 'selected' : ''}>Списания</option>
+            <option value="refund" ${creditHistoryFilters.type === 'refund' ? 'selected' : ''}>Возвраты</option>
+            <option value="final" ${creditHistoryFilters.type === 'final' ? 'selected' : ''}>Итоговая стоимость</option>
+          </select>
+          <select data-credit-filter="status" aria-label="Фильтр по статусу">
+            <option value="all" ${creditHistoryFilters.status === 'all' ? 'selected' : ''}>Все статусы</option>
+            <option value="processing" ${creditHistoryFilters.status === 'processing' ? 'selected' : ''}>Обрабатывается</option>
+            <option value="completed" ${creditHistoryFilters.status === 'completed' ? 'selected' : ''}>Готово</option>
+            <option value="failed" ${creditHistoryFilters.status === 'failed' ? 'selected' : ''}>Ошибка</option>
+          </select>
+          <button type="button" data-credit-action="reset">Сбросить</button>
+        </div>
+        <div class="nova-credit-table">${body}</div>
+        <div class="nova-generation-dialog-actions">
+          <button class="primary" type="button" data-credit-action="close">Закрыть</button>
+        </div>
+      </div>`;
+
+    dialog.onchange = (event) => {
+      const key = event.target?.dataset?.creditFilter;
+      if (!key) return;
+      creditHistoryFilters = { ...creditHistoryFilters, [key]: event.target.value || 'all' };
+      renderCreditHistory();
+    };
+    dialog.onclick = (event) => {
+      const action = event.target.closest('[data-credit-action]')?.dataset.creditAction;
+      if (!action) return;
+      if (action === 'close') dialog.hidden = true;
+      if (action === 'reset') {
+        creditHistoryFilters = { jobId: 'all', type: 'all', status: 'all' };
+        renderCreditHistory();
+      }
+    };
+  }
+
+  function openCreditHistory(jobId = 'all') {
+    ensureCreditHistoryStyles();
+    ensureCreditHistoryDialog();
+    creditHistoryFilters = { ...creditHistoryFilters, jobId: jobId || 'all' };
+    renderCreditHistory();
+    $('#novaCreditHistoryDialog').hidden = false;
+  }
+
+  function ensureCreditHistoryButton() {
+    const head = $('.nova-generation-head');
+    if (!head || $('#novaCreditHistoryOpen', head)) return Boolean(head);
+    const button = document.createElement('button');
+    button.id = 'novaCreditHistoryOpen';
+    button.className = 'nova-credit-history-open';
+    button.type = 'button';
+    button.textContent = '💳 История кредитов';
+    button.addEventListener('click', () => openCreditHistory('all'));
+    head.appendChild(button);
+    return true;
+  }
+
+  function ensureJobCreditButton(job) {
+    const card = document.querySelector(`.nova-generation-job[data-job-id="${CSS.escape(job.id)}"]`);
+    if (!card || $('.nova-credit-card-open', card)) return;
+    const button = document.createElement('button');
+    button.className = 'nova-credit-card-open';
+    button.type = 'button';
+    button.textContent = '💳 История кредитов этого задания';
+    button.addEventListener('click', () => openCreditHistory(job.id));
+    const summary = $('.nova-job-ux-summary', card);
+    if (summary) summary.insertAdjacentElement('afterend', button);
+    else card.appendChild(button);
+  }
+
   function ensureCancelDialog() {
     let dialog = $('#novaGenerationCancelDialog');
     if (dialog) return dialog;
@@ -616,7 +950,8 @@
       const detail = event.detail || {};
       if (!detail.id) return;
       const job = normalizeJob(detail);
-      requestAnimationFrame(() => enhanceJobCard(job));
+      syncCreditLedgerFromJob(job, detail);
+      requestAnimationFrame(() => { enhanceJobCard(job); ensureJobCreditButton(job); ensureCreditHistoryButton(); });
       if (detail.status === 'preparing') {
         status(job.mode === 'paid'
           ? `Генерация запущена · ${job.costCredits || 0} кредитов.`
@@ -659,8 +994,17 @@
 
   function install() {
     ensureStyles();
+    ensureCreditHistoryStyles();
     ensureReviewDialog();
     ensureCancelDialog();
+    ensureCreditHistoryDialog();
+    ensureCreditHistoryButton();
+    if (!ensureCreditHistoryButton()) {
+      const observer = new MutationObserver(() => {
+        if (ensureCreditHistoryButton()) observer.disconnect();
+      });
+      observer.observe(document.documentElement, { childList: true, subtree: true });
+    }
     wireEvents();
     window.NovaGenerationUX = Object.freeze({
       openReview: () => {
@@ -670,6 +1014,25 @@
       getJob(id) {
         const job = jobs.get(id);
         return job ? { ...job } : null;
+      },
+      openCreditHistory(jobId = 'all') {
+        openCreditHistory(jobId);
+      },
+      getCreditHistory() {
+        return creditLedger.map((row) => ({ ...row }));
+      },
+      recordCreditOperation(entry = {}) {
+        if (!entry.jobId) throw new Error('Для операции нужен jobId.');
+        return upsertCreditLedger({
+          id: entry.id || `${entry.jobId}:${entry.type || 'final'}`,
+          jobId: entry.jobId,
+          type: entry.type || 'final',
+          amount: entry.amount || 0,
+          status: entry.status || 'pending',
+          provider: entry.provider || 'NOVA',
+          model: entry.model || '',
+          note: entry.note || ''
+        });
       }
     });
   }
