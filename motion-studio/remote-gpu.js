@@ -152,6 +152,46 @@ function confirmRemoteCompute(action='Remote GPU'){
   if(!ok)setStatus('FREE LOCK: удалённый запуск отменён. Локальные функции остаются бесплатными.','ok');
   return ok;
 }
+function approvalStable(value){
+  if(Array.isArray(value))return value.map(approvalStable);
+  if(value&&typeof value==='object'){
+    const out={};
+    const volatile=new Set(['created_at','updated_at','job_id','defer_start']);
+    Object.keys(value).sort().forEach(key=>{
+      if(!volatile.has(key))out[key]=approvalStable(value[key]);
+    });
+    return out;
+  }
+  return value;
+}
+function approvalFileMeta(file){
+  if(!file)return null;
+  return {
+    name:String(file.name||''),
+    size:Number(file.size||0),
+    type:String(file.type||'')
+  };
+}
+function remoteApprovalKey(job,source,reference,audioTracks=[]){
+  const payload={
+    job:approvalStable(job||{}),
+    source:approvalFileMeta(source),
+    reference:approvalFileMeta(reference),
+    audio:(audioTracks||[]).map(approvalFileMeta)
+  };
+  const text=JSON.stringify(payload);
+  let hash=2166136261;
+  for(let i=0;i<text.length;i++){
+    hash^=text.charCodeAt(i);
+    hash=Math.imul(hash,16777619);
+  }
+  return 'remote-v1-'+(hash>>>0).toString(36);
+}
+function approvalMatches(job,source,reference,audioTracks=[]){
+  const meta=recoveryMeta();
+  if(!meta?.userApprovedRemote||!meta?.approvalKey)return false;
+  return meta.approvalKey===remoteApprovalKey(job,source,reference,audioTracks);
+}
 function recoveryMeta(){
   try{return JSON.parse(localStorage.getItem(LS_RECOVERY)||'null')}catch(_){return null}
 }
@@ -218,14 +258,22 @@ async function beginRecovery(job,source,sourceName,characterRef=null,audioRef=nu
   const refName=ref?.name||'character-reference.png';
   const audioName=audio?.name||'audio.mp3';
   const previous=recoveryMeta();
+  const approvalKey=remoteApprovalKey(job,source,ref,audioList);
+  const inheritedApproval=Boolean(
+    previous?.userApprovedRemote&&
+    previous?.approvalKey&&
+    previous.approvalKey===approvalKey
+  );
+  const userApprovedRemote=Boolean(approvedRemote||inheritedApproval);
   const meta={
-    version:4,
+    version:5,
     phase:'prepared',
     job:{...job,defer_start:false},
     remoteJobId:'',
     workerUrl:endpoint(),
     workerSessionId:lastHealth?.session_id||'',
-    userApprovedRemote:Boolean(approvedRemote||previous?.userApprovedRemote),
+    userApprovedRemote,
+    approvalKey:userApprovedRemote?approvalKey:'',
     sourceName:name,
     sourceType:source?.type||'video/mp4',
     sourceSize:Number(source?.size||0),
@@ -1038,24 +1086,35 @@ async function testRender(){
   const health=await connect({resume:false});if(!health)return;
   if(!health.blender){setStatus('Для теста нужен Blender. Перезапусти Colab notebook.','error');return}
   const job={schema:'nova.remote-job.v1',source_prompt:'NOVA Remote GPU self test, clean blocking scene',engine:'blender',quality:'preview',duration:1,ratio:'9:16',fps:24,mirror_drive:false};
-  await beginRecovery(job,null,'');
+  await beginRecovery(job,null,'',null,null,true);
   await submitPreparedJob(job,null,'',{recovery:false});
 }
 async function send(approved=false){
   if(sendBusy)return;
   if(!endpoint()||!token()){setStatus('Сначала подключи GPU worker.','error');return}
-  if(!approved&&!confirmRemoteCompute('Отправка задачи на Remote GPU'))return;
   saveConnection();
   const job=buildJob();
   const source=$('remoteSource')?.files?.[0]||currentSourceFile||null;
   const reference=$('remoteCharacterRef')?.files?.[0]||currentCharacterRef||null;
   const audioTracks=selectedAudioFiles();
   const audio=audioTracks[0]||null;
+
+  let explicitApproval=false;
+  if(approved){
+    if(!approvalMatches(job,source,reference,audioTracks)){
+      if(!confirmRemoteCompute('Изменённая задача Remote GPU'))return;
+      explicitApproval=true;
+    }
+  }else{
+    if(!confirmRemoteCompute('Отправка задачи на Remote GPU'))return;
+    explicitApproval=true;
+  }
+
   currentSourceFile=source;
   currentCharacterRef=reference;
   currentAudioFiles=audioTracks;
   currentAudioFile=audio;
-  await beginRecovery(job,source,source?.name||'source.mp4',reference,audioTracks,Boolean(approved||recoveryMeta()?.userApprovedRemote));
+  await beginRecovery(job,source,source?.name||'source.mp4',reference,audioTracks,explicitApproval);
   await submitPreparedJob(job,source,source?.name||'source.mp4',{recovery:false,reference,referenceName:reference?.name||'',audio,audioName:audio?.name||'',audioTracks});
 }
 async function cancel(){
@@ -1207,7 +1266,7 @@ async function acceptHybridReferenceFromParent(event){
       currentSourceFile?.name||meta.sourceName||'source.mp4',
       currentCharacterRef,
       currentAudioFiles.length?currentAudioFiles:currentAudioFile,
-      Boolean(meta.userApprovedRemote)
+      false
     );
   }
   setEasyState('HYBRID PHOTO ГОТОВО','Фото из NOVA Video PRO передано в Motion Studio. Человек будет анимирован через WanGP image-to-video; Remote GPU запустится только после твоего подтверждения.','ok');
@@ -1228,8 +1287,8 @@ $('remoteCharacterRef')?.addEventListener('change',async e=>{
   currentCharacterRef=e.target.files?.[0]||null;
   const meta=recoveryMeta();
   if(meta&&currentCharacterRef){
-    await beginRecovery(meta.job||buildJob(),currentSourceFile,currentSourceFile?.name||meta.sourceName||'source.mp4',currentCharacterRef,currentAudioFile,Boolean(meta.userApprovedRemote));
-    setRecoveryStatus('Фото персонажа сохранено для identity lock.','ok');
+    const updated=await beginRecovery(meta.job||buildJob(),currentSourceFile,currentSourceFile?.name||meta.sourceName||'source.mp4',currentCharacterRef,currentAudioFile,false);
+    setRecoveryStatus(updated.userApprovedRemote?'Фото персонажа восстановлено для уже одобренного job.':'Фото персонажа изменено. Для следующего Remote GPU запуска потребуется подтверждение.','ok');
   }
 });
 $('remoteSource')?.addEventListener('change',async e=>{
@@ -1237,8 +1296,8 @@ $('remoteSource')?.addEventListener('change',async e=>{
   refreshEasyState();
   const meta=recoveryMeta();
   if(meta&&meta.sourceSize&&currentSourceFile){
-    await beginRecovery(meta.job||buildJob(),currentSourceFile,currentSourceFile.name,currentCharacterRef,currentAudioFile,Boolean(meta.userApprovedRemote));
-    setRecoveryStatus(meta.userApprovedRemote?'Исходник восстановлен. Одобренный job готов продолжиться автоматически.':'Исходник выбран.','ok');
+    const updated=await beginRecovery(meta.job||buildJob(),currentSourceFile,currentSourceFile.name,currentCharacterRef,currentAudioFile,false);
+    setRecoveryStatus(updated.userApprovedRemote?'Исходник совпадает с уже одобренным job. Можно продолжать автоматически.':'Исходник выбран или изменён. Для следующего Remote GPU запуска потребуется подтверждение.','ok');
   }
   const params=new URLSearchParams(location.search);
   if(params.get('auto')==='1'){
@@ -1253,7 +1312,7 @@ $('remoteAudio')?.addEventListener('change',async e=>{
   currentAudioFile=currentAudioFiles[0]||null;
   const meta=recoveryMeta();
   if(meta&&currentAudioFiles.length){
-    await beginRecovery(meta.job||buildJob(),currentSourceFile,currentSourceFile?.name||meta.sourceName||'source.mp4',currentCharacterRef,currentAudioFiles,Boolean(meta.userApprovedRemote));
+    await beginRecovery(meta.job||buildJob(),currentSourceFile,currentSourceFile?.name||meta.sourceName||'source.mp4',currentCharacterRef,currentAudioFiles,false);
   }
   if(currentAudioFiles.length)setEasyState('АУДИО ВЫБРАНО',currentAudioFiles.length+' дорожк(и). Если видео уже выбрано, NOVA продолжит автоматически и выберет FFmpeg.','ok');
   refreshEasyState();

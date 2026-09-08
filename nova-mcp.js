@@ -9,6 +9,7 @@
   const GITHUB_GATEWAY_KEY = 'nova.mcp.github.gateway';
   const GITHUB_UPSTREAM = 'https://api.githubcopilot.com/mcp/';
   const GITHUB_LOCAL_GATEWAY = 'http://127.0.0.1:8787/mcp/github';
+  const GITHUB_ALLOWED_TOOLS = new Set(['get_me', 'get_file_contents']);
 
   const state = {
     endpoint: localStorage.getItem(ENDPOINT_KEY) || '',
@@ -153,7 +154,10 @@
 
   async function refreshCapabilities() {
     const toolsResult = await rpc('tools/list', {});
-    state.tools = Array.isArray(toolsResult?.tools) ? toolsResult.tools : [];
+    const listedTools = Array.isArray(toolsResult?.tools) ? toolsResult.tools : [];
+    state.tools = state.provider === 'github'
+      ? listedTools.filter((tool) => GITHUB_ALLOWED_TOOLS.has(String(tool?.name || '')))
+      : listedTools;
     const [resources, prompts] = await Promise.all([
       listOptional('resources/list'),
       listOptional('prompts/list')
@@ -239,6 +243,9 @@
 
   async function callTool(name, args = {}) {
     if (!state.connected) throw new Error('Сначала подключи MCP-сервер.');
+    if (state.provider === 'github' && !GITHUB_ALLOWED_TOOLS.has(name)) {
+      throw new Error('FREE LOCK: этот GitHub MCP-инструмент не разрешён: ' + name);
+    }
     const tool = state.tools.find((item) => item.name === name);
     if (!tool) throw new Error('Инструмент не найден: ' + name);
 
@@ -288,7 +295,8 @@
       ['FREE LOCK: автозапуск tool выключен', true],
       ['Токен хранится только в sessionStorage', true],
       ['Прямой GitHub MCP из браузера блокируется и не используется', true],
-      ['GitHub preset использует gateway + read-only policy', true]
+      ['GitHub preset использует gateway + read-only policy', true],
+      ['GitHub client allowlist: только get_me + get_file_contents', GITHUB_ALLOWED_TOOLS.size === 2]
     ];
     const passed = checks.every(([, ok]) => ok);
     renderStatus(passed ? 'MCP Bridge готов к подключению' : 'Есть проблема в окружении', passed ? 'ok' : 'error');

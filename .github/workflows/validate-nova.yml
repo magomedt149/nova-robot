@@ -13,6 +13,9 @@ on:
       - "nova-health.js"
       - "nova-auto-montage.js"
       - "nova-whisper.js"
+      - "nova-mcp.js"
+      - "nova-generation-ux.js"
+      - "mcp-gateway/**"
       - "automation/bump_nova_version.py"
       - "automation/validate_frontend.py"
       - "motion-studio/**"
@@ -33,6 +36,9 @@ on:
       - "nova-health.js"
       - "nova-auto-montage.js"
       - "nova-whisper.js"
+      - "nova-mcp.js"
+      - "nova-generation-ux.js"
+      - "mcp-gateway/**"
       - "automation/bump_nova_version.py"
       - "automation/validate_frontend.py"
       - "motion-studio/**"
@@ -77,6 +83,9 @@ jobs:
           node --check nova-health.js
           node --check nova-auto-montage.js
           node --check nova-whisper.js
+          node --check nova-mcp.js
+          node --check nova-generation-ux.js
+          node --check mcp-gateway/github-gateway.js
           node --check motion-studio/app.js
           node --check motion-studio/director.js
           node --check motion-studio/remote-gpu.js
