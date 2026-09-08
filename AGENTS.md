@@ -43,3 +43,9 @@ Treat GitHub Actions failures as a release-blocking signal, not as a reason to i
 7. Prefer minimal, reversible fixes and preserve existing working behavior.
 8. When a failure is already fixed by a newer commit, do not revert the newer working state just to repair the historical failed run.
 
+## User command: «добавь и допиши»
+
+When the user says «добавь и допиши», follow the permanent method in:
+`docs/TUMSOEV_ADD_AND_APPEND_METHOD.md`
+
+Do not create duplicate scheduled tasks when an existing task can be safely extended. Preserve unique important tasks, NOVA FREE LOCK, and verify the saved result.
