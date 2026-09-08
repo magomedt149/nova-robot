@@ -485,7 +485,7 @@
     "health runtime build and cache-busting query synchronized to NOVA 27.25.0"
   ],
   "generationUx": true,
-  "generationUxVersion": "1.0.0",
+  "generationUxVersion": "1.1.0",
   "generationReviewCard": true,
   "generationReviewChecks": [
     "source file",
@@ -525,5 +525,33 @@
     "charged",
     "refunded",
     "final cost"
-  ]
+  ],
+  "creditHistoryScreen": true,
+  "creditHistoryStorage": "localStorage",
+  "creditHistoryStorageKey": "nova.creditLedger.v1",
+  "creditHistoryOperations": [
+    "charge",
+    "refund",
+    "final cost"
+  ],
+  "creditHistoryStatuses": [
+    "pending",
+    "processing",
+    "completed",
+    "failed"
+  ],
+  "creditHistoryFilters": [
+    "job",
+    "operation",
+    "status"
+  ],
+  "creditHistoryPerJobOpen": true,
+  "creditHistorySummary": [
+    "charged",
+    "refunded",
+    "final cost",
+    "processing count"
+  ],
+  "creditHistoryPaidModeOnlyChargesAreConfirmedByProvider": true,
+  "creditHistoryFreeJobsShowZeroFinalCost": true
 }
