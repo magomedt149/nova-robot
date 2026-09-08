@@ -8,8 +8,8 @@ NOVA 27.2 uses a free-only default policy.
 - Paid APIs are disabled by default.
 - Saved Remote GPU URL/token never starts compute automatically.
 - Text commands never auto-submit Remote GPU jobs.
-- Full Auto GPU and automatic Remote GPU recovery are disabled.
-- Every manual Remote GPU submit, test, or recovery requires an explicit on-screen confirmation.
+- Full Auto Final remains disabled under FREE LOCK. Auto Recovery may continue only the exact Remote GPU job and inputs that the owner explicitly approved; changing the prompt, source, character reference, or audio invalidates that approval.
+- Every new or changed Remote GPU submit/test requires an explicit on-screen confirmation. Recovery may resume the same previously approved job without asking again.
 - Netlify production deploys only when `.netlify-release` changes.
 - Netlify Deploy Preview and branch deploys are skipped automatically.
 - Public-repository checks and GitHub Pages deployment may run on pushes, and the local-only YouTube preview may run on its daily schedule. Workflows that can spend credits, start Remote GPU compute, make real calls, or publish externally remain manual/approval-gated.
@@ -50,5 +50,12 @@ Current policy version: **NOVA 27.2.1**
 - Browser-to-upstream direct mode is disabled because GitHub rejects cross-origin browser MCP requests; NOVA uses a server-side gateway.
 - The default GitHub profile is read-only + lockdown and exposes only `get_me` and `get_file_contents`.
 - `GITHUB_PERSONAL_ACCESS_TOKEN` must exist only on the gateway server.
-- Optional `NOVA_MCP_GATEWAY_KEY` protects the gateway; the PWA may keep that gateway key only in sessionStorage.
+- Public GitHub MCP gateways must set `NOVA_MCP_GATEWAY_KEY`; the PWA may keep that gateway key only in sessionStorage. Unauthenticated mode is permitted only for an explicitly loopback-bound local gateway (`127.0.0.1`/`localhost`) and never for a public listener.
 - The built-in GitHub test reads `magomedt149/nova-robot/version.json`; it does not write or spend credits.
+
+
+## Safety regression guards
+
+- `tests/test_remote_gpu_approval.py` prevents an approval for one Remote GPU job from leaking into a changed job.
+- `tests/test_mcp_gateway_security.py` requires the GitHub MCP gateway to stay read-only/lockdown, restrict tool calls to the allowlist, require authentication for public listeners, and keep an upstream timeout.
+- `Validate NOVA` watches `nova-mcp.js`, `nova-generation-ux.js`, and `mcp-gateway/**` so MCP/security edits receive CI validation before merge.
