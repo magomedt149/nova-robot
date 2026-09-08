@@ -1,7 +1,7 @@
 {
   "name": "NOVA",
-  "version": "27.26.0",
-  "pwa": "27.26.0",
+  "version": "27.27.0",
+  "pwa": "27.27.0",
   "mode": "free-only",
   "paidApis": false,
   "externalComputeRequiresConfirmation": true,
@@ -553,5 +553,16 @@
     "processing count"
   ],
   "creditHistoryPaidModeOnlyChargesAreConfirmedByProvider": true,
-  "creditHistoryFreeJobsShowZeroFinalCost": true
+  "creditHistoryFreeJobsShowZeroFinalCost": true,
+  "mcpBridge": true,
+  "mcpBridgeVersion": "1.0.0",
+  "mcpProtocolVersion": "2026-07-28",
+  "mcpTransport": "Streamable HTTP",
+  "mcpAutoConnect": false,
+  "mcpAutomaticToolCalls": false,
+  "mcpExternalToolConfirmation": true,
+  "mcpTokenPersistence": "sessionStorage-only",
+  "mcpPaidActionsDefault": false,
+  "mcpBrowserRequiresCors": true,
+  "mcpStaticHostNote": "GitHub Pages hosts the NOVA client only; an MCP HTTP server must run separately and allow the NOVA origin."
 }
