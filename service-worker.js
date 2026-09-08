@@ -1,4 +1,4 @@
-const CACHE = 'nova-v95-generation-ux-20260907';
+const CACHE = 'nova-v96-credit-history-20260907';
 const API_CACHE = 'nova-api-economy-v2';
 const METERED_NETLIFY_HOST = /(^|\\.)netlify\\.app$/i.test(self.location.hostname);
 const YOUTUBE_TTL_MS = 24 * 60 * 60 * 1000;
