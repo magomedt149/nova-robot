@@ -138,7 +138,7 @@
     "Нова, смешай музыку с видео, fade in 2 seconds, fade out 3 seconds"
   ],
   "healthRuntime": true,
-  "healthRuntimeVersion": "27.26.0",
+  "healthRuntimeVersion": "27.27.0",
   "autoMontage": true,
   "autoMontageVersion": "1.0.0",
   "autoMontageMode": "local-first 5-second preview; remote compute only after approval",
