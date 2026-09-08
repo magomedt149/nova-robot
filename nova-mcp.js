@@ -1,7 +1,7 @@
 (() => {
   'use strict';
 
-  const BRIDGE_VERSION = '1.1.0';
+  const BRIDGE_VERSION = '1.2.0';
   const NOVA_VERSION = '27.28.0';
   const MCP_PROTOCOL_VERSION = '2026-07-28';
   const ENDPOINT_KEY = 'nova.mcp.endpoint';
@@ -9,7 +9,9 @@
   const GITHUB_GATEWAY_KEY = 'nova.mcp.github.gateway';
   const GITHUB_UPSTREAM = 'https://api.githubcopilot.com/mcp/';
   const GITHUB_LOCAL_GATEWAY = 'http://127.0.0.1:8787/mcp/github';
+  const GITHUB_PUBLIC_API = 'https://api.github.com/';
   const GITHUB_ALLOWED_TOOLS = new Set(['get_me', 'get_file_contents']);
+  const GITHUB_PUBLIC_ALLOWED_TOOLS = new Set(['get_file_contents']);
 
   const state = {
     endpoint: localStorage.getItem(ENDPOINT_KEY) || '',
@@ -52,17 +54,106 @@
     catch (_) { return false; }
   }
 
+  function isGitHubPublicEndpoint(value) {
+    try { return new URL(String(value || '')).hostname === 'api.github.com'; }
+    catch (_) { return false; }
+  }
+
+  function cleanGitHubRef(value) {
+    return String(value || 'main')
+      .replace(/^refs\/heads\//, '')
+      .replace(/^refs\/tags\//, '')
+      .trim() || 'main';
+  }
+
+  function base64Utf8(value) {
+    const binary = atob(String(value || '').replace(/\s+/g, ''));
+    const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0));
+    return new TextDecoder('utf-8').decode(bytes);
+  }
+
+  async function githubPublicGetFileContents(args = {}) {
+    const owner = String(args.owner || '').trim();
+    const repo = String(args.repo || '').trim();
+    const path = String(args.path || '').replace(/^\/+/, '').trim();
+    const ref = cleanGitHubRef(args.ref);
+    if (!/^[A-Za-z0-9_.-]+$/.test(owner)) throw new Error('GitHub owner указан неверно.');
+    if (!/^[A-Za-z0-9_.-]+$/.test(repo)) throw new Error('GitHub repo указан неверно.');
+    if (!path || path.includes('..')) throw new Error('GitHub path указан неверно.');
+
+    const url = new URL(
+      '/repos/' + encodeURIComponent(owner) + '/' + encodeURIComponent(repo) + '/contents/' +
+      path.split('/').map(encodeURIComponent).join('/'),
+      GITHUB_PUBLIC_API
+    );
+    url.searchParams.set('ref', ref);
+
+    const response = await fetch(url.toString(), {
+      method: 'GET',
+      headers: {
+        Accept: 'application/vnd.github+json',
+        'X-GitHub-Api-Version': '2022-11-28'
+      },
+      cache: 'no-store',
+      credentials: 'omit'
+    });
+
+    if (!response.ok) {
+      const remaining = response.headers.get('x-ratelimit-remaining');
+      const raw = await response.text();
+      if (response.status === 403 && remaining === '0') {
+        throw new Error('GitHub FREE лимит запросов временно исчерпан. Подожди и повтори позже.');
+      }
+      throw new Error('GitHub HTTP ' + response.status + (raw ? ': ' + raw.slice(0, 180) : ''));
+    }
+
+    const data = await response.json();
+    if (Array.isArray(data)) {
+      return {
+        type: 'directory',
+        owner,
+        repo,
+        path,
+        ref,
+        entries: data.map((item) => ({
+          name: item.name,
+          path: item.path,
+          type: item.type,
+          size: item.size,
+          sha: item.sha
+        }))
+      };
+    }
+    if (data?.type !== 'file') throw new Error('GitHub вернул не файл.');
+    const content = data.encoding === 'base64' ? base64Utf8(data.content) : String(data.content || '');
+    return {
+      type: 'file',
+      owner,
+      repo,
+      path: data.path || path,
+      ref,
+      sha: data.sha || '',
+      size: Number(data.size || 0),
+      content
+    };
+  }
+
+  async function githubPublicCallTool(name, args = {}) {
+    if (!GITHUB_PUBLIC_ALLOWED_TOOLS.has(name)) {
+      throw new Error('FREE LOCK: в GitHub Public режиме разрешено только чтение файлов.');
+    }
+    if (name === 'get_file_contents') return githubPublicGetFileContents(args);
+    throw new Error('GitHub Public tool не поддерживается: ' + name);
+  }
+
   function selectGitHubPreset() {
-    const saved = localStorage.getItem(GITHUB_GATEWAY_KEY) || GITHUB_LOCAL_GATEWAY;
     const input = $('#novaMcpEndpoint');
-    if (input) input.value = saved;
-    state.endpoint = saved;
-    state.provider = 'github';
+    if (input) input.value = GITHUB_PUBLIC_API;
+    state.endpoint = GITHUB_PUBLIC_API;
+    state.provider = 'github-public';
     renderStatus(
-      saved.startsWith('http://127.0.0.1')
-        ? 'GitHub MCP выбран. localhost работает только на компьютере с gateway; для iPhone нужен публичный HTTPS gateway.'
-        : 'GitHub MCP выбран: официальный GitHub сервер через NOVA gateway.',
-      'idle'
+      'GitHub FREE выбран: публичные репозитории читаются прямо с GitHub на iPhone — без localhost, gateway, токена и платных API.',
+      'ok'
     );
     render();
   }
@@ -153,6 +244,27 @@
   }
 
   async function refreshCapabilities() {
+    if (state.provider === 'github-public') {
+      state.tools = [{
+        name: 'get_file_contents',
+        description: 'FREE read-only: прочитать файл или список папки из публичного GitHub репозитория.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            owner: { type: 'string' },
+            repo: { type: 'string' },
+            path: { type: 'string' },
+            ref: { type: 'string' }
+          },
+          required: ['owner', 'repo', 'path']
+        }
+      }];
+      state.resources = [];
+      state.prompts = [];
+      render();
+      return state.tools;
+    }
+
     const toolsResult = await rpc('tools/list', {});
     const listedTools = Array.isArray(toolsResult?.tools) ? toolsResult.tools : [];
     state.tools = state.provider === 'github'
@@ -176,8 +288,28 @@
       state.endpoint = normalizeEndpoint(endpoint || state.endpoint);
       if (!state.endpoint) throw new Error('Укажи адрес MCP-сервера, например https://server.example/mcp');
       if (isDirectGitHubEndpoint(state.endpoint)) {
-        throw new Error('GitHub блокирует прямое MCP-подключение из браузера. Используй NOVA GitHub Gateway, а не api.githubcopilot.com напрямую.');
+        throw new Error('GitHub блокирует прямое MCP-подключение из браузера. Используй GitHub FREE или NOVA HTTPS Gateway.');
       }
+
+      if (isGitHubPublicEndpoint(state.endpoint)) {
+        state.provider = 'github-public';
+        localStorage.setItem(ENDPOINT_KEY, GITHUB_PUBLIC_API);
+        setToken('');
+        state.sessionId = '';
+        state.protocolVersion = MCP_PROTOCOL_VERSION;
+        state.serverInfo = { name: 'GitHub FREE Read-Only Bridge', version: BRIDGE_VERSION };
+        state.capabilities = { tools: true, publicOnly: true, readonly: true };
+        state.connected = true;
+        await refreshCapabilities();
+        renderStatus('GitHub FREE подключён — localhost и токен не нужны', 'ok');
+        updateChip();
+        return {
+          protocolVersion: MCP_PROTOCOL_VERSION,
+          serverInfo: state.serverInfo,
+          capabilities: state.capabilities
+        };
+      }
+
       state.provider = isGitHubGatewayEndpoint(state.endpoint) ? 'github' : '';
       localStorage.setItem(ENDPOINT_KEY, state.endpoint);
       if (state.provider === 'github') localStorage.setItem(GITHUB_GATEWAY_KEY, state.endpoint);
@@ -216,7 +348,7 @@
   async function disconnect() {
     const endpoint = state.endpoint;
     const sessionId = state.sessionId;
-    if (endpoint && sessionId) {
+    if (state.provider !== 'github-public' && endpoint && sessionId) {
       try {
         const headers = { 'Mcp-Session-Id': sessionId };
         const token = getToken();
@@ -246,6 +378,9 @@
     if (state.provider === 'github' && !GITHUB_ALLOWED_TOOLS.has(name)) {
       throw new Error('FREE LOCK: этот GitHub MCP-инструмент не разрешён: ' + name);
     }
+    if (state.provider === 'github-public' && !GITHUB_PUBLIC_ALLOWED_TOOLS.has(name)) {
+      throw new Error('FREE LOCK: GitHub FREE разрешает только чтение публичных файлов.');
+    }
     const tool = state.tools.find((item) => item.name === name);
     if (!tool) throw new Error('Инструмент не найден: ' + name);
 
@@ -257,7 +392,9 @@
 
     renderStatus('Выполняю ' + name + '…', 'busy');
     try {
-      const result = await rpc('tools/call', { name, arguments: args || {} });
+      const result = state.provider === 'github-public'
+        ? await githubPublicCallTool(name, args || {})
+        : await rpc('tools/call', { name, arguments: args || {} });
       renderStatus('Готово: ' + name, 'ok');
       return result;
     } catch (error) {
@@ -269,7 +406,7 @@
   async function testGitHubRead() {
     if (!state.connected) throw new Error('Сначала подключи GitHub MCP.');
     if (!state.tools.some((item) => item.name === 'get_file_contents')) {
-      throw new Error('GitHub MCP не выдал get_file_contents. Проверь gateway и права токена.');
+      throw new Error('GitHub не выдал get_file_contents. Нажми GitHub FREE и подключи снова.');
     }
     const result = await callTool('get_file_contents', {
       owner: 'magomedt149',
@@ -295,8 +432,10 @@
       ['FREE LOCK: автозапуск tool выключен', true],
       ['Токен хранится только в sessionStorage', true],
       ['Прямой GitHub MCP из браузера блокируется и не используется', true],
-      ['GitHub preset использует gateway + read-only policy', true],
-      ['GitHub client allowlist: только get_me + get_file_contents', GITHUB_ALLOWED_TOOLS.size === 2]
+      ['GitHub FREE работает без localhost/gateway для публичных repo', GITHUB_PUBLIC_ALLOWED_TOOLS.size === 1],
+      ['GitHub FREE allowlist: только get_file_contents', GITHUB_PUBLIC_ALLOWED_TOOLS.has('get_file_contents')],
+      ['GitHub HTTPS gateway остаётся доступен для авторизованного режима', true],
+      ['GitHub gateway client allowlist: get_me + get_file_contents', GITHUB_ALLOWED_TOOLS.size === 2]
     ];
     const passed = checks.every(([, ok]) => ok);
     renderStatus(passed ? 'MCP Bridge готов к подключению' : 'Есть проблема в окружении', passed ? 'ok' : 'error');
@@ -403,10 +542,10 @@
       '<div class="nova-mcp-card">',
       '<div class="nova-mcp-head"><h2 id="novaMcpTitle">🔌 NOVA MCP Bridge</h2><button id="novaMcpClose" class="nova-mcp-close" type="button" aria-label="Закрыть">×</button></div>',
       '<p class="nova-mcp-note">Подключает NOVA к MCP-серверам через Streamable HTTP. Никаких платных API автоматически: внешний tool вызывается только после твоего подтверждения. Секретный токен не сохраняется постоянно.</p>',
-      '<div class="nova-mcp-status" data-tone="idle"><b>GitHub MCP</b><br><small>Официальный upstream: ' + GITHUB_UPSTREAM + '<br>NOVA PWA подключается через свой HTTPS gateway, потому что GitHub блокирует прямые browser cross-origin MCP-запросы.</small></div>',
+      '<div class="nova-mcp-status" data-tone="idle"><b>GitHub FREE</b><br><small>Для публичных репозиториев NOVA читает GitHub прямо с iPhone: без localhost, gateway, токена и платных API. Официальный MCP gateway остаётся опцией для авторизованного режима.</small></div>',
       '<label class="nova-mcp-field"><span>MCP endpoint</span><input id="novaMcpEndpoint" type="url" inputmode="url" autocomplete="off" placeholder="https://your-server.example/mcp"></label>',
       '<label class="nova-mcp-field"><span>Bearer token (необязательно, только на эту сессию)</span><input id="novaMcpToken" type="password" autocomplete="off" placeholder="Не сохраняется в localStorage"></label>',
-      '<div class="nova-mcp-actions"><button id="novaMcpGitHubPreset" type="button">GitHub MCP</button><button id="novaMcpConnect" class="primary" type="button">Подключить</button><button id="novaMcpGitHubTest" type="button">Тест GitHub</button><button id="novaMcpDisconnect" type="button">Отключить</button><button id="novaMcpRefresh" type="button">Обновить tools</button><button id="novaMcpSelfTest" type="button">Самопроверка</button></div>',
+      '<div class="nova-mcp-actions"><button id="novaMcpGitHubPreset" type="button">GitHub FREE</button><button id="novaMcpConnect" class="primary" type="button">Подключить</button><button id="novaMcpGitHubTest" type="button">Тест GitHub</button><button id="novaMcpDisconnect" type="button">Отключить</button><button id="novaMcpRefresh" type="button">Обновить tools</button><button id="novaMcpSelfTest" type="button">Самопроверка</button></div>',
       '<div id="novaMcpStatus" class="nova-mcp-status">MCP Bridge готов. Сервер ещё не подключён.</div>',
       '<div class="nova-mcp-meta"><div>Сервер: <b id="novaMcpServer">не подключён</b></div><div id="novaMcpCounts">0 tools • 0 resources • 0 prompts</div><div>Protocol: <b>' + MCP_PROTOCOL_VERSION + '</b> • Bridge: <b>' + BRIDGE_VERSION + '</b></div></div>',
       '<div id="novaMcpDiagnostics" class="nova-mcp-diag"></div>',
