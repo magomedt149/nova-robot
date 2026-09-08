@@ -52,6 +52,8 @@ Current policy version: **NOVA 27.2.1**
 - `GITHUB_PERSONAL_ACCESS_TOKEN` must exist only on the gateway server.
 - Public GitHub MCP gateways must set `NOVA_MCP_GATEWAY_KEY`; the PWA may keep that gateway key only in sessionStorage. Unauthenticated mode is permitted only for an explicitly loopback-bound local gateway (`127.0.0.1`/`localhost`) and never for a public listener.
 - The built-in GitHub test reads `magomedt149/nova-robot/version.json`; it does not write or spend credits.
+- For public repositories, NOVA 1.2 adds a browser-only GitHub FREE bridge using `https://api.github.com/`; it needs no localhost, public gateway, GitHub token, or paid API.
+- GitHub FREE is strictly read-only and exposes only `get_file_contents`. The authenticated HTTPS gateway remains optional for cases that require authenticated GitHub MCP access.
 
 
 ## Safety regression guards
