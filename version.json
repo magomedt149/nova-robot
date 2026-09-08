@@ -555,7 +555,7 @@
   "creditHistoryPaidModeOnlyChargesAreConfirmedByProvider": true,
   "creditHistoryFreeJobsShowZeroFinalCost": true,
   "mcpBridge": true,
-  "mcpBridgeVersion": "1.1.0",
+  "mcpBridgeVersion": "1.2.0",
   "mcpProtocolVersion": "2026-07-28",
   "mcpTransport": "Streamable HTTP",
   "mcpAutoConnect": false,
@@ -582,5 +582,15 @@
     "repo": "nova-robot",
     "path": "version.json",
     "ref": "refs/heads/main"
-  }
+  },
+  "githubPublicFreeBridge": true,
+  "githubPublicFreeBridgeApi": "https://api.github.com/",
+  "githubPublicFreeBridgePublicReposOnly": true,
+  "githubPublicFreeBridgeTokenRequired": false,
+  "githubPublicFreeBridgePaidApi": false,
+  "githubPublicFreeBridgeTools": [
+    "get_file_contents"
+  ],
+  "githubPublicFreeBridgeIphone": true,
+  "githubPublicFreeBridgeGatewayRequired": false
 }
