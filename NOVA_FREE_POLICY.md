@@ -41,3 +41,14 @@ Current policy version: **NOVA 27.2.1**
 - MCP bearer tokens are session-only and are not stored in `localStorage` or committed to GitHub.
 - GitHub Pages hosts only the NOVA client. A real MCP Streamable HTTP server must run separately, use HTTPS (except localhost development), and allow the NOVA web origin with CORS.
 - Adding MCP does not override NOVA FREE LOCK: paid APIs and billable external actions remain disabled by default.
+
+
+## GitHub MCP
+
+- NOVA 27.28.0 adds the official GitHub MCP server as the first provider through a NOVA gateway.
+- Official upstream: `https://api.githubcopilot.com/mcp/`.
+- Browser-to-upstream direct mode is disabled because GitHub rejects cross-origin browser MCP requests; NOVA uses a server-side gateway.
+- The default GitHub profile is read-only + lockdown and exposes only `get_me` and `get_file_contents`.
+- `GITHUB_PERSONAL_ACCESS_TOKEN` must exist only on the gateway server.
+- Optional `NOVA_MCP_GATEWAY_KEY` protects the gateway; the PWA may keep that gateway key only in sessionStorage.
+- The built-in GitHub test reads `magomedt149/nova-robot/version.json`; it does not write or spend credits.
