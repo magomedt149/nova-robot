@@ -1,4 +1,4 @@
-const APP_VERSION = '27.28.0';
+const APP_VERSION = '27.28.1';
 const CACHE = `nova-v${APP_VERSION}-github-mcp`;
 const API_CACHE = 'nova-api-economy-v2';
 const METERED_NETLIFY_HOST = /(^|\\.)netlify\\.app$/i.test(self.location.hostname);
