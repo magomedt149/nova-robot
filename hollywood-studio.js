@@ -79,7 +79,12 @@
   exportPng?.addEventListener('click', () => exportImage('png'));
 
   function loadNOVAFeature(src, id) {
-    if (document.getElementById(id)) return Promise.resolve();
+    const requestedPath = new URL(src, document.baseURI).pathname;
+    const alreadyLoaded = [...document.scripts].some((script) => {
+      if (!script.src) return false;
+      return new URL(script.src, document.baseURI).pathname === requestedPath;
+    });
+    if (document.getElementById(id) || alreadyLoaded) return Promise.resolve();
     return new Promise((resolve, reject) => {
       const script = document.createElement('script');
       script.id = id;

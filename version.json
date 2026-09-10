@@ -1,7 +1,7 @@
 {
   "name": "NOVA",
-  "version": "27.28.0",
-  "pwa": "27.28.0",
+  "version": "27.28.1",
+  "pwa": "27.28.1",
   "mode": "free-only",
   "paidApis": false,
   "externalComputeRequiresConfirmation": true,
@@ -138,7 +138,7 @@
     "Нова, смешай музыку с видео, fade in 2 seconds, fade out 3 seconds"
   ],
   "healthRuntime": true,
-  "healthRuntimeVersion": "27.28.0",
+  "healthRuntimeVersion": "27.28.1",
   "autoMontage": true,
   "autoMontageVersion": "1.0.0",
   "autoMontageMode": "local-first 5-second preview; remote compute only after approval",

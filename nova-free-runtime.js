@@ -1,7 +1,7 @@
 (() => {
   'use strict';
 
-  const VERSION = '27.2.1';
+  const VERSION = '27.28.1';
   const FREE_LOCK_KEY = 'nova.freeLock.version';
   const FREE_UPDATE_CHECK_KEY = 'nova.freeUpdate.lastCheck';
   const UPDATE_INTERVAL_MS = 6 * 60 * 60 * 1000;
