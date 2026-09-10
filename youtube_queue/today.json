@@ -1,47 +1,50 @@
 {
-  "date": "2026-09-05",
-  "title": "В Minecraft нашли место, которого не должно быть",
-  "description": "Короткая оригинальная Minecraft mystery-история: странный лагерь, следы и дверь под землёй. Это художественный сюжет, созданный для Tumsoev, а не утверждение о реальном секретном объекте в игре.",
-  "hashtags": ["#Minecraft", "#MinecraftShorts", "#Майнкрафт", "#Gaming", "#Shorts"],
-  "tags": ["Minecraft", "Minecraft mystery", "Minecraft Shorts", "Майнкрафт история", "gaming story"],
+  "date": "2026-09-09",
+  "title": "Nintendo Direct 9.9.2026: 5 главных анонсов за 45 секунд",
+  "description": "Свежий разбор Nintendo Direct 9 сентября 2026: Persona 6, Metroid Ravenous, Monster Hunter Wilds, Pikmin 4 Switch 2 Edition и Final Fantasy VII Revelation. Коротко, без чужих клипов — только оригинальный пересказ и выводы.",
+  "hashtags": ["#NintendoDirect", "#NintendoSwitch2", "#Persona6", "#Metroid", "#GamingNews"],
+  "tags": ["Nintendo Direct 2026", "Nintendo Switch 2", "Persona 6", "Metroid Ravenous", "Monster Hunter Wilds", "Pikmin 4", "Final Fantasy VII Revelation", "gaming news"],
   "category_id": "20",
-  "privacy_status": "private",
-  "pre_publish_score": 92,
-  "narrator": "denis",
-  "voice_note": "Использовать Дениса для mystery/gaming. Если workflow не имеет Дениса, не подменять Ириной молча: собрать preview с доступным локальным голосом и отметить замену.",
-  "first_frame": "ЭТОГО МЕСТА НЕ ДОЛЖНО БЫТЬ",
-  "source_urls": ["https://www.minecraft.net/en-us/article/mclive_march2026_recap"],
-  "originality_note": "Использовать только собственный/лицензированный Minecraft gameplay или оригинально созданные визуалы. Сюжет вымышленный и оригинальный.",
+  "privacy_status": "public",
+  "pre_publish_score": 96,
+  "narrator": "irina",
+  "voice_note": "Свежая озвучка Ириной Piper ru_RU-irina-medium для новостного игрового формата.",
+  "first_frame": "NINTENDO DIRECT: 5 ГЛАВНЫХ АНОНСОВ",
+  "source_urls": [
+    "https://www.nintendo.com/us/nintendo-direct/archive/",
+    "https://www.nintendo.com/it-it/Notizie/Nintendo-Direct/L-ultimo-Nintendo-Direct/Nintendo-Direct-698557.html"
+  ],
+  "originality_note": "Оригинальный русскоязычный пересказ публичных анонсов Nintendo. Не использовать чужие видеофрагменты, трейлеры или защищённые клипы.",
   "scenes": [
     {
-      "headline": "ЭТОГО МЕСТА НЕ ДОЛЖНО БЫТЬ",
-      "caption": "Игрок заметил свет между деревьями.",
-      "narration": "Он шёл через лес и увидел свет там, где на карте ничего не было."
+      "headline": "5 АНОНСОВ ЗА 45 СЕКУНД",
+      "caption": "Nintendo Direct вышел сегодня — вот что реально важно.",
+      "narration": "Сегодня Nintendo провела новый Direct про игры для Switch 2. Вот пять анонсов, которые стоит знать прямо сейчас."
     },
     {
-      "headline": "ПУСТОЙ ЛАГЕРЬ",
-      "caption": "Костёр горит. Игроков рядом нет.",
-      "narration": "Внутри оказался пустой лагерь. Костёр ещё горел, но вокруг не было ни одного игрока."
+      "headline": "PERSONA 6",
+      "caption": "Официально идёт на Nintendo Switch 2.",
+      "narration": "Первое: Persona 6 подтверждена для Nintendo Switch 2. Для фанатов серии это один из самых заметных анонсов презентации."
     },
     {
-      "headline": "СЛЕДЫ ВЕДУТ ПОД ЗЕМЛЮ",
-      "caption": "И заканчиваются у одного блока.",
-      "narration": "Следы вели к обычному блоку земли. Когда он его сломал, под ним появилась лестница."
+      "headline": "METROID RAVENOUS",
+      "caption": "Релиз — 28 января 2027 года.",
+      "narration": "Второе: Metroid Ravenous получила дату выхода — двадцать восьмое января две тысячи двадцать седьмого года."
     },
     {
-      "headline": "ДВЕРЬ БЕЗ РУЧКИ",
-      "caption": "За ней слышны шаги.",
-      "narration": "Внизу была железная дверь без кнопки и рычага. А потом с другой стороны послышались шаги."
+      "headline": "MONSTER HUNTER WILDS",
+      "caption": "Игра приходит на Switch 2 этой зимой.",
+      "narration": "Третье: Monster Hunter Wilds тоже выходит на Switch 2. Это усиливает зимнюю линейку консоли ещё одним большим именем."
     },
     {
-      "headline": "ОН НЕ БЫЛ ОДИН",
-      "caption": "Дверь начала открываться сама.",
-      "narration": "Он уже хотел уйти, когда дверь медленно начала открываться сама."
+      "headline": "PIKMIN + FINAL FANTASY",
+      "caption": "Pikmin 4 Switch 2 Edition и Final Fantasy VII Revelation.",
+      "narration": "Четвёртое и пятое: обновлённый Pikmin 4 для Switch 2 и Final Fantasy VII Revelation тоже были среди главных показов."
     },
     {
-      "headline": "ОТКРЫТЬ ДВЕРЬ?",
-      "caption": "Part 2 — если продолжаем эту историю.",
-      "narration": "Что бы ты сделал: вошёл внутрь или сразу убежал? Если эта история зайдёт, продолжим во второй части."
+      "headline": "КАКОЙ АНОНС №1?",
+      "caption": "Persona 6, Metroid или Monster Hunter?",
+      "narration": "Какой анонс для тебя самый сильный: Persona 6, Metroid или Monster Hunter? Напиши один вариант — посмотрим, что выберет большинство."
     }
   ]
 }
