@@ -1,9 +1,10 @@
-const APP_VERSION = '27.28.0';
+const APP_VERSION = '27.28.1';
 const CACHE = `nova-v${APP_VERSION}-github-mcp`;
 const API_CACHE = 'nova-api-economy-v2';
-const METERED_NETLIFY_HOST = /(^|\\.)netlify\\.app$/i.test(self.location.hostname);
+const METERED_NETLIFY_HOST = /(^|\.)netlify\.app$/i.test(self.location.hostname);
 const YOUTUBE_TTL_MS = 24 * 60 * 60 * 1000;
 const TRANSLATE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+const ALWAYS_FRESH_STATIC = /\/(nova-free-calls|nova-call-diagnostics)\.js$/i;
 
 const CORE = [
   './',
@@ -467,6 +468,18 @@ self.addEventListener('fetch', (event) => {
   }
 
   if (event.request.method !== 'GET') return;
+
+  if (sameOrigin && ALWAYS_FRESH_STATIC.test(url.pathname)) {
+    event.respondWith(
+      fetch(event.request, { cache: 'no-store' })
+        .then((response) => {
+          if (response.ok) caches.open(CACHE).then((cache) => cache.put(event.request, response.clone()));
+          return response;
+        })
+        .catch(() => caches.match(event.request, { ignoreSearch: true }))
+    );
+    return;
+  }
 
   if (sameOrigin && (url.pathname.endsWith('/update.html') || url.pathname.endsWith('/version.json') || url.pathname.endsWith('/manifest.webmanifest'))) {
     if (METERED_NETLIFY_HOST) {
