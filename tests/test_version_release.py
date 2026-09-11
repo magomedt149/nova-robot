@@ -64,6 +64,36 @@ def test_release_update_changes_every_marker_together() -> None:
         assert validate_consistency(root) == "1.2.4"
 
 
+def test_cache_only_service_worker_patch_bump_is_allowed() -> None:
+    with tempfile.TemporaryDirectory() as directory:
+        root = Path(directory)
+        write_fixture(root, "1.2.3")
+        (root / "service-worker.js").write_text(
+            "const APP_VERSION = '1.2.4';\nconst CACHE = `nova-v${APP_VERSION}`;\n",
+            encoding="utf-8",
+        )
+        assert validate_consistency(root) == "1.2.3"
+
+        updates = collect_updates(root, "1.3.0")
+        assert "const APP_VERSION = '1.3.0';" in updates["service-worker.js"]
+        assert "const APP_VERSION = '1.2.4';" not in updates["service-worker.js"]
+
+
+def test_stale_service_worker_patch_is_rejected() -> None:
+    with tempfile.TemporaryDirectory() as directory:
+        root = Path(directory)
+        write_fixture(root, "1.2.3")
+        (root / "service-worker.js").write_text(
+            "const APP_VERSION = '1.2.2';\nconst CACHE = `nova-v${APP_VERSION}`;\n",
+            encoding="utf-8",
+        )
+        try:
+            validate_consistency(root)
+        except VersionError:
+            return
+        raise AssertionError("stale service-worker cache version must be rejected")
+
+
 def test_release_update_rejects_an_inconsistent_source() -> None:
     with tempfile.TemporaryDirectory() as directory:
         root = Path(directory)
