@@ -23,6 +23,7 @@ import secrets
 import shutil
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 import uuid
@@ -32,6 +33,7 @@ from typing import Any
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
+from starlette.background import BackgroundTask
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 JOB_ROOT = Path(os.environ.get("NOVA_REMOTE_JOB_ROOT", "/content/NOVA_REMOTE_JOBS")).resolve()
@@ -51,9 +53,13 @@ SELF_TEST_LOCK = threading.Lock()
 WANGP_JOBS: dict[str, Any] = {}
 DOWNLOAD_TICKETS: dict[str, dict[str, Any]] = {}
 DOWNLOAD_TICKET_TTL = int(os.environ.get("NOVA_REMOTE_DOWNLOAD_TTL", "600"))
-WORKER_VERSION = "2.2.0"
-PROTOCOL_VERSION = 8
+WORKER_VERSION = "2.3.0"
+PROTOCOL_VERSION = 9
 SESSION_ID = uuid.uuid4().hex[:12]
+CHECHEN_TTS_MODEL_ID = "facebook/mms-tts-che"
+CHECHEN_TTS_MAX_CHARS = 1200
+CHECHEN_TTS_LOCK = threading.RLock()
+CHECHEN_TTS_RUNTIME: dict[str, Any] = {}
 
 app = FastAPI(title="NOVA Remote GPU Worker", version="1.0")
 app.add_middleware(
@@ -70,6 +76,57 @@ def require_token(request: Request) -> None:
     supplied = request.headers.get("x-nova-token") or request.query_params.get("token")
     if not supplied or not secrets.compare_digest(str(supplied), TOKEN):
         raise HTTPException(status_code=401, detail="Invalid NOVA worker token")
+
+
+def chechen_tts_dependencies_ready() -> bool:
+    try:
+        import scipy  # noqa: F401
+        import torch  # noqa: F401
+        import transformers  # noqa: F401
+        return True
+    except Exception:
+        return False
+
+
+def load_chechen_tts() -> tuple[Any, Any, Any]:
+    with CHECHEN_TTS_LOCK:
+        if CHECHEN_TTS_RUNTIME:
+            return (
+                CHECHEN_TTS_RUNTIME["tokenizer"],
+                CHECHEN_TTS_RUNTIME["model"],
+                CHECHEN_TTS_RUNTIME["torch"],
+            )
+        try:
+            import torch
+            from transformers import AutoTokenizer, VitsModel
+        except Exception as exc:
+            raise RuntimeError("Install torch, transformers and scipy for Chechen TTS") from exc
+        tokenizer = AutoTokenizer.from_pretrained(CHECHEN_TTS_MODEL_ID)
+        model = VitsModel.from_pretrained(CHECHEN_TTS_MODEL_ID)
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+        model = model.to(device).eval()
+        CHECHEN_TTS_RUNTIME.update(tokenizer=tokenizer, model=model, torch=torch, device=device)
+        return tokenizer, model, torch
+
+
+def synthesize_chechen_tts(text: str) -> Path:
+    from scipy.io.wavfile import write as write_wav
+
+    with CHECHEN_TTS_LOCK:
+        tokenizer, model, torch = load_chechen_tts()
+        inputs = tokenizer(text=text, return_tensors="pt")
+        inputs = {name: value.to(CHECHEN_TTS_RUNTIME["device"]) for name, value in inputs.items()}
+        with torch.no_grad():
+            waveform = model(**inputs).waveform.squeeze().detach().float().cpu().numpy()
+    peak = float(abs(waveform).max()) if waveform.size else 0.0
+    if not waveform.size or peak <= 0:
+        raise RuntimeError("Chechen TTS produced empty audio")
+    waveform = (waveform / max(1.0, peak) * 32767.0).astype("int16")
+    handle = tempfile.NamedTemporaryFile(prefix="nova_ramzan_", suffix=".wav", delete=False)
+    handle.close()
+    output = Path(handle.name)
+    write_wav(output, int(model.config.sampling_rate), waveform)
+    return output
 
 
 def status_path(job_id: str) -> Path:
@@ -1563,12 +1620,43 @@ async def health(request: Request):
             "single_photo_motion": True,
             "hybrid_background_text_stability_prompt": True,
             "human_motion_preferred_t4": "VACE 1.3B",
+            "chechen_tts": chechen_tts_dependencies_ready(),
+            "chechen_tts_voice": "ramzan",
+            "chechen_tts_model": CHECHEN_TTS_MODEL_ID,
+            "chechen_tts_paid_api": False,
         },
         "wangp_root": str(WANGP_ROOT),
         "job_root": str(JOB_ROOT),
         "drive_mounted": Path("/content/drive/MyDrive").exists(),
         "free_disk_gb": round(disk.free / 1024**3, 1),
     }
+
+
+@app.post("/tts/chechen")
+async def chechen_tts(request: Request):
+    require_token(request)
+    try:
+        payload = await request.json()
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail="Expected JSON body") from exc
+    text = str(payload.get("text", "") if isinstance(payload, dict) else "").strip()
+    voice = str(payload.get("voice", "ramzan") if isinstance(payload, dict) else "ramzan").lower()
+    if voice != "ramzan":
+        raise HTTPException(status_code=400, detail="Only the ramzan Chechen voice is available")
+    if not text:
+        raise HTTPException(status_code=400, detail="Chechen TTS text is empty")
+    if len(text) > CHECHEN_TTS_MAX_CHARS:
+        raise HTTPException(status_code=413, detail=f"Text exceeds {CHECHEN_TTS_MAX_CHARS} characters")
+    try:
+        output = await asyncio.to_thread(synthesize_chechen_tts, text)
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail=f"Chechen TTS failed: {exc}") from exc
+    return FileResponse(
+        output,
+        media_type="audio/wav",
+        filename="ramzan-chechen.wav",
+        background=BackgroundTask(output.unlink, missing_ok=True),
+    )
 
 
 @app.post("/self-test")
