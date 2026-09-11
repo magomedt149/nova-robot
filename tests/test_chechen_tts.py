@@ -18,7 +18,7 @@ def test_ramzan_frontend_is_wired_and_free():
     assert "X-NOVA-Token" in module
     assert "/tts/chechen" in module
     assert "paidApi: false" in module
-    assert "nova-chechen-tts.js?v=1.0.0" in read("index.html")
+    assert "nova-chechen-tts.js?v=1.1.0" in read("index.html")
     assert "'./nova-chechen-tts.js'" in read("service-worker.js")
 
 
@@ -27,6 +27,18 @@ def test_ramzan_voice_selector_is_registered():
     assert "nova:ramzan" in voices
     assert "speakRamzan" in voices
     assert "Meta MMS (FREE Worker)" in voices
+
+
+def test_experimental_song_mode_is_truthfully_labeled():
+    module = read("nova-chechen-tts.js")
+    worker = read("automation/remote_gpu_worker.py")
+    assert "/tts/chechen-song" in module
+    assert "Это не клон певца" in module or "это не клон певца" in module
+    assert "singRamzan" in module
+    assert '@app.post("/tts/chechen-song")' in worker
+    assert "experimental rhythmic/melodic TTS preview, not a cloned singer" in worker
+    assert "rubberband=tempo=" in worker
+    assert '"Am,D,G,Em"' in worker
 
 
 def test_worker_has_protected_chechen_tts_endpoint():
@@ -60,3 +72,5 @@ def test_version_manifest_declares_ramzan_truthfully():
     assert data["chechenTtsWorkerRequired"] is True
     assert data["remoteGpuWorkerVersion"] == "2.3.0"
     assert data["remoteGpuProtocolVersion"] == 9
+    assert data["chechenTtsSongTest"] is True
+    assert "not singer cloning" in data["chechenTtsSongMode"]
