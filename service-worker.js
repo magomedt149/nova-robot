@@ -1,10 +1,10 @@
-const APP_VERSION = '27.28.1';
+const APP_VERSION = '27.29.0';
 const CACHE = `nova-v${APP_VERSION}-github-mcp`;
 const API_CACHE = 'nova-api-economy-v2';
 const METERED_NETLIFY_HOST = /(^|\.)netlify\.app$/i.test(self.location.hostname);
 const YOUTUBE_TTL_MS = 24 * 60 * 60 * 1000;
 const TRANSLATE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
-const ALWAYS_FRESH_STATIC = /\/(nova-free-calls|nova-call-diagnostics)\.js$/i;
+const ALWAYS_FRESH_STATIC = /\/(?:nova-free-calls|nova-call-diagnostics)\.js$|\/nova-call-check\.html$/i;
 
 const CORE = [
   './',
@@ -82,7 +82,7 @@ self.addEventListener('install', (event) => {
     const results = await Promise.allSettled(CORE.map((path) => cache.add(path)));
     const failed = CORE.filter((_, index) => results[index].status === 'rejected');
     if (failed.length) console.warn('[NOVA SW] Optional cache misses:', failed);
-    for (const critical of ['./index.html', './app.js', './nova-mcp.js', './styles.css']) {
+    for (const critical of ['./index.html', './app.js', './nova-mcp.js', './styles.css', './nova-free-calls.js', './nova-call-diagnostics.js']) {
       if (!(await cache.match(critical, { ignoreSearch: true }))) await cache.add(critical);
     }
   })());
@@ -470,13 +470,16 @@ self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
 
   if (sameOrigin && ALWAYS_FRESH_STATIC.test(url.pathname)) {
+    const network = fetch(event.request, { cache: 'no-store' })
+      .then((response) => {
+        if (response.ok) caches.open(CACHE).then((cache) => cache.put(event.request, response.clone()));
+        return response;
+      });
+    event.waitUntil(network.then(() => undefined, () => undefined));
     event.respondWith(
-      fetch(event.request, { cache: 'no-store' })
-        .then((response) => {
-          if (response.ok) caches.open(CACHE).then((cache) => cache.put(event.request, response.clone()));
-          return response;
-        })
-        .catch(() => caches.match(event.request, { ignoreSearch: true }))
+      caches.match(event.request, { ignoreSearch: true })
+        .then((cached) => cached || network)
+        .catch(() => network)
     );
     return;
   }

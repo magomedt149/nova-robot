@@ -12,6 +12,9 @@ on:
       - "service-worker.js"
       - "nova-health.js"
       - "nova-auto-montage.js"
+      - "nova-free-calls.js"
+      - "nova-call-diagnostics.js"
+      - "nova-call-check.html"
       - "nova-whisper.js"
       - "nova-mcp.js"
       - "nova-generation-ux.js"
@@ -35,6 +38,9 @@ on:
       - "service-worker.js"
       - "nova-health.js"
       - "nova-auto-montage.js"
+      - "nova-free-calls.js"
+      - "nova-call-diagnostics.js"
+      - "nova-call-check.html"
       - "nova-whisper.js"
       - "nova-mcp.js"
       - "nova-generation-ux.js"
@@ -82,6 +88,8 @@ jobs:
           node --check app.js
           node --check nova-health.js
           node --check nova-auto-montage.js
+          node --check nova-free-calls.js
+          node --check nova-call-diagnostics.js
           node --check nova-whisper.js
           node --check nova-mcp.js
           node --check nova-generation-ux.js

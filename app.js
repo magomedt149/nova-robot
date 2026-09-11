@@ -1,7 +1,7 @@
 (() => {
   'use strict';
 
-  const VERSION = '27.28.0';
+  const VERSION = '27.29.0';
   const $ = (selector) => document.querySelector(selector);
   const $$ = (selector) => [...document.querySelectorAll(selector)];
 
@@ -1574,25 +1574,30 @@
     }, 4800, token);
   }
 
-  function performFreeInternetCall() {
+  async function performFreeInternetCall() {
     resetPerformance();
     const calls = window.NOVA_FREE_CALLS;
-    if (!calls?.createRoom) {
+    if (!calls?.createAndOpen) {
       respond(language === 'en'
         ? 'NOVA FREE CALL is not available in this build.'
         : 'NOVA FREE CALL недоступен в этой версии.');
       return;
     }
 
-    const room = calls.createRoom();
-    addMessage('bot', language === 'en'
-      ? `FREE internet call room created: ${room.url}\nSend this link to the other person. It is an internet call, not a telephone-number call.`
-      : `Создана комната бесплатного интернет-звонка NOVA:\n${room.url}\nОтправь эту ссылку собеседнику. Это интернет-звонок, не звонок на обычный телефонный номер.`);
-    setStatus(language === 'en' ? 'NOVA FREE CALL ready' : 'NOVA FREE CALL готов', 'speaking');
-
-    window.setTimeout(() => {
-      try { calls.openRoom(room); } catch (_) {}
-    }, 900);
+    setStatus(language === 'en' ? 'Connecting NOVA FREE CALL…' : 'Подключаю NOVA FREE CALL…', 'thinking');
+    try {
+      const room = await calls.createAndOpen();
+      addMessage('bot', language === 'en'
+        ? `FREE internet video call ready: ${room.url}\nSend this link to the other person. No paid telephone call was started.`
+        : `Бесплатный видеозвонок NOVA готов:\n${room.url}\nНажми «Маме», чтобы отправить ссылку. Платный телефонный звонок не запускался.`);
+      setStatus(language === 'en' ? 'NOVA FREE CALL ready' : 'NOVA FREE CALL готов', 'speaking');
+    } catch (error) {
+      const room = calls.getLastRoom?.();
+      addMessage('bot', language === 'en'
+        ? `The embedded route is unavailable. Use the separate-call button${room?.url ? `: ${room.url}` : '.'}`
+        : `Встроенный маршрут сейчас недоступен. Нажми «Открыть видеозвонок»${room?.url ? ` или отправь ссылку:\n${room.url}` : '.'}`);
+      setStatus(language === 'en' ? 'Open the backup call' : 'Открой резервный звонок', 'error');
+    }
   }
 
   function isFreeInternetCallCommand(value) {

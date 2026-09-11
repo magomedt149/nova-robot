@@ -1,20 +1,58 @@
 (() => {
   'use strict';
 
-  const VERSION = '1.3.0';
+  const VERSION = '1.4.0';
   const ROOM_PREFIX = 'NOVA-TUMSOEV';
   const SELF_HOSTED_BASE = 'https://call.tumsoev.com/';
-  const TEMP_PUBLIC_FALLBACK_BASE = 'https://meet.jit.si/';
+  const TEMP_PUBLIC_FALLBACK_BASE = 'https://jitsi.member.fsf.org/';
+  const MODERATOR_FALLBACK_BASE = 'https://meet.jit.si/';
   const STORAGE_KEY = 'nova.freeCalls.lastRoom.v1';
   const SELF_HOSTED_SEEN_KEY = 'nova.freeCalls.selfHostedSeen.v1';
   const PUBLIC_FALLBACK_ALLOWED_KEY = 'nova.freeCalls.publicFallbackAllowed.v1';
   const UI_ID = 'nova-free-call-ui';
   const STYLE_ID = 'nova-free-call-style';
+  const SELF_HOSTED_PROBE_MS = 1400;
+  const PUBLIC_API_TIMEOUT_MS = 6500;
+  const CONNECTION_TIMEOUT_MS = 18000;
+
+  const PROVIDERS = Object.freeze({
+    selfHosted: Object.freeze({
+      id: 'self-hosted',
+      base: SELF_HOSTED_BASE,
+      provider: 'NOVA Call self-hosted',
+      selfHosted: true,
+      temporaryFallback: false,
+      communityFallback: false,
+      requiresModeratorLogin: false,
+      inline: true
+    }),
+    community: Object.freeze({
+      id: 'community',
+      base: TEMP_PUBLIC_FALLBACK_BASE,
+      provider: 'Jitsi community fallback',
+      selfHosted: false,
+      temporaryFallback: true,
+      communityFallback: true,
+      requiresModeratorLogin: false,
+      inline: true
+    }),
+    moderator: Object.freeze({
+      id: 'moderator-login',
+      base: MODERATOR_FALLBACK_BASE,
+      provider: 'Jitsi moderator-login fallback',
+      selfHosted: false,
+      temporaryFallback: true,
+      communityFallback: false,
+      requiresModeratorLogin: true,
+      inline: false
+    })
+  });
 
   let activeCallRoom = null;
   let jitsiApi = null;
   let wakeLock = null;
   let mountToken = 0;
+  let connectionTimer = 0;
 
   function randomToken(bytes = 12) {
     const data = new Uint8Array(bytes);
@@ -36,7 +74,15 @@
 
   function buildRoomUrl(roomName, base = SELF_HOSTED_BASE) {
     const room = encodeURIComponent(String(roomName || makeRoomName()).replace(/[^a-zA-Z0-9_-]/g, ''));
-    return `${normalizeBase(base)}${room}#config.startAudioOnly=false&config.startWithAudioMuted=false&config.startWithVideoMuted=false&config.prejoinPageEnabled=false&config.disableDeepLinking=true`;
+    const config = [
+      'config.startAudioOnly=false',
+      'config.startWithAudioMuted=false',
+      'config.startWithVideoMuted=false',
+      'config.prejoinPageEnabled=false',
+      'config.prejoinConfig.enabled=false',
+      'config.disableDeepLinking=true'
+    ];
+    return `${normalizeBase(base)}${room}#${config.join('&')}`;
   }
 
   function saveRoom(room) {
@@ -46,7 +92,32 @@
   function getLastRoom() {
     try {
       const value = localStorage.getItem(STORAGE_KEY);
-      return value ? JSON.parse(value) : null;
+      const room = value ? JSON.parse(value) : null;
+      if (!room?.url) return room;
+
+      // Rooms created by older NOVA builds used meet.jit.si as the normal
+      // fallback. That service now requires a moderator login and the OAuth
+      // popup is commonly blocked inside an iPhone PWA iframe. Migrate only
+      // those legacy rooms to the anonymous community route.
+      const isLegacyModeratorRoom = normalizeBase(room.base) === normalizeBase(MODERATOR_FALLBACK_BASE)
+        && room.requiresModeratorLogin !== true;
+      if (isLegacyModeratorRoom) {
+        const migrated = {
+          ...room,
+          url: buildRoomUrl(room.roomName, TEMP_PUBLIC_FALLBACK_BASE),
+          base: TEMP_PUBLIC_FALLBACK_BASE,
+          provider: PROVIDERS.community.provider,
+          providerId: PROVIDERS.community.id,
+          selfHosted: false,
+          temporaryFallback: true,
+          communityFallback: true,
+          requiresModeratorLogin: false,
+          inline: true
+        };
+        saveRoom(migrated);
+        return migrated;
+      }
+      return room;
     } catch (_) {
       return null;
     }
@@ -74,36 +145,44 @@
     try { localStorage.setItem(PUBLIC_FALLBACK_ALLOWED_KEY, enabled ? '1' : '0'); } catch (_) {}
   }
 
-  async function probe(url, timeoutMs = 3000) {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), timeoutMs);
-    try {
-      await fetch(url, { method: 'GET', mode: 'no-cors', cache: 'no-store', signal: controller.signal });
-      return true;
-    } catch (_) {
-      return false;
-    } finally {
-      clearTimeout(timeout);
-    }
+  function providerConfig(provider) {
+    return { ...(provider || PROVIDERS.community) };
+  }
+
+  function probeImage(base, timeoutMs = 3500) {
+    return new Promise((resolve) => {
+      if (navigator.onLine === false) { resolve(false); return; }
+      const image = new Image();
+      let settled = false;
+      const finish = (ok) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        image.onload = null;
+        image.onerror = null;
+        resolve(ok);
+      };
+      const timer = setTimeout(() => finish(false), timeoutMs);
+      image.onload = () => finish(true);
+      image.onerror = () => finish(false);
+      image.src = `${normalizeBase(base)}images/favicon.ico?nova_probe=${Date.now()}`;
+    });
   }
 
   async function resolveProvider() {
-    const fallbackAllowed = publicFallbackAllowed();
-    const [selfHostedOk, fallbackOk] = await Promise.all([
-      probe(SELF_HOSTED_BASE, 3000),
-      fallbackAllowed ? probe(TEMP_PUBLIC_FALLBACK_BASE, 3000) : Promise.resolve(false)
-    ]);
+    if (navigator.onLine === false) throw new Error('Нет интернета. Подключись к сети и нажми «Повтор».');
 
-    if (selfHostedOk) {
-      markSelfHostedWorking();
-      return { base: SELF_HOSTED_BASE, provider: 'NOVA Call self-hosted', selfHosted: true, temporaryFallback: false };
+    // Do not delay every call by probing an undeployed server. Once the
+    // self-hosted route has completed a real conference, NOVA checks it for a
+    // short bounded time and otherwise falls back immediately.
+    if (hasSelfHostedEverWorked() && await probeImage(SELF_HOSTED_BASE, SELF_HOSTED_PROBE_MS)) {
+      return providerConfig(PROVIDERS.selfHosted);
     }
 
-    if (fallbackOk) {
-      return { base: TEMP_PUBLIC_FALLBACK_BASE, provider: 'Jitsi public fallback', selfHosted: false, temporaryFallback: true };
-    }
+    if (publicFallbackAllowed()) return providerConfig(PROVIDERS.community);
 
-    throw new Error('Сейчас нет доступного маршрута NOVA Call.');
+    if (await probeImage(SELF_HOSTED_BASE, 3000)) return providerConfig(PROVIDERS.selfHosted);
+    throw new Error('Свой сервер NOVA Call недоступен, а бесплатный резерв отключён.');
   }
 
   function createRoomWithProvider(provider, roomName = makeRoomName()) {
@@ -113,8 +192,12 @@
       base: provider.base,
       createdAt: Date.now(),
       provider: provider.provider,
+      providerId: provider.id || '',
       selfHosted: provider.selfHosted === true,
       temporaryFallback: provider.temporaryFallback === true,
+      communityFallback: provider.communityFallback === true,
+      requiresModeratorLogin: provider.requiresModeratorLogin === true,
+      inline: provider.inline !== false,
       mode: 'FREE_VIDEO_CALL',
       video: true,
       pstn: false
@@ -123,9 +206,7 @@
     return room;
   }
 
-  let activeProvider = hasSelfHostedEverWorked()
-    ? { base: SELF_HOSTED_BASE, provider: 'NOVA Call self-hosted', selfHosted: true, temporaryFallback: false }
-    : { base: TEMP_PUBLIC_FALLBACK_BASE, provider: 'Jitsi public fallback', selfHosted: false, temporaryFallback: true };
+  let activeProvider = providerConfig(hasSelfHostedEverWorked() ? PROVIDERS.selfHosted : PROVIDERS.community);
 
   async function refreshActiveProvider() {
     try { activeProvider = await resolveProvider(); } catch (_) {}
@@ -143,17 +224,29 @@
   }
 
   async function diagnose() {
-    const [selfHosted, publicFallback] = await Promise.all([
-      probe(SELF_HOSTED_BASE, 5000),
-      publicFallbackAllowed() ? probe(TEMP_PUBLIC_FALLBACK_BASE, 5000) : Promise.resolve(false)
+    const [selfHosted, communityFallback] = await Promise.all([
+      probeImage(SELF_HOSTED_BASE, 4000),
+      publicFallbackAllowed() ? probeImage(TEMP_PUBLIC_FALLBACK_BASE, 5000) : Promise.resolve(false)
     ]);
+    let emergencyFallback = false;
+    if (!communityFallback && publicFallbackAllowed()) {
+      try {
+        await loadScript(`${normalizeBase(MODERATOR_FALLBACK_BASE)}external_api.js`, 5000);
+        emergencyFallback = true;
+      } catch (_) {}
+    }
     if (selfHosted) markSelfHostedWorking();
     return {
       version: VERSION,
       selfHostedUrl: SELF_HOSTED_BASE,
       selfHostedOnline: selfHosted,
       publicFallbackAllowed: publicFallbackAllowed(),
-      publicFallbackOnline: publicFallback,
+      publicFallbackOnline: communityFallback || emergencyFallback,
+      communityFallbackUrl: TEMP_PUBLIC_FALLBACK_BASE,
+      communityFallbackOnline: communityFallback,
+      emergencyFallbackUrl: MODERATOR_FALLBACK_BASE,
+      emergencyFallbackOnline: emergencyFallback,
+      emergencyFallbackRequiresModeratorLogin: true,
       permanentlyPreferSelfHosted: hasSelfHostedEverWorked(),
       inlineVideoCall: true,
       iframeApi: true,
@@ -239,8 +332,11 @@
       #${UI_ID} .nova-call-status{font-size:11px;padding:5px 8px;border-radius:999px;background:rgba(255,255,255,.08);white-space:nowrap} #${UI_ID} .nova-call-status[data-state="ready"]{background:rgba(35,180,105,.2)} #${UI_ID} .nova-call-status[data-state="error"]{background:rgba(220,70,70,.22)}
       #${UI_ID} button{appearance:none;border:1px solid rgba(255,255,255,.17);background:rgba(255,255,255,.08);color:#fff;border-radius:12px;min-height:39px;padding:0 11px;font:700 12px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif} #${UI_ID} button:active{transform:scale(.97)}
       #${UI_ID} .nova-call-close{width:40px;padding:0;font-size:24px} #${UI_ID} .nova-call-stage{position:relative;flex:1;min-height:0;background:#000;overflow:hidden} #${UI_ID} .nova-call-mount,#${UI_ID} .nova-call-mount>iframe{width:100%!important;height:100%!important;min-height:100%!important;border:0!important}
+      #${UI_ID} .nova-call-loading,#${UI_ID} .nova-call-fallback{box-sizing:border-box;width:100%;height:100%;min-height:260px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:28px;color:#fff;text-align:center;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+      #${UI_ID} .nova-call-spinner{width:38px;height:38px;border:4px solid rgba(255,255,255,.2);border-top-color:#4f94ff;border-radius:50%;animation:nova-call-spin .8s linear infinite} #${UI_ID} .nova-call-fallback b{font-size:21px} #${UI_ID} .nova-call-fallback p{max-width:440px;margin:0;color:rgba(255,255,255,.76);font-size:15px;line-height:1.45} #${UI_ID} .nova-call-fallback button{min-height:50px;padding:0 20px;background:#397fe8;border-color:#68a0f1;font-size:15px}
       #${UI_ID} .nova-call-actions{display:grid;grid-template-columns:repeat(4,1fr);gap:7px;padding:8px 9px;background:rgba(4,9,24,.98);border-top:1px solid rgba(255,255,255,.12)} #${UI_ID} .nova-call-actions button:first-child{background:rgba(40,180,110,.18);border-color:rgba(80,230,145,.45)}
       #${UI_ID} .nova-call-note{grid-column:1/-1;color:rgba(255,255,255,.68);font:500 10px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;text-align:center;line-height:1.3}
+      @keyframes nova-call-spin{to{transform:rotate(360deg)}}
       @media(max-width:560px){#${UI_ID} .nova-call-actions{grid-template-columns:1fr 1fr} #${UI_ID} .nova-call-status{display:none}}
     `;
     document.head.appendChild(style);
@@ -303,11 +399,19 @@
   }
 
   function providerText(room) {
-    return room?.selfHosted ? 'Свой NOVA Call сервер · видео' : 'Бесплатный резерв Jitsi · видео';
+    if (room?.selfHosted) return 'Свой NOVA Call сервер · видео';
+    if (room?.requiresModeratorLogin) return 'Аварийный резерв Jitsi · нужен вход организатора';
+    return 'Бесплатный резерв Jitsi · без регистрации';
+  }
+
+  function clearConnectionTimer() {
+    clearTimeout(connectionTimer);
+    connectionTimer = 0;
   }
 
   function disposeMeeting() {
     mountToken += 1;
+    clearConnectionTimer();
     try { jitsiApi?.dispose?.(); } catch (_) {}
     jitsiApi = null;
     const root = document.getElementById(UI_ID);
@@ -315,7 +419,7 @@
     if (mount) mount.innerHTML = '';
   }
 
-  function loadScript(src, timeoutMs = 7000) {
+  function loadScript(src, timeoutMs = PUBLIC_API_TIMEOUT_MS) {
     return new Promise((resolve, reject) => {
       if (window.JitsiMeetExternalAPI) return resolve(true);
       const existing = [...document.scripts].find((s) => s.src === src);
@@ -350,9 +454,13 @@
   }
 
   function bindJitsiEvents(api, room, token) {
-    const current = () => token === mountToken && activeCallRoom?.roomName === room.roomName;
+    const current = () => token === mountToken
+      && activeCallRoom?.roomName === room.roomName
+      && activeCallRoom?.providerId === room.providerId;
     api.addListener?.('videoConferenceJoined', () => {
       if (!current()) return;
+      clearConnectionTimer();
+      if (room.selfHosted) markSelfHostedWorking();
       setCallStatus('В ЭФИРЕ', 'ready');
       requestWakeLock();
     });
@@ -372,8 +480,18 @@
       if (!current()) return;
       setCallStatus('МИКРОФОН ⚠️', 'error');
     });
+    api.addListener?.('errorOccurred', (event) => {
+      if (!current()) return;
+      const signature = `${event?.type || ''} ${event?.name || ''}`.toLowerCase();
+      if (/conference|connection|authentication/.test(signature)) {
+        handleRoomFailure(room, token, 'Jitsi connection error');
+        return;
+      }
+      setCallStatus('ОШИБКА JITSI', 'error');
+    });
     api.addListener?.('videoConferenceLeft', () => {
       if (!current()) return;
+      clearConnectionTimer();
       setCallStatus('ЗВОНОК ЗАВЕРШЁН');
       releaseWakeLock();
     });
@@ -383,20 +501,83 @@
     });
   }
 
-  function fallbackDirectIframe(room, token) {
-    if (token !== mountToken) return;
+  function setMountLoading(message = 'Подключаю быстрый бесплатный маршрут…') {
     const root = ensureCallUi();
     const mount = root.querySelector('[data-nova-call-mount]');
-    if (!mount) return;
+    if (!mount) return false;
     mount.innerHTML = '';
-    const frame = document.createElement('iframe');
-    frame.title = 'NOVA видеозвонок';
-    frame.allow = 'camera; microphone; fullscreen; display-capture; autoplay; clipboard-write';
-    frame.allowFullscreen = true;
-    frame.referrerPolicy = 'no-referrer';
-    frame.src = room.url;
-    frame.addEventListener('load', () => setCallStatus('ОТКРЫТО', 'ready'), { once: true });
-    mount.appendChild(frame);
+    const box = document.createElement('div');
+    box.className = 'nova-call-loading';
+    const spinner = document.createElement('span');
+    spinner.className = 'nova-call-spinner';
+    spinner.setAttribute('aria-hidden', 'true');
+    const label = document.createElement('b');
+    label.textContent = message;
+    box.append(spinner, label);
+    mount.appendChild(box);
+    return true;
+  }
+
+  function showExternalFallback(room, reason = '') {
+    const root = ensureCallUi();
+    const mount = root.querySelector('[data-nova-call-mount]');
+    const provider = root.querySelector('[data-nova-call-provider]');
+    const note = root.querySelector('[data-nova-call-note]');
+    if (!mount) return false;
+    clearConnectionTimer();
+    if (provider) provider.textContent = providerText(room);
+    mount.innerHTML = '';
+
+    const box = document.createElement('div');
+    box.className = 'nova-call-fallback';
+    const title = document.createElement('b');
+    title.textContent = room.requiresModeratorLogin
+      ? 'Открой звонок отдельно'
+      : 'Не удалось подключить звонок внутри NOVA';
+    const message = document.createElement('p');
+    message.textContent = room.requiresModeratorLogin
+      ? 'Этот аварийный сервер просит первого участника войти как организатор. Отдельное окно не блокирует вход, как встроенный экран iPhone.'
+      : 'Нажми кнопку ниже — звонок откроется напрямую в браузере.';
+    const open = document.createElement('button');
+    open.type = 'button';
+    open.textContent = '↗ Открыть видеозвонок';
+    open.addEventListener('click', () => openRoomExternal(room));
+    box.append(title, message, open);
+
+    if (reason) {
+      const detail = document.createElement('small');
+      detail.textContent = 'NOVA остановила бесконечную загрузку и подготовила рабочий запасной запуск.';
+      box.appendChild(detail);
+    }
+    mount.appendChild(box);
+    if (note) note.textContent = 'Ссылка комнаты сохранена. Кнопки «Маме» и «Ссылка» продолжают работать.';
+    setCallStatus('НУЖНО ОТКРЫТЬ', 'error');
+    return true;
+  }
+
+  async function handleRoomFailure(room, token, reason = '') {
+    if (token !== mountToken) return false;
+    clearConnectionTimer();
+
+    if (room.selfHosted && publicFallbackAllowed()) {
+      const fallback = createRoomWithProvider(PROVIDERS.community, room.roomName);
+      activeProvider = providerConfig(PROVIDERS.community);
+      activeCallRoom = fallback;
+      setCallStatus('ВКЛЮЧАЮ РЕЗЕРВ…');
+      return mountRoom(fallback, true);
+    }
+
+    if (room.communityFallback && publicFallbackAllowed()) {
+      disposeMeeting();
+      const fallback = createRoomWithProvider(PROVIDERS.moderator, room.roomName);
+      activeProvider = providerConfig(PROVIDERS.moderator);
+      activeCallRoom = fallback;
+      return showExternalFallback(fallback, reason);
+    }
+
+    disposeMeeting();
+    activeCallRoom = room;
+    return showExternalFallback(room, reason);
   }
 
   async function mountRoom(room, force = false) {
@@ -410,7 +591,13 @@
     const token = ++mountToken;
     if (provider) provider.textContent = providerText(room);
     setCallStatus(navigator.onLine === false ? 'НЕТ ИНТЕРНЕТА' : 'ПОДКЛЮЧЕНИЕ…', navigator.onLine === false ? 'error' : '');
-    mount.innerHTML = '';
+    setMountLoading(navigator.onLine === false ? 'Нет интернета' : 'Подключаю видеозвонок…');
+
+    if (navigator.onLine === false) return false;
+    if (room.requiresModeratorLogin || room.inline === false) {
+      showExternalFallback(room);
+      return true;
+    }
 
     let origin;
     try { origin = new URL(room.base || room.url).origin; }
@@ -427,8 +614,10 @@
         width: '100%',
         height: '100%',
         lang: 'ru',
+        userInfo: { displayName: 'Тумсоев' },
         configOverwrite: {
           prejoinPageEnabled: false,
+          prejoinConfig: { enabled: false },
           startWithAudioMuted: false,
           startWithVideoMuted: false,
           disableDeepLinking: true,
@@ -438,10 +627,13 @@
       });
       bindJitsiEvents(jitsiApi, room, token);
       setCallStatus('ЗАПУСК…');
+      clearConnectionTimer();
+      connectionTimer = setTimeout(() => {
+        if (token === mountToken) handleRoomFailure(room, token, 'Connection timeout');
+      }, room.selfHosted ? 9000 : CONNECTION_TIMEOUT_MS);
       return true;
-    } catch (_) {
-      fallbackDirectIframe(room, token);
-      return true;
+    } catch (error) {
+      return handleRoomFailure(room, token, error?.message || 'Jitsi API unavailable');
     }
   }
 
@@ -477,22 +669,38 @@
 
   async function switchProvider() {
     if (!activeCallRoom) return false;
-    const useFallback = activeCallRoom.selfHosted;
-    if (useFallback && !publicFallbackAllowed()) setPublicFallbackAllowed(true);
-    const provider = useFallback
-      ? { base: TEMP_PUBLIC_FALLBACK_BASE, provider: 'Jitsi public fallback', selfHosted: false, temporaryFallback: true }
-      : { base: SELF_HOSTED_BASE, provider: 'NOVA Call self-hosted', selfHosted: true, temporaryFallback: false };
-    const switched = createRoomWithProvider(provider, activeCallRoom.roomName);
+    let nextProvider = PROVIDERS.selfHosted;
+    if (activeCallRoom.selfHosted) nextProvider = PROVIDERS.community;
+    else if (activeCallRoom.communityFallback) nextProvider = PROVIDERS.moderator;
+    if (nextProvider.temporaryFallback && !publicFallbackAllowed()) setPublicFallbackAllowed(true);
+    const switched = createRoomWithProvider(nextProvider, activeCallRoom.roomName);
+    activeProvider = providerConfig(nextProvider);
     activeCallRoom = switched;
     await mountRoom(switched, true);
-    setCallStatus('МАРШРУТ СМЕНЁН', 'ready');
     return switched;
   }
 
   async function createAndOpen() {
-    const room = await createBestRoom();
-    openRoom(room);
-    return room;
+    const root = ensureCallUi();
+    root.hidden = false;
+    document.documentElement.style.overflow = 'hidden';
+    document.body.style.overflow = 'hidden';
+    const provider = root.querySelector('[data-nova-call-provider]');
+    if (provider) provider.textContent = 'Выбираю лучший маршрут…';
+    setCallStatus('ГОТОВЛЮ…');
+    setMountLoading();
+    try {
+      const room = await createBestRoom();
+      activeCallRoom = room;
+      await mountRoom(room, true);
+      return activeCallRoom || room;
+    } catch (error) {
+      setCallStatus('НЕ УДАЛОСЬ', 'error');
+      const fallback = createRoomWithProvider(PROVIDERS.moderator);
+      activeCallRoom = fallback;
+      showExternalFallback(fallback, error?.message || 'No route');
+      throw error;
+    }
   }
 
   async function reopenLastRoom(maxAgeMs = 6 * 60 * 60 * 1000) {
@@ -514,12 +722,12 @@
     if (activeCallRoom && document.visibilityState === 'visible') requestWakeLock();
   });
 
-  refreshActiveProvider();
-
   window.NOVA_FREE_CALLS = {
     version: VERSION,
     selfHostedBase: SELF_HOSTED_BASE,
     fallbackBase: TEMP_PUBLIC_FALLBACK_BASE,
+    communityFallbackBase: TEMP_PUBLIC_FALLBACK_BASE,
+    moderatorFallbackBase: MODERATOR_FALLBACK_BASE,
     createRoom,
     createBestRoom,
     buildRoomUrl,

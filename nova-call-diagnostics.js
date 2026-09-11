@@ -1,7 +1,7 @@
 (() => {
   'use strict';
 
-  const VERSION = '1.1.0';
+  const VERSION = '1.2.0';
   const BADGE_ID = 'novaCallStatusBadge';
   const BUTTON_ID = 'novaCallCheckBtn';
   const MODAL_ID = 'novaCallDiagnosticsModal';
@@ -22,8 +22,8 @@
     badge = document.createElement('span');
     badge.id = BADGE_ID;
     badge.className = 'version';
-    badge.textContent = 'CALL…';
-    badge.title = 'NOVA Call — автоматическая проверка';
+    badge.textContent = 'CALL ✓';
+    badge.title = 'NOVA Call — нажми для полной проверки';
     anchor.insertAdjacentElement('afterend', badge);
     return badge;
   }
@@ -48,7 +48,8 @@
     setBadge('checking', 'CALL…');
     try {
       const info = await calls.diagnose();
-      const fallbackReady = info.publicFallbackAllowed && info.publicFallbackOnline;
+      const fallbackReady = info.publicFallbackAllowed && info.communityFallbackOnline;
+      const emergencyReady = info.publicFallbackAllowed && info.emergencyFallbackOnline;
       const ok = info.selfHostedOnline || fallbackReady;
       if (info.selfHostedOnline) {
         setBadge('ready', 'CALL READY');
@@ -56,7 +57,11 @@
       }
       if (fallbackReady) {
         setBadge('ready', 'CALL READY');
-        return { ok:true, state:'free-fallback', message:'Основной сервер недоступен, бесплатный резерв готов.', info };
+        return { ok:true, state:'free-fallback', message:'Бесплатный резерв без регистрации готов.', info };
+      }
+      if (emergencyReady) {
+        setBadge('checking', 'CALL BACKUP');
+        return { ok:false, state:'moderator-fallback', message:'Доступен только аварийный резерв: организатору потребуется войти в отдельном окне.', info };
       }
       setBadge('offline', 'CALL OFFLINE');
       return { ok:false, state:'offline', message:'Сейчас не найден доступный маршрут для бесплатного видеозвонка.', info };
@@ -87,7 +92,8 @@
     const info = result.info || {};
     const stateLabel = result.ok ? '🟢 ГОТОВО' : '🔴 НЕ ГОТОВО';
     const selfLabel = info.selfHostedOnline ? '🟢 online' : '⚪ offline / не настроен';
-    const fallbackLabel = info.publicFallbackAllowed ? (info.publicFallbackOnline ? '🟢 доступен' : '🔴 недоступен') : '🔒 отключён';
+    const fallbackLabel = info.publicFallbackAllowed ? (info.communityFallbackOnline ? '🟢 доступен без входа' : '🔴 недоступен') : '🔒 отключён';
+    const emergencyLabel = info.emergencyFallbackOnline ? '🟡 доступен, нужен вход организатора' : 'резервируется только при сбое';
     const mediaLabel = info.mediaDevices ? '🟢 поддерживаются' : '🔴 недоступны';
 
     card.innerHTML = `
@@ -98,7 +104,8 @@
       <p><b>${stateLabel}</b></p><p>${esc(result.message)}</p>
       <div style="background:#1d1d1d;border-radius:12px;padding:12px">
         <div>Свой сервер: <b>${selfLabel}</b></div>
-        <div>Бесплатный резерв: <b>${fallbackLabel}</b></div>
+        <div>Бесплатный резерв без регистрации: <b>${fallbackLabel}</b></div>
+        <div>Аварийный резерв: <b>${emergencyLabel}</b></div>
         <div>Камера/микрофон браузера: <b>${mediaLabel}</b></div>
         <div>Встроенный видеозвонок: <b>${info.iframeApi ? 'Jitsi IFrame API' : 'обычный режим'}</b></div>
         <div>Интернет: <b>${info.online === false ? '🔴 offline' : '🟢 online'}</b></div>
@@ -126,11 +133,10 @@
     card.querySelector('[data-test-room]')?.addEventListener('click', async () => {
       const box = card.querySelector('[data-room]');
       const calls = getCalls();
-      if (!calls?.createBestRoom) { box.textContent = 'Модуль создания комнаты недоступен.'; return; }
+      if (!calls?.createAndOpen) { box.textContent = 'Модуль создания комнаты недоступен.'; return; }
       box.textContent = 'Создаю…';
       try {
-        const room = await calls.createBestRoom();
-        calls.openRoom?.(room);
+        await calls.createAndOpen();
         box.textContent = '✅ Видеозвонок открыт внутри NOVA.';
       } catch (error) {
         box.textContent = error?.message || 'Не удалось создать комнату.';
@@ -154,7 +160,7 @@
       badge.dataset.novaCallBound = '1';
       badge.addEventListener('click', openDiagnostics);
     }
-    window.setTimeout(runCheck, 1200);
+    setBadge(getCalls()?.diagnose ? 'ready' : 'offline', getCalls()?.diagnose ? 'CALL ✓' : 'CALL OFFLINE');
   }
 
   window.NOVA_CALL_DIAGNOSTICS = { version: VERSION, runCheck, openDiagnostics };
