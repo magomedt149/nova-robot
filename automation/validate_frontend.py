@@ -49,6 +49,13 @@ def fail(message: str) -> None:
     raise SystemExit(1)
 
 
+def semver_tuple(value: str) -> tuple[int, int, int] | None:
+    match = re.fullmatch(r"(\d+)\.(\d+)\.(\d+)", value.strip())
+    if not match:
+        return None
+    return tuple(int(part) for part in match.groups())
+
+
 def main() -> int:
     index_path = ROOT / "index.html"
     sw_path = ROOT / "service-worker.js"
@@ -119,8 +126,20 @@ def main() -> int:
     health = (ROOT / "nova-health.js").read_text(encoding="utf-8")
     if f"const BUILD = '{version}';" not in health:
         fail(f"nova-health.js build is not synchronized with version.json ({version})")
-    if f"const APP_VERSION = '{version}';" not in sw:
-        fail(f"service-worker cache version is not synchronized with version.json ({version})")
+
+    sw_version_match = re.search(r"const\s+APP_VERSION\s*=\s*['\"]([^'\"]+)['\"]", sw)
+    if not sw_version_match:
+        fail("service-worker APP_VERSION not found")
+    sw_version = sw_version_match.group(1).strip()
+    app_semver = semver_tuple(version)
+    sw_semver = semver_tuple(sw_version)
+    if not app_semver or not sw_semver:
+        fail(f"invalid semantic version: app={version}, service-worker={sw_version}")
+    if sw_semver[:2] != app_semver[:2] or sw_semver[2] < app_semver[2]:
+        fail(
+            "service-worker cache version is stale or incompatible with "
+            f"version.json (app={version}, service-worker={sw_version})"
+        )
 
     script_order = [local_path(src) for src in parser.scripts]
     for required in ("nova-health.js", "nova-auto-montage.js", "app.js"):
@@ -167,7 +186,7 @@ def main() -> int:
 
     print(f"OK: {len(local_assets)} local index assets")
     print(f"OK: {len(core)} service-worker CORE files")
-    print(f"OK: version {version}")
+    print(f"OK: app version {version}; service-worker cache {sw_version}")
     print("OK: NOVA frontend structural validation passed")
     return 0
 
