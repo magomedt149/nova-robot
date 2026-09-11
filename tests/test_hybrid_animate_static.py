@@ -32,7 +32,7 @@ def main() -> None:
     hollywood = read("hollywood-studio.js")
     version = json.loads(read("version.json"))
 
-    must('WORKER_VERSION = "2.2.0"' in worker, "GPU worker is 2.2.0")
+    must('WORKER_VERSION = "2.3.0"' in worker, "GPU worker is 2.3.0")
     must("has_reference: bool = False" in worker, "WanGP router accepts single-photo references")
     must('settings["image_start"] = str(character_reference)' in worker, "single photo becomes WanGP image_start")
     must('"natural": "Natural living full-body motion' in worker, "natural full-body motion prompt exists")
@@ -60,7 +60,7 @@ def main() -> None:
     must(version.get("hybridSinglePhotoImageToVideo") is True, "single-photo image-to-video flag is enabled")
     must(version.get("hybridZeroCreditRouterSelfTest") is True, "zero-credit Hybrid router self-test is enabled")
     must(version.get("motionStudioVersion") == "30", "version.json Motion Studio is v30")
-    must(version.get("remoteGpuWorkerVersion") == "2.2.0", "version.json worker is 2.2.0")
+    must(version.get("remoteGpuWorkerVersion") == "2.3.0", "version.json worker is 2.3.0")
     must(version.get("healthRuntimeVersion") == current_version, "health runtime version matches NOVA")
 
     print("OK: NOVA Hybrid Animate GitHub regression checks passed")

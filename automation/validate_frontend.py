@@ -158,7 +158,7 @@ def main() -> int:
     hollywood = (ROOT / "hollywood-studio.js").read_text(encoding="utf-8")
 
     hybrid_checks = [
-        ('WORKER_VERSION = "2.2.0"' in worker, "GPU worker version 2.2.0"),
+        ('WORKER_VERSION = "2.3.0"' in worker, "GPU worker version 2.3.0"),
         ("has_reference: bool = False" in worker, "WanGP single-photo reference routing"),
         ('settings["image_start"] = str(character_reference)' in worker, "single photo becomes WanGP image_start"),
         ('"natural": "Natural living full-body motion' in worker, "natural full-body motion prompt"),
@@ -177,7 +177,7 @@ def main() -> int:
         (version_data.get("hybridSinglePhotoImageToVideo") is True, "single-photo image-to-video enabled"),
         (version_data.get("hybridZeroCreditRouterSelfTest") is True, "Hybrid zero-credit router self-test enabled"),
         (version_data.get("motionStudioVersion") == "30", "version.json Motion Studio v30"),
-        (version_data.get("remoteGpuWorkerVersion") == "2.2.0", "version.json worker 2.2.0"),
+        (version_data.get("remoteGpuWorkerVersion") == "2.3.0", "version.json worker 2.3.0"),
         (version_data.get("healthRuntimeVersion") == version, "health runtime matches NOVA version"),
     ]
     failed_hybrid = [label for ok, label in hybrid_checks if not ok]

@@ -72,7 +72,7 @@ if (-not $WorkerPython) {
 }
 
 & $WorkerPython -m pip install --upgrade pip
-& $WorkerPython -m pip install fastapi uvicorn python-multipart mediapipe opencv-python-headless
+& $WorkerPython -m pip install fastapi uvicorn python-multipart mediapipe opencv-python-headless torch transformers scipy
 
 if ((Has-Cmd "tailscale") -and -not $NoFunnel) {
   $status = ""

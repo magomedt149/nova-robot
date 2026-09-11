@@ -48,7 +48,8 @@
   const VOICES = Object.freeze({
     liza: Object.freeze({ id: '55f8c0f546884f9cbdefa113f5e7b682', label: 'Лиза — Elizabeth Friendly', provider: 'heygen', locale: 'ru-RU', exactReference: true }),
     irina: Object.freeze({ id: IRINA_LOCK.voiceId, label: 'Ирина', provider: IRINA_LOCK.provider, locale: IRINA_LOCK.locale, gender: 'female', locked: true }),
-    denis: Object.freeze({ id: DENIS_PROFILE.voiceId, label: 'Денис — мужской RU', provider: DENIS_PROFILE.provider, locale: DENIS_PROFILE.locale, gender: DENIS_PROFILE.gender })
+    denis: Object.freeze({ id: DENIS_PROFILE.voiceId, label: 'Денис — мужской RU', provider: DENIS_PROFILE.provider, locale: DENIS_PROFILE.locale, gender: DENIS_PROFILE.gender }),
+    ramzan: Object.freeze({ id: 'facebook/mms-tts-che', label: 'Рамзан — чеченский', provider: 'meta-mms-worker', locale: 'ce-RU', gender: 'male', paidApi: false })
   });
 
   const synth = window.speechSynthesis;
@@ -156,6 +157,7 @@
   function normalizeVoice(value) {
     const raw = String(value || '').toLowerCase().replace(/^nova:/, '');
     if (raw === 'elizabeth' || raw === 'elizabeth-friendly' || raw === 'lisa') return 'liza';
+    if (raw === 'рамзан' || raw === 'chechen' || raw === 'ce') return 'ramzan';
     return VOICES[raw] ? raw : 'irina';
   }
 
@@ -558,10 +560,16 @@
   }
 
   async function speakNow(text, voice = getDefaultVoice()) {
+    const key = normalizeVoice(voice);
+    if (key === 'ramzan') {
+      const cleanChechen = basicClean(text);
+      if (!cleanChechen) return;
+      if (!window.NovaChechenTTS?.speak) throw new Error('Модуль чеченского голоса Рамзан не загружен.');
+      return window.NovaChechenTTS.speak(cleanChechen);
+    }
     await ensurePronunciation();
     const clean = cleanRussianText(text);
     if (!clean) return;
-    const key = normalizeVoice(voice);
     if (key === 'liza') return speakExactLiza(clean);
     if (key === 'irina') assertIrinaLocked();
 
@@ -635,6 +643,7 @@
   function speak(text, voice = getDefaultVoice()) { return enqueueSpeak(text, voice); }
   function speakIrina(text) { assertIrinaLocked(); return enqueueSpeak(text, 'irina'); }
   function speakDenis(text) { return enqueueSpeak(text, 'denis'); }
+  function speakRamzan(text) { return enqueueSpeak(text, 'ramzan'); }
 
   async function speakDialogue(turns) {
     const normalized = (Array.isArray(turns) ? turns : []).map((turn, index) => ({
@@ -691,16 +700,24 @@
         const irina = select.querySelector('option[value="nova:irina"]');
         irina?.insertAdjacentElement('afterend', denis);
       }
+      if (!select.querySelector('option[value="nova:ramzan"]')) {
+        const ramzan = document.createElement('option');
+        ramzan.value = 'nova:ramzan';
+        ramzan.textContent = 'Рамзан — чеченский · Meta MMS (FREE Worker)';
+        const denis = select.querySelector('option[value="nova:denis"]');
+        denis?.insertAdjacentElement('afterend', ramzan);
+      }
       if (!select.dataset.novaVoicePresetBound) {
         select.dataset.novaVoicePresetBound = '1';
         select.addEventListener('change', () => {
           if (select.value === 'nova:liza') setDefaultVoice('liza');
           else if (select.value === 'nova:irina') setDefaultVoice('irina');
           else if (select.value === 'nova:denis') setDefaultVoice('denis');
+          else if (select.value === 'nova:ramzan') setDefaultVoice('ramzan');
         });
       }
       if (!select.value || select.value.startsWith('nova:')) {
-        select.value = selectedPreset === 'liza' ? 'nova:liza' : selectedPreset === 'denis' ? 'nova:denis' : 'nova:irina';
+        select.value = selectedPreset === 'liza' ? 'nova:liza' : selectedPreset === 'denis' ? 'nova:denis' : selectedPreset === 'ramzan' ? 'nova:ramzan' : 'nova:irina';
       }
     });
   }
@@ -715,7 +732,7 @@
     const note = document.createElement('div');
     note.id = 'novaNeuralTtsNote';
     note.className = 'nova-note-meta';
-    note.textContent = '🇷🇺 Голоса NOVA: Ирина — женский ru-RU (Piper Irina, при сбое только женский системный fallback). Денис — мужской ru-RU (на iPhone мужской системный голос, при необходимости Piper Denis). При переключении женский и мужской профили не смешиваются.';
+    note.textContent = 'Голоса NOVA: Ирина и Денис — русский Piper. Рамзан — чеченский Meta MMS через подключённый бесплатный NOVA Worker/Colab; платные API не используются.';
     anchor.insertAdjacentElement('afterend', note);
   }
 
@@ -749,6 +766,7 @@
     irinaLock: IRINA_LOCK,
     irinaRuntimeProfile: IRINA_RUNTIME_PROFILE,
     denisProfile: DENIS_PROFILE,
+    ramzanProfile: VOICES.ramzan,
     exactLiza: VOICES.liza,
     defaultNarrator: getDefaultVoice(),
     defaultMale: 'denis',
@@ -763,6 +781,7 @@
     speak,
     speakIrina,
     speakDenis,
+    speakRamzan,
     speakDialogue,
     findClosestMaleRussianVoice,
     findClosestFemaleRussianVoice,

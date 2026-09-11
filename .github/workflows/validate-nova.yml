@@ -136,7 +136,7 @@ jobs:
           grep -q "mix_audio" automation/remote_gpu_worker.py
           grep -q "export_mp4_compatible" automation/remote_gpu_worker.py
           grep -q "run_worker_self_test" automation/remote_gpu_worker.py
-          grep -q "PROTOCOL_VERSION = 8" automation/remote_gpu_worker.py
+          grep -q "PROTOCOL_VERSION = 9" automation/remote_gpu_worker.py
           for instrument in guitar piano accordion bass synth; do
             python automation/nova_music.py --chords "Am,D,G,Em" --bpm 120 --instrument "$instrument" --beats-per-chord 0.5 --repeats 1 --out "/tmp/nova-media-test/music-$instrument.wav"
             test -s "/tmp/nova-media-test/music-$instrument.wav"

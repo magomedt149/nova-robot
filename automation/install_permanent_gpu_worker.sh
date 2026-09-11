@@ -11,7 +11,7 @@ SERVICE="$SERVICE_DIR/nova-gpu-worker.service"
 mkdir -p "$HOME_DIR" "$SERVICE_DIR"
 python3 -m venv "$VENV"
 "$PY" -m pip install --upgrade pip
-"$PY" -m pip install fastapi uvicorn python-multipart mediapipe opencv-python-headless
+"$PY" -m pip install fastapi uvicorn python-multipart mediapipe opencv-python-headless torch transformers scipy
 
 cat > "$SERVICE" <<EOF
 [Unit]
