@@ -129,6 +129,95 @@ def synthesize_chechen_tts(text: str) -> Path:
     return output
 
 
+def chechen_song_lines(lyrics: str) -> list[tuple[str, str]]:
+    section = "verse"
+    lines: list[tuple[str, str]] = []
+    for raw in lyrics.splitlines():
+        line = raw.strip()
+        if not line:
+            continue
+        if line.startswith("[") and line.endswith("]"):
+            section = line[1:-1].strip().lower() or "verse"
+            continue
+        lines.append((section, line))
+    return lines
+
+
+def synthesize_chechen_song_test(lyrics: str, bpm: float) -> Path:
+    """Create an experimental rhythmic/melodic TTS preview, not a cloned singer."""
+    lines = chechen_song_lines(lyrics)
+    if not lines:
+        raise RuntimeError("No lyric lines found")
+    if len(lines) > 32:
+        raise RuntimeError("Song test supports up to 32 lyric lines")
+    if not command_exists("ffmpeg") or not command_exists("ffprobe"):
+        raise RuntimeError("FFmpeg and FFprobe are required for song mode")
+
+    work = Path(tempfile.mkdtemp(prefix="nova_ramzan_song_"))
+    paced: list[Path] = []
+    pitch_steps = [1.0, 1.059463, 1.122462, 1.059463, 1.0, 0.943874]
+    try:
+        for index, (section, line) in enumerate(lines):
+            raw_temp = synthesize_chechen_tts(line.lower())
+            raw = work / f"raw_{index:02d}.wav"
+            shutil.move(str(raw_temp), raw)
+            raw_duration = max(0.25, media_duration_seconds(raw))
+            is_chorus = "chorus" in section or "припев" in section or "final" in section
+            stretch = 1.88 if is_chorus else 1.68
+            pause = 0.62 if index == len(lines) - 1 else 0.34
+            target_voice = min(raw_duration * stretch, 7.5)
+            target_slot = target_voice + pause
+            pitch = pitch_steps[index % len(pitch_steps)] * (1.059463 if is_chorus else 1.0)
+            output = work / f"line_{index:02d}.wav"
+            audio_filter = (
+                f"rubberband=tempo={raw_duration / target_voice:.6f}:pitch={pitch:.6f}:"
+                "transients=smooth:detector=soft:formant=preserved,"
+                "highpass=f=72,lowpass=f=10800,aecho=0.80:0.18:90:0.11,"
+                f"afade=t=in:st=0:d=0.025,apad=pad_dur={pause:.3f},"
+                f"atrim=0:{target_slot:.3f},aresample=44100"
+            )
+            subprocess.run(
+                ["ffmpeg", "-y", "-v", "error", "-i", str(raw), "-af", audio_filter, str(output)],
+                check=True,
+                timeout=120,
+            )
+            paced.append(output)
+
+        manifest = work / "concat.txt"
+        manifest.write_text("\n".join(f"file '{path.as_posix()}'" for path in paced) + "\n", encoding="utf-8")
+        vocal = work / "ramzan-vocal.wav"
+        subprocess.run(
+            ["ffmpeg", "-y", "-v", "error", "-f", "concat", "-safe", "0", "-i", str(manifest), "-ar", "44100", "-ac", "1", str(vocal)],
+            check=True,
+            timeout=180,
+        )
+        duration = max(1.0, media_duration_seconds(vocal))
+        seconds_per_cycle = 16.0 * 60.0 / bpm
+        repeats = max(1, min(32, int(duration / seconds_per_cycle) + 1))
+        music = work / "music.wav"
+        subprocess.run(
+            [sys.executable, str(REPO_ROOT / "automation" / "nova_music.py"), "--chords", "Am,D,G,Em", "--bpm", f"{bpm:g}", "--instrument", "guitar", "--beats-per-chord", "4", "--repeats", str(repeats), "--out", str(music)],
+            check=True,
+            timeout=180,
+        )
+        output = work / "ramzan-chechen-song-test.mp3"
+        fade_start = max(0.0, duration - 1.0)
+        subprocess.run(
+            [
+                "ffmpeg", "-y", "-v", "error", "-i", str(music), "-i", str(vocal),
+                "-filter_complex",
+                f"[0:a]volume=0.62[m];[1:a]volume=1.20[v];[m][v]amix=inputs=2:duration=shortest:normalize=0,afade=t=out:st={fade_start:.3f}:d=1.0,loudnorm=I=-15:LRA=7:TP=-1.5[a]",
+                "-map", "[a]", "-ar", "44100", "-ac", "2", "-b:a", "192k", str(output),
+            ],
+            check=True,
+            timeout=180,
+        )
+        return output
+    except Exception:
+        shutil.rmtree(work, ignore_errors=True)
+        raise
+
+
 def status_path(job_id: str) -> Path:
     return JOB_ROOT / job_id / "status.json"
 
@@ -1624,6 +1713,7 @@ async def health(request: Request):
             "chechen_tts_voice": "ramzan",
             "chechen_tts_model": CHECHEN_TTS_MODEL_ID,
             "chechen_tts_paid_api": False,
+            "chechen_tts_song_test": command_exists("ffmpeg"),
         },
         "wangp_root": str(WANGP_ROOT),
         "job_root": str(JOB_ROOT),
@@ -1656,6 +1746,31 @@ async def chechen_tts(request: Request):
         media_type="audio/wav",
         filename="ramzan-chechen.wav",
         background=BackgroundTask(output.unlink, missing_ok=True),
+    )
+
+
+@app.post("/tts/chechen-song")
+async def chechen_song_tts(request: Request):
+    require_token(request)
+    try:
+        payload = await request.json()
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail="Expected JSON body") from exc
+    lyrics = str(payload.get("lyrics", "") if isinstance(payload, dict) else "").strip()
+    if not lyrics:
+        raise HTTPException(status_code=400, detail="Chechen song lyrics are empty")
+    if len(lyrics) > CHECHEN_TTS_MAX_CHARS:
+        raise HTTPException(status_code=413, detail=f"Lyrics exceed {CHECHEN_TTS_MAX_CHARS} characters")
+    try:
+        bpm = max(60.0, min(140.0, float(payload.get("bpm", 82))))
+        output = await asyncio.to_thread(synthesize_chechen_song_test, lyrics, bpm)
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail=f"Chechen song test failed: {exc}") from exc
+    return FileResponse(
+        output,
+        media_type="audio/mpeg",
+        filename="ramzan-chechen-song-test.mp3",
+        background=BackgroundTask(shutil.rmtree, output.parent, ignore_errors=True),
     )
 
 
