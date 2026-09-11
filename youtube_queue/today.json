@@ -1,50 +1,50 @@
 {
-  "date": "2026-09-09",
-  "title": "Nintendo Direct 9.9.2026: 5 главных анонсов за 45 секунд",
-  "description": "Свежий разбор Nintendo Direct 9 сентября 2026: Persona 6, Metroid Ravenous, Monster Hunter Wilds, Pikmin 4 Switch 2 Edition и Final Fantasy VII Revelation. Коротко, без чужих клипов — только оригинальный пересказ и выводы.",
-  "hashtags": ["#NintendoDirect", "#NintendoSwitch2", "#Persona6", "#Metroid", "#GamingNews"],
-  "tags": ["Nintendo Direct 2026", "Nintendo Switch 2", "Persona 6", "Metroid Ravenous", "Monster Hunter Wilds", "Pikmin 4", "Final Fantasy VII Revelation", "gaming news"],
-  "category_id": "20",
+  "date": "2026-09-10",
+  "title": "iPhone 18 Pro: 5 главных новинок, которые Apple только что показала",
+  "description": "Свежий разбор iPhone 18 Pro после презентации Apple: A20 Pro, камера 48 МП с переменной диафрагмой, новая Siri AI, увеличенная автономность и более быстрая зарядка. Коротко и по делу — оригинальный пересказ без чужих клипов.",
+  "hashtags": ["#iPhone18Pro", "#Apple", "#iOS27", "#SiriAI", "#TechNews"],
+  "tags": ["iPhone 18 Pro", "iPhone 18 Pro Max", "Apple September 2026", "A20 Pro", "Siri AI", "iOS 27", "variable aperture", "Apple news"],
+  "category_id": "28",
   "privacy_status": "public",
-  "pre_publish_score": 96,
+  "pre_publish_score": 97,
   "narrator": "irina",
-  "voice_note": "Свежая озвучка Ириной Piper ru_RU-irina-medium для новостного игрового формата.",
-  "first_frame": "NINTENDO DIRECT: 5 ГЛАВНЫХ АНОНСОВ",
+  "voice_note": "Свежая озвучка Ириной Piper ru_RU-irina-medium для новостного tech-формата.",
+  "first_frame": "IPHONE 18 PRO: 5 ГЛАВНЫХ НОВИНОК",
   "source_urls": [
-    "https://www.nintendo.com/us/nintendo-direct/archive/",
-    "https://www.nintendo.com/it-it/Notizie/Nintendo-Direct/L-ultimo-Nintendo-Direct/Nintendo-Direct-698557.html"
+    "https://www.apple.com/newsroom/2026/09/apple-debuts-iphone-18-pro-and-iphone-18-pro-max/",
+    "https://www.macrumors.com/2026/09/10/iphone-18-pro-pro-max-10-new-features/"
   ],
-  "originality_note": "Оригинальный русскоязычный пересказ публичных анонсов Nintendo. Не использовать чужие видеофрагменты, трейлеры или защищённые клипы.",
+  "originality_note": "Оригинальный русскоязычный пересказ официально объявленных характеристик. Не использовать чужие видеофрагменты презентации, обзоров или рекламных роликов.",
   "scenes": [
     {
-      "headline": "5 АНОНСОВ ЗА 45 СЕКУНД",
-      "caption": "Nintendo Direct вышел сегодня — вот что реально важно.",
-      "narration": "Сегодня Nintendo провела новый Direct про игры для Switch 2. Вот пять анонсов, которые стоит знать прямо сейчас."
+      "headline": "5 НОВИНОК ЗА 50 СЕКУНД",
+      "caption": "Apple показала iPhone 18 Pro — вот что реально изменилось.",
+      "narration": "Apple только что показала iPhone 18 Pro. Вот пять изменений, которые реально отличают его от прошлогодней модели."
     },
     {
-      "headline": "PERSONA 6",
-      "caption": "Официально идёт на Nintendo Switch 2.",
-      "narration": "Первое: Persona 6 подтверждена для Nintendo Switch 2. Для фанатов серии это один из самых заметных анонсов презентации."
+      "headline": "A20 PRO — 2 НМ",
+      "caption": "Новый чип и более стабильная производительность.",
+      "narration": "Первое: новый A20 Pro. Это первый двухнанометровый чип в айфоне, а Apple обещает заметный прирост производительности и графики."
     },
     {
-      "headline": "METROID RAVENOUS",
-      "caption": "Релиз — 28 января 2027 года.",
-      "narration": "Второе: Metroid Ravenous получила дату выхода — двадцать восьмое января две тысячи двадцать седьмого года."
+      "headline": "КАМЕРА С ДИАФРАГМОЙ",
+      "caption": "48 МП и ручной выбор глубины резкости.",
+      "narration": "Второе: основная камера на сорок восемь мегапикселей получила переменную диафрагму. Теперь можно лучше контролировать свет и глубину резкости прямо в камере."
     },
     {
-      "headline": "MONSTER HUNTER WILDS",
-      "caption": "Игра приходит на Switch 2 этой зимой.",
-      "narration": "Третье: Monster Hunter Wilds тоже выходит на Switch 2. Это усиливает зимнюю линейку консоли ещё одним большим именем."
+      "headline": "SIRI AI + IOS 27",
+      "caption": "Больше контекста и действий прямо на iPhone.",
+      "narration": "Третье: iOS 27 приносит Siri AI. Она лучше понимает контекст на экране и должна стать намного полезнее в ежедневных задачах."
     },
     {
-      "headline": "PIKMIN + FINAL FANTASY",
-      "caption": "Pikmin 4 Switch 2 Edition и Final Fantasy VII Revelation.",
-      "narration": "Четвёртое и пятое: обновлённый Pikmin 4 для Switch 2 и Final Fantasy VII Revelation тоже были среди главных показов."
+      "headline": "БАТАРЕЯ И ЗАРЯДКА",
+      "caption": "До 50 процентов примерно за 15 минут.",
+      "narration": "Четвёртое и пятое: выросла автономность, особенно у Pro Max, а быстрая зарядка теперь обещает около пятидесяти процентов примерно за пятнадцать минут."
     },
     {
-      "headline": "КАКОЙ АНОНС №1?",
-      "caption": "Persona 6, Metroid или Monster Hunter?",
-      "narration": "Какой анонс для тебя самый сильный: Persona 6, Metroid или Monster Hunter? Напиши один вариант — посмотрим, что выберет большинство."
+      "headline": "ОБНОВЛЯТЬСЯ ИЛИ НЕТ?",
+      "caption": "Главный вопрос — стоит ли менять прошлый Pro.",
+      "narration": "А теперь главный вопрос: ты бы обновился ради камеры и Siri AI, или оставил прошлый Pro ещё на год? Напиши один вариант в комментариях."
     }
   ]
 }
