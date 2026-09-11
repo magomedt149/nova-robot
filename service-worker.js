@@ -1,4 +1,4 @@
-const APP_VERSION = '27.29.0';
+const APP_VERSION = '27.30.0';
 const CACHE = `nova-v${APP_VERSION}-github-mcp`;
 const API_CACHE = 'nova-api-economy-v2';
 const METERED_NETLIFY_HOST = /(^|\.)netlify\.app$/i.test(self.location.hostname);
@@ -79,7 +79,14 @@ self.addEventListener('install', (event) => {
   self.skipWaiting();
   event.waitUntil((async () => {
     const cache = await caches.open(CACHE);
-    const results = await Promise.allSettled(CORE.map((path) => cache.add(path)));
+    const results = await Promise.allSettled(CORE.map(async (path) => {
+      const separator = path.includes('?') ? '&' : '?';
+      const response = await fetch(`${path}${separator}nova_release=${encodeURIComponent(APP_VERSION)}`, {
+        cache: 'reload'
+      });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      await cache.put(path, response);
+    }));
     const failed = CORE.filter((_, index) => results[index].status === 'rejected');
     if (failed.length) console.warn('[NOVA SW] Optional cache misses:', failed);
     for (const critical of ['./index.html', './app.js', './nova-mcp.js', './styles.css', './nova-free-calls.js', './nova-call-diagnostics.js']) {
@@ -528,7 +535,7 @@ self.addEventListener('fetch', (event) => {
   }
 
   event.respondWith(
-    fetch(event.request)
+    fetch(event.request, sameOrigin && event.request.mode === 'navigate' ? { cache: 'no-store' } : undefined)
       .then((response) => {
         if (response.ok && sameOrigin) {
           const copy = response.clone();

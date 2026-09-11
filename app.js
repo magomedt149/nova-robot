@@ -1,7 +1,7 @@
 (() => {
   'use strict';
 
-  const VERSION = '27.29.0';
+  const VERSION = '27.30.0';
   const $ = (selector) => document.querySelector(selector);
   const $$ = (selector) => [...document.querySelectorAll(selector)];
 
@@ -2897,7 +2897,7 @@
   async function checkForNovaUpdate() {
     if (novaAutoUpdateRunning || novaAutoUpdateRedirecting || document.hidden || !navigator.onLine) return false;
     // Never auto-poll the metered Netlify host. NOVA's free update path is GitHub Pages/static hosting.
-    if (/(^|\\.)netlify\\.app$/i.test(location.hostname)) return false;
+    if (/(^|\.)netlify\.app$/i.test(location.hostname)) return false;
 
     novaAutoUpdateRunning = true;
     try {
@@ -2908,7 +2908,7 @@
       if (!response.ok) return false;
       const info = await response.json();
       const target = String(info?.pwa || info?.version || '').trim();
-      if (!/^\\d+\\.\\d+\\.\\d+$/.test(target) || compareNovaVersions(target, VERSION) <= 0) return false;
+      if (!/^\d+\.\d+\.\d+$/.test(target) || compareNovaVersions(target, VERSION) <= 0) return false;
 
       novaAutoUpdateRedirecting = true;
       pauseRecognitionForOutput();
@@ -2940,7 +2940,7 @@
 
   if ('serviceWorker' in navigator) {
     let pwaReloading = false;
-    const isMeteredNetlifyHost = /(^|\\.)netlify\\.app$/i.test(location.hostname);
+    const isMeteredNetlifyHost = /(^|\.)netlify\.app$/i.test(location.hostname);
     navigator.serviceWorker.addEventListener('controllerchange', () => {
       if (pwaReloading) return;
       pwaReloading = true;
@@ -2955,12 +2955,13 @@
     window.addEventListener('load', async () => {
       try {
         let registration = await navigator.serviceWorker.getRegistration('./');
-        if (!registration) {
-          registration = await navigator.serviceWorker.register(
-            `./service-worker.js?v=${encodeURIComponent(VERSION)}`,
-            { updateViaCache: 'none' }
-          );
-        } else if (!isMeteredNetlifyHost) {
+        if (!registration || !isMeteredNetlifyHost) {
+          const workerUrl = isMeteredNetlifyHost
+            ? `./service-worker.js?v=${encodeURIComponent(VERSION)}`
+            : `./service-worker.js?nova_release=${encodeURIComponent(VERSION)}`;
+          registration = await navigator.serviceWorker.register(workerUrl, { updateViaCache: 'none' });
+        }
+        if (!isMeteredNetlifyHost) {
           await registration.update().catch(() => {});
         }
 

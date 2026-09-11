@@ -40,6 +40,10 @@ def write_fixture(root: Path, version: str = "1.2.3") -> None:
         f"const APP_VERSION = '{version}';\nconst CACHE = `nova-v${{APP_VERSION}}`;\n",
         encoding="utf-8",
     )
+    (root / "update.html").write_text(
+        f"<script>const FALLBACK_TARGET = '{version}';</script>\n",
+        encoding="utf-8",
+    )
 
 
 def test_current_repository_release_markers_are_consistent() -> None:
@@ -58,6 +62,7 @@ def test_release_update_changes_every_marker_together() -> None:
             "app.js",
             "nova-health.js",
             "service-worker.js",
+            "update.html",
         }
         for relative, content in updates.items():
             (root / relative).write_text(content, encoding="utf-8")

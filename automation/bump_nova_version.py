@@ -25,6 +25,7 @@ VERSION_PATHS = (
     "app.js",
     "nova-health.js",
     "service-worker.js",
+    "update.html",
 )
 
 
@@ -83,6 +84,11 @@ def validate_consistency(root: Path) -> str:
     require_marker(index, f"app.js?v={version}", "app cache marker")
     require_marker(read_text(root, "app.js"), f"const VERSION = '{version}';", "app runtime")
     require_marker(read_text(root, "nova-health.js"), f"const BUILD = '{version}';", "health runtime")
+    require_marker(
+        read_text(root, "update.html"),
+        f"const FALLBACK_TARGET = '{version}';",
+        "update fallback",
+    )
 
     sw_version = service_worker_version(root)
     sw_semver = semver_tuple(sw_version)
@@ -139,6 +145,12 @@ def collect_updates(root: Path, new_version: str) -> dict[str, str]:
         f"const APP_VERSION = '{new_version}';",
         "service-worker.js",
     )
+    update_page = replace_exact(
+        read_text(root, "update.html"),
+        f"const FALLBACK_TARGET = '{old_version}';",
+        f"const FALLBACK_TARGET = '{new_version}';",
+        "update.html",
+    )
 
     return {
         "version.json": json.dumps(data, ensure_ascii=False, indent=2) + "\n",
@@ -146,6 +158,7 @@ def collect_updates(root: Path, new_version: str) -> dict[str, str]:
         "app.js": app,
         "nova-health.js": health,
         "service-worker.js": worker,
+        "update.html": update_page,
     }
 
 
