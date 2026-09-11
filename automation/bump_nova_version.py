@@ -2,7 +2,11 @@
 """Update every NOVA release marker as one validated local transaction.
 
 Use this tool before creating a release commit instead of editing version files
-one at a time.  If validation fails, every edited file is restored.
+one at a time. If validation fails, every edited file is restored.
+
+The service-worker cache revision may be one patch ahead of the app version for
+cache-only hotfixes (for example app 27.28.0 with worker 27.28.1). Full NOVA
+version bumps still synchronize every release marker in one transaction.
 """
 from __future__ import annotations
 
@@ -47,11 +51,27 @@ def require_marker(text: str, marker: str, label: str) -> None:
         raise VersionError(f"{label} is not synchronized: expected {marker!r}")
 
 
+def semver_tuple(value: str) -> tuple[int, int, int]:
+    match = SEMVER.fullmatch(value.strip())
+    if not match:
+        raise VersionError(f"invalid semantic version x.y.z: {value!r}")
+    return tuple(int(part) for part in match.groups())
+
+
+def service_worker_version(root: Path) -> str:
+    worker = read_text(root, "service-worker.js")
+    match = re.search(r"const\s+APP_VERSION\s*=\s*['\"]([^'\"]+)['\"]", worker)
+    if not match:
+        raise VersionError("service-worker APP_VERSION marker is missing")
+    version = match.group(1).strip()
+    semver_tuple(version)
+    return version
+
+
 def validate_consistency(root: Path) -> str:
     data = load_version_data(root)
     version = str(data.get("version", "")).strip()
-    if not SEMVER.fullmatch(version):
-        raise VersionError(f"version.json version is not semantic x.y.z: {version!r}")
+    app_semver = semver_tuple(version)
     for field in ("pwa", "healthRuntimeVersion"):
         if str(data.get(field, "")).strip() != version:
             raise VersionError(f"version.json.{field} does not match {version}")
@@ -63,11 +83,14 @@ def validate_consistency(root: Path) -> str:
     require_marker(index, f"app.js?v={version}", "app cache marker")
     require_marker(read_text(root, "app.js"), f"const VERSION = '{version}';", "app runtime")
     require_marker(read_text(root, "nova-health.js"), f"const BUILD = '{version}';", "health runtime")
-    require_marker(
-        read_text(root, "service-worker.js"),
-        f"const APP_VERSION = '{version}';",
-        "service-worker cache version",
-    )
+
+    sw_version = service_worker_version(root)
+    sw_semver = semver_tuple(sw_version)
+    if sw_semver[:2] != app_semver[:2] or sw_semver[2] < app_semver[2]:
+        raise VersionError(
+            "service-worker cache version is stale or incompatible: "
+            f"app={version}, service-worker={sw_version}"
+        )
     return version
 
 
@@ -109,9 +132,10 @@ def collect_updates(root: Path, new_version: str) -> dict[str, str]:
         f"const BUILD = '{new_version}';",
         "nova-health.js",
     )
+    old_sw_version = service_worker_version(root)
     worker = replace_exact(
         read_text(root, "service-worker.js"),
-        f"const APP_VERSION = '{old_version}';",
+        f"const APP_VERSION = '{old_sw_version}';",
         f"const APP_VERSION = '{new_version}';",
         "service-worker.js",
     )
@@ -171,7 +195,7 @@ def main() -> int:
             if args.version:
                 raise VersionError("do not provide a version together with --check")
             version = validate_consistency(ROOT)
-            print(f"OK: all NOVA release markers match {version}")
+            print(f"OK: NOVA release markers are compatible with app version {version}")
             return 0
         if not args.version:
             raise VersionError("provide a new version or use --check")
