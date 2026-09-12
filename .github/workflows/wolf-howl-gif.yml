@@ -1,0 +1,67 @@
+name: Wolf Gray Howl GIF
+
+on:
+  push:
+    branches:
+      - test/wolf-motion-full-pipeline
+    paths:
+      - 'blender/wolf-motion/render_wolf_howl_gif.py'
+      - '.github/workflows/wolf-howl-gif.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  render-howl-gif:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Blender, FFmpeg and headless display
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y blender python3-numpy ffmpeg xvfb libegl1
+          blender --version
+          ffmpeg -version | head -n 1
+
+      - name: Generate rigged wolf GLB
+        run: |
+          blender --background --python blender/wolf-motion/generate_procedural_wolf.py
+
+      - name: Render howl animation frames
+        run: |
+          xvfb-run -a blender --background --python blender/wolf-motion/render_wolf_howl_gif.py
+
+      - name: Build GIF and MP4 preview
+        run: |
+          mkdir -p blender/wolf-motion/renders
+          ffmpeg -y -framerate 12 -pattern_type glob -i 'blender/wolf-motion/renders/howl_frames/howl_*.png' \
+            -vf 'palettegen=max_colors=192' blender/wolf-motion/renders/howl_palette.png
+          ffmpeg -y -framerate 12 -pattern_type glob -i 'blender/wolf-motion/renders/howl_frames/howl_*.png' \
+            -i blender/wolf-motion/renders/howl_palette.png -lavfi 'paletteuse=dither=sierra2_4a' \
+            blender/wolf-motion/renders/wolf_gray_howl.gif
+          ffmpeg -y -framerate 12 -pattern_type glob -i 'blender/wolf-motion/renders/howl_frames/howl_*.png' \
+            -c:v libx264 -pix_fmt yuv420p -crf 20 blender/wolf-motion/renders/wolf_gray_howl.mp4
+
+      - name: Validate outputs
+        run: |
+          test -s blender/wolf-motion/renders/wolf_gray_howl.gif
+          test -s blender/wolf-motion/renders/wolf_gray_howl.mp4
+          test -s blender/wolf-motion/renders/wolf_howl_preview.blend
+          file blender/wolf-motion/renders/wolf_gray_howl.gif
+          ls -lh blender/wolf-motion/renders/wolf_gray_howl.* blender/wolf-motion/renders/wolf_howl_preview.blend
+
+      - name: Upload howl preview artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: wolf-gray-howl
+          path: |
+            blender/wolf-motion/renders/wolf_gray_howl.gif
+            blender/wolf-motion/renders/wolf_gray_howl.mp4
+            blender/wolf-motion/renders/wolf_howl_preview.blend
+            blender/wolf-motion/assets/model/wolf.glb
+          if-no-files-found: error
+          retention-days: 7
