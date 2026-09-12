@@ -311,20 +311,39 @@ def configure_render(args, output: Path):
         resolution = (1080, 1920) if args.quality == "final" else (540, 960)
     scene.render.resolution_x, scene.render.resolution_y = resolution
     scene.render.resolution_percentage = 100
-    scene.render.image_settings.file_format = "FFMPEG"
-    scene.render.ffmpeg.format = "MPEG4"
+    raw = output.with_name(output.stem + ".blender.mp4")
     try:
+        scene.render.image_settings.file_format = "FFMPEG"
+        scene.render.ffmpeg.format = "MPEG4"
         scene.render.ffmpeg.codec = "H264"
         scene.render.ffmpeg.constant_rate_factor = "MEDIUM"
-    except Exception:
-        pass
-    raw = output.with_name(output.stem + ".blender.mp4")
-    scene.render.filepath = str(raw)
+        scene.render.filepath = str(raw)
+    except (TypeError, ValueError):
+        # Some Blender 5.x Linux builds omit the built-in FFMPEG output enum.
+        # Render lossless frames and let the system ffmpeg create the MP4.
+        raw = output.with_name(output.stem + "_frames")
+        if raw.exists():
+            shutil.rmtree(raw)
+        raw.mkdir(parents=True)
+        scene.render.image_settings.file_format = "PNG"
+        scene.render.filepath = str(raw / "frame_")
     return frames, raw, resolution
 
 
-def faststart(raw: Path, output: Path):
+def faststart(raw: Path, output: Path, fps: int):
     ffmpeg = shutil.which("ffmpeg")
+    if raw.is_dir():
+        if not ffmpeg:
+            raise RuntimeError("ffmpeg is required to encode Blender PNG frames")
+        subprocess.run([
+            ffmpeg, "-y", "-hide_banner", "-loglevel", "error",
+            "-framerate", str(fps), "-start_number", "1",
+            "-i", str(raw / "frame_%04d.png"),
+            "-c:v", "libx264", "-pix_fmt", "yuv420p",
+            "-movflags", "+faststart", "-an", str(output)
+        ], check=True)
+        shutil.rmtree(raw)
+        return
     if not ffmpeg:
         if raw != output:
             shutil.move(str(raw), str(output))
@@ -370,9 +389,12 @@ def main():
     scene = bpy.context.scene
     scene.frame_set(1)
     bpy.ops.render.render(animation=True)
-    if not raw.is_file() or raw.stat().st_size <= 0:
+    if raw.is_dir():
+        if not any(raw.glob("frame_*.png")):
+            raise RuntimeError(f"Blender did not produce frame sequence: {raw}")
+    elif not raw.is_file() or raw.stat().st_size <= 0:
         raise RuntimeError(f"Blender did not produce video: {raw}")
-    faststart(raw, output)
+    faststart(raw, output, args.fps)
     if not output.is_file() or output.stat().st_size <= 0:
         raise RuntimeError(f"Final MP4 is missing: {output}")
     print("NOVA WOLF AUTO READY:", output)
