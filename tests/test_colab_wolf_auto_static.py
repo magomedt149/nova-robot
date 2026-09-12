@@ -22,7 +22,8 @@ NOTEBOOK = NOTEBOOK_PATH.read_text(encoding="utf-8")
 
 def test_voice_command_routes_to_wolf_motion_studio():
     assert "WOLF_COLAB_COMMAND" in FREE
-    assert "Нова, включи Colab" in FREE
+    assert "(?:включи|запусти|открой)" in FREE
+    assert "(?:colab|колаб|коллаб)" in FREE
     assert "nova.colab.wolf.voiceApprovedAt" in FREE
     assert "target.searchParams.set('wolf', '1')" in FREE
 
