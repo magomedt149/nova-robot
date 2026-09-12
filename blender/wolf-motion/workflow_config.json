@@ -1,0 +1,21 @@
+{
+  "project": "Tumsoev Wolf Motion",
+  "fps": 24,
+  "model_file": "assets/model/wolf.glb",
+  "motion_refs": {
+    "idle": {"file": "motion_refs/idle.mp4", "seconds": 3.0, "loop": true},
+    "walk": {"file": "motion_refs/walk.mp4", "seconds": 2.0, "loop": true},
+    "run": {"file": "motion_refs/run.mp4", "seconds": 1.0, "loop": true},
+    "howl": {"file": "motion_refs/howl.mp4", "seconds": 3.5, "loop": false}
+  },
+  "actions": {
+    "idle": "WOLF_IDLE",
+    "walk": "WOLF_WALK",
+    "run": "WOLF_RUN",
+    "howl": "WOLF_HOWL"
+  },
+  "export": {
+    "glb": "exports/wolf_animated.glb"
+  },
+  "free_lock": true
+}
