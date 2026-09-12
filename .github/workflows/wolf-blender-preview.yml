@@ -1,0 +1,54 @@
+name: Wolf Blender FREE Preview
+
+on:
+  push:
+    branches:
+      - test/wolf-motion-full-pipeline
+    paths:
+      - 'blender/wolf-motion/generate_procedural_wolf.py'
+      - 'blender/wolf-motion/render_wolf_preview.py'
+      - '.github/workflows/wolf-blender-preview.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  render-preview:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Blender and NumPy
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y blender python3-numpy
+          blender --version
+
+      - name: Generate procedural wolf GLB
+        run: |
+          blender --background --python blender/wolf-motion/generate_procedural_wolf.py
+
+      - name: Render Blender preview and save .blend
+        run: |
+          blender --background --python blender/wolf-motion/render_wolf_preview.py
+
+      - name: Validate preview outputs
+        run: |
+          test -s blender/wolf-motion/renders/wolf_blender_preview.png
+          test -s blender/wolf-motion/renders/wolf_blender_preview.blend
+          file blender/wolf-motion/renders/wolf_blender_preview.png
+          ls -lh blender/wolf-motion/renders/wolf_blender_preview.*
+
+      - name: Upload Blender preview artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: wolf-blender-preview
+          path: |
+            blender/wolf-motion/renders/wolf_blender_preview.png
+            blender/wolf-motion/renders/wolf_blender_preview.blend
+            blender/wolf-motion/assets/model/wolf.glb
+          if-no-files-found: error
+          retention-days: 7
