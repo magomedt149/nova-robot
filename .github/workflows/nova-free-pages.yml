@@ -10,9 +10,13 @@ permissions:
   pages: write
   id-token: write
 
+# GitHub Pages allows only one active deployment. Do not cancel an in-flight
+# deployment: cancelling here can leave Pages reporting the old deployment as
+# "in progress" for a few seconds and make the next run fail red. Queue runs
+# instead, so the newest commit deploys after the previous one finishes.
 concurrency:
   group: nova-pages
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   check:
