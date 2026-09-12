@@ -27,7 +27,7 @@ jobs:
         run: |
           set -euo pipefail
           sudo apt-get update -qq
-          sudo apt-get install -y --no-install-recommends ffmpeg wget xz-utils
+          sudo apt-get install -y --no-install-recommends ffmpeg wget xz-utils libegl1
 
       - name: Install Blender 5.2.1 LTS
         run: |
