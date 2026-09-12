@@ -1,9 +1,10 @@
-name: Wolf Blender FREE Smoke Test
+name: Wolf Blender FREE Full Pipeline Test
 
 on:
   push:
     branches:
       - test/wolf-motion-blender
+      - test/wolf-motion-full-pipeline
     paths:
       - 'blender/wolf-motion/**'
       - '.github/workflows/wolf-blender-smoke-test.yml'
@@ -13,12 +14,18 @@ permissions:
   contents: read
 
 jobs:
-  blender-smoke:
+  blender-pipeline:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 18
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Asset preflight
+        id: assets
+        run: |
+          mkdir -p blender/wolf-motion/exports
+          python blender/wolf-motion/asset_preflight.py
 
       - name: Install Blender and GLB dependency
         run: |
@@ -27,12 +34,11 @@ jobs:
           blender --version
           blender --background --python-expr "import numpy; print('NUMPY_OK', numpy.__version__)"
 
-      - name: Run headless Blender smoke test
+      - name: Proxy smoke test
         run: |
-          mkdir -p blender/wolf-motion/exports
           blender --background --python blender/wolf-motion/ci_smoke_test.py
 
-      - name: Validate exported GLB and report
+      - name: Validate proxy GLB and action slots
         run: |
           test -s blender/wolf-motion/exports/wolf_motion_smoke.glb
           test -s blender/wolf-motion/exports/wolf_motion_smoke_report.json
@@ -48,12 +54,50 @@ jobs:
           print(json.dumps(report, ensure_ascii=False, indent=2))
           PY
 
-      - name: Upload first GLB test artifact
+      - name: Real wolf structure/export validation
+        if: steps.assets.outputs.model_present == 'true'
+        continue-on-error: true
+        run: |
+          blender --background --python blender/wolf-motion/real_model_validate.py
+
+      - name: Inspect real wolf report
+        if: steps.assets.outputs.model_present == 'true'
+        run: |
+          test -s blender/wolf-motion/exports/real_model_validation_report.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          p = Path('blender/wolf-motion/exports/real_model_validation_report.json')
+          report = json.loads(p.read_text(encoding='utf-8'))
+          print(json.dumps(report, ensure_ascii=False, indent=2))
+          assert report['status'] not in {'FAIL_NO_MESH','FAIL_EXPORT'}, report
+          PY
+
+      - name: Upload proxy GLB test artifact
         uses: actions/upload-artifact@v4
         with:
-          name: wolf-motion-first-glb
+          name: wolf-motion-proxy-glb
           path: |
             blender/wolf-motion/exports/wolf_motion_smoke.glb
             blender/wolf-motion/exports/wolf_motion_smoke_report.json
           if-no-files-found: error
+          retention-days: 7
+
+      - name: Upload asset preflight report
+        uses: actions/upload-artifact@v4
+        with:
+          name: wolf-motion-asset-preflight
+          path: blender/wolf-motion/exports/asset_preflight_report.json
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Upload real wolf validation artifact
+        if: steps.assets.outputs.model_present == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: wolf-real-model-validation
+          path: |
+            blender/wolf-motion/exports/real_model_validation_report.json
+            blender/wolf-motion/exports/wolf_real_pipeline_validation.glb
+          if-no-files-found: warn
           retention-days: 7
