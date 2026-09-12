@@ -1,0 +1,80 @@
+name: NOVA Wolf 10s FREE Render Test
+
+on:
+  push:
+    paths:
+      - '.github/workflows/nova-wolf-render-test.yml'
+      - 'blender-colab/scripts/render_wolf_cinema_auto.py'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  BLENDER_VERSION: '5.2.1'
+  BLENDER_DIR: '/tmp/blender-5.2.1-linux-x64'
+
+jobs:
+  render:
+    name: Render wolf 10s / 24fps / FREE
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Checkout NOVA
+        uses: actions/checkout@v5
+
+      - name: Install runtime deps
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends ffmpeg wget xz-utils
+
+      - name: Install Blender 5.2.1 LTS
+        run: |
+          set -euo pipefail
+          wget -q --show-progress https://download.blender.org/release/Blender5.2/blender-5.2.1-linux-x64.tar.xz -O /tmp/blender.tar.xz
+          tar -xf /tmp/blender.tar.xz -C /tmp
+          test -x "$BLENDER_DIR/blender"
+          "$BLENDER_DIR/blender" --version | head -n 3
+
+      - name: Render 10-second wolf test
+        env:
+          NOVA_BLENDER_BIN: /tmp/blender-5.2.1-linux-x64/blender
+          NOVA_WOLF_DURATION: '10'
+          NOVA_WOLF_FPS: '24'
+          NOVA_WOLF_WIDTH: '640'
+          NOVA_WOLF_HEIGHT: '360'
+          NOVA_WOLF_ENGINE: 'BLENDER_EEVEE_NEXT'
+          NOVA_WOLF_OUTPUT: '${{ github.workspace }}/artifacts/NOVA_WOLF_GITHUB_FREE_10s.mp4'
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts
+          "$NOVA_BLENDER_BIN" -b --python blender-colab/scripts/render_wolf_cinema_auto.py
+          test -s artifacts/NOVA_WOLF_GITHUB_FREE_10s.mp4
+          ffprobe -v error -show_entries format=duration -of default=nw=1:nk=1 artifacts/NOVA_WOLF_GITHUB_FREE_10s.mp4
+
+      - name: Verify video contract
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json, subprocess
+          p='artifacts/NOVA_WOLF_GITHUB_FREE_10s.mp4'
+          raw=subprocess.check_output(['ffprobe','-v','error','-show_streams','-show_format','-of','json',p], text=True)
+          j=json.loads(raw)
+          v=next(s for s in j['streams'] if s.get('codec_type')=='video')
+          fps=v.get('r_frame_rate','0/1')
+          num,den=map(int,fps.split('/'))
+          fps_val=num/den if den else 0
+          dur=float(j['format'].get('duration') or 0)
+          assert 9.7 <= dur <= 10.4, dur
+          assert abs(fps_val-24) < 0.05, fps_val
+          print(f'VIDEO_OK duration={dur:.3f}s fps={fps_val:.3f} size={v.get("width")}x{v.get("height")}')
+          PY
+
+      - name: Upload MP4 artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: NOVA-WOLF-FREE-10s
+          path: artifacts/NOVA_WOLF_GITHUB_FREE_10s.mp4
+          if-no-files-found: error
+          retention-days: 7
