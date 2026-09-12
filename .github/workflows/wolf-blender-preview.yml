@@ -21,10 +21,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install Blender and NumPy
+      - name: Install Blender and headless display deps
         run: |
           sudo apt-get update
-          sudo apt-get install -y blender python3-numpy
+          sudo apt-get install -y blender python3-numpy xvfb libegl1 libgl1-mesa-dri libglx-mesa0 mesa-vulkan-drivers
           blender --version
 
       - name: Generate procedural wolf GLB
@@ -32,8 +32,10 @@ jobs:
           blender --background --python blender/wolf-motion/generate_procedural_wolf.py
 
       - name: Render Blender preview and save .blend
+        env:
+          LIBGL_ALWAYS_SOFTWARE: '1'
         run: |
-          blender --background --python blender/wolf-motion/render_wolf_preview.py
+          xvfb-run -a blender --background --python blender/wolf-motion/render_wolf_preview.py
 
       - name: Validate preview outputs
         run: |
