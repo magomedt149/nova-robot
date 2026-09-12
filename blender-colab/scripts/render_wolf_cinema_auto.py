@@ -298,7 +298,7 @@ def verify_orbit(scene, cam, frames):
 
 def configure_render(args, output: Path):
     scene = bpy.context.scene
-    render_fps = min(int(args.fps), 6) if args.ci_smoke else int(args.fps)
+    render_fps = min(int(args.fps), 2) if args.ci_smoke else int(args.fps)
     frames = max(render_fps, int(round(args.duration * render_fps)))
     scene.frame_start = 1
     scene.frame_end = frames
