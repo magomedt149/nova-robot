@@ -8,15 +8,9 @@ on:
 permissions:
   contents: read
 
-# IMPORTANT:
-# GitHub Pages for this repository is already deployed by GitHub's native
-# Pages branch pipeline. A second actions/deploy-pages job races with that
-# native deployment and causes red failures such as:
-# "Deployment request failed ... due to in progress deployment".
-#
-# This workflow therefore owns validation only. The native Pages pipeline is
-# the single deployment owner. This keeps NOVA FREE, avoids duplicate deploys,
-# and makes every push deterministic.
+# GitHub's native Pages branch pipeline is the single deployment owner.
+# This workflow validates NOVA only. Keeping deployment out of this workflow
+# prevents duplicate Pages races and the red "in progress deployment" error.
 concurrency:
   group: nova-free-checks-${{ github.ref }}
   cancel-in-progress: true
@@ -83,14 +77,18 @@ jobs:
           python3 - <<'PY'
           import json
           from pathlib import Path
+
           p = Path('blender-colab/NOVA_Wolf_Auto_Worker.ipynb')
-          data = json.loads(p.read_text(encoding='utf-8'))
+          text = p.read_text(encoding='utf-8')
+          data = json.loads(text)
+
           assert data.get('nbformat') == 4
           assert data.get('cells')
-          text = p.read_text(encoding='utf-8')
-          assert 'NOVA_WOLF_AUTO_V1' in text
+          assert 'NOVA Wolf Direct Worker' in text
           assert 'runtime.unassign()' in text
-          assert 'без WanGP' in text
+          assert 'Blender 5.2.1' in text
+          assert 'WanGP здесь не используются' in text
+          assert 'pip install' not in text or 'wangp' not in text.lower()
           print('FREE wolf notebook: OK')
           PY
 
