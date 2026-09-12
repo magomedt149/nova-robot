@@ -131,6 +131,23 @@ def add_area(name, loc, energy, size, color, target):
     return obj
 
 
+def animation_fcurves(obj, data_path, indices):
+    """Return matching curves across Blender's legacy and layered Action APIs."""
+    animation = obj.animation_data
+    action = animation.action if animation else None
+    if not action:
+        return []
+
+    ensure = getattr(action, "fcurve_ensure_for_datablock", None)
+    if ensure:
+        return [ensure(obj, data_path, index=index) for index in indices]
+
+    return [
+        fc for fc in getattr(action, "fcurves", ())
+        if fc.data_path == data_path and fc.array_index in indices
+    ]
+
+
 def build_wolf():
     dark = material("WolfDark", (0.055, 0.065, 0.075), 0.92)
     grey = material("WolfGrey", (0.25, 0.29, 0.33), 0.92)
@@ -191,10 +208,9 @@ def build_wolf():
         obj.keyframe_insert(data_path="rotation_euler", frame=mid)
         obj.rotation_euler = base
         obj.keyframe_insert(data_path="rotation_euler", frame=end_plus)
-        if obj.animation_data and obj.animation_data.action:
-            for fc in obj.animation_data.action.fcurves:
-                for kp in fc.keyframe_points:
-                    kp.interpolation = "BEZIER"
+        for fc in animation_fcurves(obj, "rotation_euler", range(3)):
+            for kp in fc.keyframe_points:
+                kp.interpolation = "BEZIER"
     return body, chest, neck, head
 
 
@@ -246,10 +262,9 @@ def setup_orbit(frames: int):
     rig.keyframe_insert(data_path="rotation_euler", index=2, frame=1)
     rig.rotation_euler = (0.0, 0.0, math.radians(218) + math.tau)
     rig.keyframe_insert(data_path="rotation_euler", index=2, frame=frames + 1)
-    if rig.animation_data and rig.animation_data.action:
-        for fc in rig.animation_data.action.fcurves:
-            for kp in fc.keyframe_points:
-                kp.interpolation = "LINEAR"
+    for fc in animation_fcurves(rig, "rotation_euler", (2,)):
+        for kp in fc.keyframe_points:
+            kp.interpolation = "LINEAR"
 
     return cam, rig, target_obj
 
