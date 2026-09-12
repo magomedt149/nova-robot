@@ -55,16 +55,20 @@ def test_service_worker_loads_colab_auto_client():
     assert "injectColabWolfAuto" in SW
 
 
-def test_dedicated_notebook_is_valid_and_has_no_wangp_install():
+def test_dedicated_notebook_is_valid_direct_and_has_no_wangp_install():
     data = json.loads(NOTEBOOK)
     assert data.get("nbformat") == 4
     assert data.get("cells")
     assert "remote_gpu_worker_colab_auto.py" in NOTEBOOK
     assert "render_wolf_cinema_auto.py" in NOTEBOOK
-    assert "без WanGP" in NOTEBOOK
+    assert "Blender 5.2.1" in NOTEBOOK
+    assert "download.blender.org/release/Blender5.2" in NOTEBOOK
     assert "Wan2GP-on-Colab" not in NOTEBOOK
+    assert "NOVA_WANGP_ROOT" not in NOTEBOOK
+    assert "shared/api.py" not in NOTEBOOK
     assert "google.colab import runtime" in NOTEBOOK
     assert "runtime.unassign()" in NOTEBOOK
+    assert "Не зависит от GitHub Actions workflow" in NOTEBOOK
 
 
 def test_worker_routes_exact_marker_and_exposes_shutdown():
