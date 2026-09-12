@@ -1,13 +1,23 @@
 #!/usr/bin/env python3
+import json
+import shutil
+import subprocess
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-FREE = (ROOT / "nova-free-runtime.js").read_text(encoding="utf-8")
-CLIENT = (ROOT / "motion-studio" / "colab-wolf-auto.js").read_text(encoding="utf-8")
-SW = (ROOT / "motion-studio" / "service-worker.js").read_text(encoding="utf-8")
-WORKER = (ROOT / "automation" / "remote_gpu_worker_colab_auto.py").read_text(encoding="utf-8")
-RENDER = (ROOT / "blender-colab" / "scripts" / "render_wolf_cinema_auto.py").read_text(encoding="utf-8")
-NOTEBOOK = (ROOT / "blender-colab" / "NOVA_Wolf_Auto_Worker.ipynb").read_text(encoding="utf-8")
+FREE_PATH = ROOT / "nova-free-runtime.js"
+CLIENT_PATH = ROOT / "motion-studio" / "colab-wolf-auto.js"
+SW_PATH = ROOT / "motion-studio" / "service-worker.js"
+WORKER_PATH = ROOT / "automation" / "remote_gpu_worker_colab_auto.py"
+RENDER_PATH = ROOT / "blender-colab" / "scripts" / "render_wolf_cinema_auto.py"
+NOTEBOOK_PATH = ROOT / "blender-colab" / "NOVA_Wolf_Auto_Worker.ipynb"
+
+FREE = FREE_PATH.read_text(encoding="utf-8")
+CLIENT = CLIENT_PATH.read_text(encoding="utf-8")
+SW = SW_PATH.read_text(encoding="utf-8")
+WORKER = WORKER_PATH.read_text(encoding="utf-8")
+RENDER = RENDER_PATH.read_text(encoding="utf-8")
+NOTEBOOK = NOTEBOOK_PATH.read_text(encoding="utf-8")
 
 
 def test_voice_command_routes_to_wolf_motion_studio():
@@ -44,11 +54,14 @@ def test_service_worker_loads_colab_auto_client():
     assert "injectColabWolfAuto" in SW
 
 
-def test_dedicated_worker_is_free_blender_only():
+def test_dedicated_notebook_is_valid_and_has_no_wangp_install():
+    data = json.loads(NOTEBOOK)
+    assert data.get("nbformat") == 4
+    assert data.get("cells")
     assert "remote_gpu_worker_colab_auto.py" in NOTEBOOK
     assert "render_wolf_cinema_auto.py" in NOTEBOOK
-    assert "WanGP" in NOTEBOOK  # documentation explicitly says it is not used
     assert "без WanGP" in NOTEBOOK
+    assert "Wan2GP-on-Colab" not in NOTEBOOK
     assert "google.colab import runtime" in NOTEBOOK
     assert "runtime.unassign()" in NOTEBOOK
 
@@ -66,7 +79,15 @@ def test_wolf_render_target_is_10s_24fps_true_orbit():
     assert "math.tau" in RENDER
     assert "frames + 1" in RENDER
     assert "DAMPED_TRACK" in RENDER
-    assert "paid_api\": False" in RENDER
+    assert '"paid_api": False' in RENDER
+
+
+def test_new_javascript_parses_when_node_is_available():
+    node = shutil.which("node")
+    if not node:
+        return
+    for path in (FREE_PATH, CLIENT_PATH, SW_PATH):
+        subprocess.run([node, "--check", str(path)], check=True, capture_output=True, text=True)
 
 
 if __name__ == "__main__":
