@@ -25,6 +25,9 @@ def clear_scene():
 
 
 def create_proxy():
+    # Minimal but valid skinned mesh + armature.  The old proxy had an
+    # Armature modifier without any vertex weights, which trips Blender 4.0's
+    # glTF exporter while it tries to create neutral bones.
     bpy.ops.mesh.primitive_cube_add(size=2, location=(0, 0, 1.0))
     body = bpy.context.object
     body.name = "WOLF_PROXY_BODY"
@@ -40,9 +43,23 @@ def create_proxy():
     bone.tail = Vector((0, 0, 1.8))
     bpy.ops.object.mode_set(mode="OBJECT")
 
+    # Give every vertex a real deform weight for the root bone so the GLB
+    # contains a proper skin/joint relationship instead of a dangling rig.
+    group = body.vertex_groups.new(name="root")
+    group.add([vertex.index for vertex in body.data.vertices], 1.0, "REPLACE")
+
     body.parent = rig
+    body.parent_type = "OBJECT"
     modifier = body.modifiers.new(name="Armature", type="ARMATURE")
     modifier.object = rig
+    modifier.use_vertex_groups = True
+
+    # Keep object transforms clean and make sure both objects are enabled for export.
+    body.hide_render = False
+    rig.hide_render = False
+    bpy.context.view_layer.objects.active = rig
+    rig.select_set(True)
+    body.select_set(True)
     return body, rig
 
 
@@ -61,7 +78,9 @@ def make_actions(rig):
 
         track = rig.animation_data.nla_tracks.new()
         track.name = name
-        track.strips.new(name=name, start=1, action=action)
+        strip = track.strips.new(name=name, start=1, action=action)
+        strip.action_frame_start = 1
+        strip.action_frame_end = frames
 
     rig.animation_data.action = None
 
@@ -76,13 +95,15 @@ def configure_scene():
 
 def export_glb():
     bpy.ops.object.select_all(action="SELECT")
-    bpy.ops.export_scene.gltf(
+    result = bpy.ops.export_scene.gltf(
         filepath=str(GLB_PATH),
         export_format="GLB",
         export_animations=True,
         export_nla_strips=True,
         export_yup=True,
     )
+    if "FINISHED" not in result:
+        raise RuntimeError(f"GLB exporter returned {result}")
 
 
 def validate():
@@ -99,6 +120,7 @@ def validate():
         "glb": GLB_PATH.name,
         "glb_bytes": GLB_PATH.stat().st_size,
         "actions": names,
+        "skinned_proxy": True,
         "note": "FREE headless Blender proxy smoke test; no paid API and no AI credits used."
     }
     REPORT_PATH.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
