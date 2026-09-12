@@ -1,0 +1,68 @@
+{
+  "preset_version": "1.0.0",
+  "name": "NOVA Irina Master — LOCKED",
+  "locked": true,
+  "change_policy": "Do not change unless the user explicitly asks to change this preset.",
+  "voice": {
+    "provider": "Piper",
+    "voice_id": "ru_RU-irina-medium",
+    "locale": "ru-RU",
+    "pitch_factor": 1,
+    "formant_factor": 1,
+    "per_video_variation": false,
+    "allow_system_fallback": false,
+    "allow_automatic_voice_substitution": false,
+    "allow_pitch_shift": false,
+    "allow_formant_shift": false,
+    "allow_demo_sample_reuse": false
+  },
+  "pronunciation": {
+    "layer": "NOVA Russian Pronunciation",
+    "normalize_technical_terms": true,
+    "preserve_yo": true,
+    "numbers_to_words": true,
+    "acronyms_to_russian_speech": true,
+    "long_text_chunk_chars": 190
+  },
+  "narration": {
+    "style": "clear Russian tutorial narration",
+    "background_music": false,
+    "keep_natural_pauses": true,
+    "prioritize_intelligibility": true
+  },
+  "mastering": {
+    "highpass_hz": 90,
+    "presence_eq": [
+      {
+        "frequency_hz": 2200,
+        "q": 1.2,
+        "gain_db": 2.5
+      },
+      {
+        "frequency_hz": 3800,
+        "q": 1.1,
+        "gain_db": 1.8
+      }
+    ],
+    "lowpass_hz": 8500,
+    "compressor": {
+      "threshold_db": -20,
+      "ratio": 2.2,
+      "attack_ms": 8,
+      "release_ms": 140,
+      "makeup_db": 2
+    },
+    "loudness": {
+      "integrated_lufs": -14,
+      "true_peak_db": -1,
+      "lra": 5
+    },
+    "output": {
+      "sample_rate_hz": 48000,
+      "channels": 2,
+      "video_audio_codec": "AAC",
+      "video_audio_bitrate_kbps": 192
+    }
+  },
+  "last_verified_example": "NOVA_Ирина_12s_МАКС_РАЗБОРЧИВО.mp4"
+}

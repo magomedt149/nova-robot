@@ -1,0 +1,11 @@
+__pycache__/
+*.py[cod]
+*.onnx
+*.onnx.json
+youtube_output/
+.env
+.env.local
+.env.*.local
+client_secret*.json
+credentials*.json
+youtube_token*.json

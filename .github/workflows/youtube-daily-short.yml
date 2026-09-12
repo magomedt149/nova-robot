@@ -1,0 +1,132 @@
+name: Daily YouTube Short - PREVIEW ONLY
+
+on:
+  workflow_dispatch:
+    inputs:
+      force:
+        description: 'Use the editor queue even when its saved date is stale'
+        required: false
+        default: false
+        type: boolean
+  schedule:
+    - cron: '0 22 * * *'
+      timezone: 'America/Los_Angeles'
+  push:
+    branches:
+      - main
+    paths:
+      - 'youtube_queue/today.json'
+      - 'youtube_queue/daily_templates.json'
+      - 'youtube/prepare_daily_queue.py'
+      - 'youtube/render_short.py'
+      - 'youtube/validate_short.py'
+      - 'youtube/requirements-preview.txt'
+      - '.github/workflows/youtube-daily-short.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: youtube-daily-short-preview
+  cancel-in-progress: true
+
+jobs:
+  build-preview:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout NOVA
+        uses: actions/checkout@v5
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+          cache-dependency-path: youtube/requirements-preview.txt
+
+      - name: Prepare today's validated queue
+        id: queue
+        env:
+          FORCE_CUSTOM: ${{ inputs.force }}
+        run: |
+          set -euo pipefail
+          args=(
+            --output youtube_output/prepared_queue.json
+            --github-output "$GITHUB_OUTPUT"
+          )
+          if [[ "${FORCE_CUSTOM:-false}" == "true" ]]; then
+            args+=(--force-custom)
+          fi
+          python youtube/prepare_daily_queue.py "${args[@]}"
+
+      - name: Install free rendering tools
+        run: |
+          set -euo pipefail
+          packages=()
+          command -v ffmpeg >/dev/null 2>&1 || packages+=(ffmpeg)
+          [[ -f /usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf ]] || packages+=(fonts-dejavu-core)
+          if (( ${#packages[@]} )); then
+            sudo apt-get update
+            sudo apt-get install -y "${packages[@]}"
+          fi
+          python -m pip install --requirement youtube/requirements-preview.txt
+
+      - name: Download selected Piper voice
+        run: python -m piper.download_voices "${{ steps.queue.outputs.voice_id }}"
+
+      - name: Render current 9x16 preview
+        run: >-
+          python youtube/render_short.py
+          --queue youtube_output/prepared_queue.json
+          --output-dir youtube_output
+
+      - name: Validate MP4, audio, thumbnail and metadata
+        run: python youtube/validate_short.py --output-dir youtube_output
+
+      - name: Upload ready preview package
+        uses: actions/upload-artifact@v4
+        with:
+          name: daily-youtube-short-preview-${{ steps.queue.outputs.queue_date }}
+          path: |
+            youtube_output/short.mp4
+            youtube_output/thumbnail.jpg
+            youtube_output/metadata.json
+            youtube_output/prepared_queue.json
+            youtube_output/validation_report.json
+          if-no-files-found: error
+          retention-days: 2
+
+      - name: Save failure diagnostics
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: daily-youtube-short-diagnostics-${{ github.run_id }}
+          path: |
+            youtube_output/
+          if-no-files-found: ignore
+          retention-days: 2
+
+      - name: Write clear run summary
+        if: ${{ always() }}
+        env:
+          JOB_STATUS: ${{ job.status }}
+          QUEUE_DATE: ${{ steps.queue.outputs.queue_date }}
+          QUEUE_SOURCE: ${{ steps.queue.outputs.queue_source }}
+          CONTENT_ID: ${{ steps.queue.outputs.content_id }}
+          VOICE_ID: ${{ steps.queue.outputs.voice_id }}
+        run: |
+          {
+            echo '## NOVA Daily Short'
+            echo "- Status: ${JOB_STATUS}"
+            echo "- California date: ${QUEUE_DATE:-not prepared}"
+            echo "- Queue source: ${QUEUE_SOURCE:-not prepared}"
+            echo "- Content: ${CONTENT_ID:-not prepared}"
+            echo "- Voice: ${VOICE_ID:-not prepared}"
+            if [[ "$JOB_STATUS" == "success" ]]; then
+              echo '- Result: validated preview MP4 is attached as a workflow artifact.'
+              echo '- YouTube upload: blocked until explicit owner approval.'
+            else
+              echo '- Result: preview was not marked ready; inspect the first failed step and diagnostics artifact.'
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"

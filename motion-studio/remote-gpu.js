@@ -1,0 +1,1372 @@
+(()=>{
+const $=id=>document.getElementById(id);
+const LS_URL='nova.remoteGpu.url';
+const LS_TOKEN='nova.remoteGpu.token';
+const LS_JOB='nova.remoteGpu.job';
+const LS_FULLAUTO='nova.remoteGpu.fullAuto';
+const LS_PENDING='nova.remoteGpu.pendingPrompt';
+const LS_AUTORECOVER='nova.remoteGpu.autoRecover';
+const LS_RECOVERY='nova.remoteGpu.recovery';
+const LS_WAITING='nova.remoteGpu.waitingColab';
+const LS_SIMPLE='nova.motion.simpleMode';
+const DB_NAME='nova-remote-gpu-recovery-v1';
+const DB_STORE='state';
+const DB_KEY='current';
+const MAX_SOURCE_CACHE=1536*1024*1024;
+const FREE_LOCK=true;
+
+let pollTimer=0,recoveryTimer=0,lastJobId='',wakeLock=null,lastHealth=null,sendBusy=false,localRenderBusy=false;
+let pollFailures=0,recoveryAttempt=0,currentSourceFile=null,currentCharacterRef=null,currentAudioFile=null,currentAudioFiles=[];
+
+function endpoint(){return ($('remoteUrl')?.value||'').trim().replace(/\/+$/,'')}
+function token(){return ($('remoteToken')?.value||'').trim()}
+function authHeaders(){return {'X-NOVA-Token':token()}}
+function selectedAudioFiles(){
+  const input=Array.from($('remoteAudio')?.files||[]);
+  if(input.length)return input.slice(0,8);
+  if(currentAudioFiles.length)return currentAudioFiles.slice(0,8);
+  return currentAudioFile?[currentAudioFile]:[];
+}
+function clampPct(value,fallback=100){
+  const n=Number(value);
+  return Number.isFinite(n)?Math.max(0,Math.min(400,n)):fallback;
+}
+function saveConnection(){
+  localStorage.setItem(LS_URL,endpoint());
+  localStorage.setItem(LS_TOKEN,token());
+}
+function setStatus(text,kind=''){
+  const el=$('remoteStatus');if(el){el.textContent=text;el.dataset.kind=kind}
+  refreshEasyState();
+}
+function setRecoveryStatus(text,kind=''){
+  const el=$('remoteRecoveryStatus');if(el){el.textContent=text;el.dataset.kind=kind}
+  refreshEasyState();
+}
+function setEasyState(label,text,kind=''){
+  const state=$('remoteEasyState');if(state){state.textContent=label;state.dataset.kind=kind}
+  const body=$('remoteEasyText');if(body)body.textContent=text;
+}
+function setEasyStep(step){
+  const order=['input','render','final'];
+  const index=Math.max(0,order.indexOf(step));
+  document.querySelectorAll('#remoteSteps [data-step]').forEach((el,i)=>{
+    el.classList.toggle('active',i===index);
+    el.classList.toggle('done',i<index);
+  });
+}
+function setEasyButton(label){
+  const btn=$('remoteEasyAction');if(btn)btn.textContent=label;
+}
+function setWaitingColab(on){
+  if(on)localStorage.setItem(LS_WAITING,'1');else localStorage.removeItem(LS_WAITING);
+  refreshEasyState();
+}
+function setupSimpleStudioMode(){
+  const panel=document.querySelector('.panel');
+  const promptLabel=$('prompt')?.closest('label');
+  const remote=$('remoteGpu');
+  if(!panel||!promptLabel||!remote)return;
+  promptLabel.classList.add('nova-easy-visible');
+  if(remote.previousElementSibling!==promptLabel)promptLabel.after(remote);
+  const simple=localStorage.getItem(LS_SIMPLE)!=='0';
+  panel.classList.toggle('nova-easy-mode',simple);
+  const toggle=$('remoteStudioToggle');
+  if(toggle)toggle.textContent=simple?'🎛️ Показать все настройки студии':'✨ Вернуться в простой режим';
+}
+function toggleSimpleStudioMode(){
+  const panel=document.querySelector('.panel');if(!panel)return;
+  const simple=!panel.classList.contains('nova-easy-mode');
+  panel.classList.toggle('nova-easy-mode',simple);
+  localStorage.setItem(LS_SIMPLE,simple?'1':'0');
+  const toggle=$('remoteStudioToggle');
+  if(toggle)toggle.textContent=simple?'🎛️ Показать все настройки студии':'✨ Вернуться в простой режим';
+  if(!simple)document.getElementById('remoteAdvanced')?.setAttribute('open','');
+}
+function refreshEasyState(){
+  const active=lastJobId||localStorage.getItem(LS_JOB);
+  const meta=recoveryMeta();
+  if(localRenderBusy){
+    setEasyStep('render');
+    setEasyButton('⏳ СОЗДАЮ ВИДЕО');
+    setEasyState('РЕНДЕР НА IPHONE','Оставь страницу открытой. Colab и Run all не нужны.','busy');
+    return;
+  }
+  if(active||meta&&['recovering','uploading','running','final','promoting','submitting'].includes(meta.phase)){
+    setEasyStep('render');
+    setEasyButton('♻️ ПРОДОЛЖИТЬ РЕНДЕР');
+    setEasyState('УДАЛЁННЫЙ JOB','Найден старый Remote GPU job. NOVA может продолжить его, но обычные новые видео теперь запускаются локально.','busy');
+    return;
+  }
+  setEasyStep('input');
+  setEasyButton('✨ СДЕЛАТЬ ВИДЕО');
+  setEasyState('БЕЗ COLAB','Обычный рендер запускается прямо на iPhone. Никакого Run all.','ok');
+}
+async function requestRecoveryPersistence(){
+  try{
+    if(!navigator.storage?.persist)return false;
+    const granted=await navigator.storage.persist();
+    if(granted)setRecoveryStatus('Auto Recovery: iPhone разрешил постоянное локальное хранение recovery-cache.','ok');
+    return granted;
+  }catch(_){return false}
+}
+function setProgress(value){
+  const n=Math.max(0,Math.min(100,Number(value)||0));
+  const bar=$('remoteProgressBar');if(bar)bar.style.width=n+'%';
+  const label=$('remoteProgressText');if(label)label.textContent=Math.round(n)+'%';
+}
+async function holdWakeLock(){
+  try{if('wakeLock' in navigator&&!wakeLock)wakeLock=await navigator.wakeLock.request('screen')}catch(_){}
+}
+async function releaseWakeLock(){
+  try{if(wakeLock){await wakeLock.release();wakeLock=null}}catch(_){wakeLock=null}
+}
+async function sleep(ms){return new Promise(r=>setTimeout(r,ms))}
+function fullAutoEnabled(){
+  if(FREE_LOCK)return false;
+  return Boolean($('remoteAutoFinal')?.checked||localStorage.getItem(LS_FULLAUTO)==='1');
+}
+function setFullAuto(enabled){
+  const on=FREE_LOCK?false:Boolean(enabled);
+  if($('remoteAutoFinal'))$('remoteAutoFinal').checked=on;
+  localStorage.setItem(LS_FULLAUTO,on?'1':'0');
+}
+function autoRecoverEnabled(){
+  const meta=recoveryMeta();
+  if(meta?.userApprovedRemote)return true;
+  const stored=localStorage.getItem(LS_AUTORECOVER);
+  return $('remoteAutoRecover')?.checked ?? (stored==='1');
+}
+function setAutoRecover(enabled){
+  const on=Boolean(enabled);
+  if($('remoteAutoRecover'))$('remoteAutoRecover').checked=on;
+  localStorage.setItem(LS_AUTORECOVER,on?'1':'0');
+  setRecoveryStatus(on?'Auto Recovery: включён для одобренного задания.':'Auto Recovery: выключен.',on?'ok':'');
+  if(on)requestRecoveryPersistence().catch(()=>{});
+}
+function confirmRemoteCompute(action='Remote GPU'){
+  if(!FREE_LOCK)return true;
+  const ok=window.confirm(
+    'NOVA FREE LOCK\n\n'+action+' использует удалённый GPU/worker. NOVA не может гарантировать, что внешний сервис бесплатный.\n\nПродолжай только если это твой бесплатный или личный GPU Worker. Платные API NOVA автоматически не запускает.\n\nПродолжить?'
+  );
+  if(!ok)setStatus('FREE LOCK: удалённый запуск отменён. Локальные функции остаются бесплатными.','ok');
+  return ok;
+}
+function approvalStable(value){
+  if(Array.isArray(value))return value.map(approvalStable);
+  if(value&&typeof value==='object'){
+    const out={};
+    const volatile=new Set(['created_at','updated_at','job_id','defer_start']);
+    Object.keys(value).sort().forEach(key=>{
+      if(!volatile.has(key))out[key]=approvalStable(value[key]);
+    });
+    return out;
+  }
+  return value;
+}
+function approvalFileMeta(file){
+  if(!file)return null;
+  return {
+    name:String(file.name||''),
+    size:Number(file.size||0),
+    type:String(file.type||'')
+  };
+}
+function remoteApprovalKey(job,source,reference,audioTracks=[]){
+  const payload={
+    job:approvalStable(job||{}),
+    source:approvalFileMeta(source),
+    reference:approvalFileMeta(reference),
+    audio:(audioTracks||[]).map(approvalFileMeta)
+  };
+  const text=JSON.stringify(payload);
+  let hash=2166136261;
+  for(let i=0;i<text.length;i++){
+    hash^=text.charCodeAt(i);
+    hash=Math.imul(hash,16777619);
+  }
+  return 'remote-v1-'+(hash>>>0).toString(36);
+}
+function approvalMatches(job,source,reference,audioTracks=[]){
+  const meta=recoveryMeta();
+  if(!meta?.userApprovedRemote||!meta?.approvalKey)return false;
+  return meta.approvalKey===remoteApprovalKey(job,source,reference,audioTracks);
+}
+function recoveryMeta(){
+  try{return JSON.parse(localStorage.getItem(LS_RECOVERY)||'null')}catch(_){return null}
+}
+function saveRecoveryMeta(meta){
+  if(meta)localStorage.setItem(LS_RECOVERY,JSON.stringify(meta));
+  else localStorage.removeItem(LS_RECOVERY);
+}
+function openRecoveryDb(){
+  return new Promise((resolve,reject)=>{
+    if(!('indexedDB' in window)){reject(new Error('IndexedDB unavailable'));return}
+    const request=indexedDB.open(DB_NAME,1);
+    request.onupgradeneeded=()=>{const db=request.result;if(!db.objectStoreNames.contains(DB_STORE))db.createObjectStore(DB_STORE,{keyPath:'id'})};
+    request.onsuccess=()=>resolve(request.result);
+    request.onerror=()=>reject(request.error||new Error('IndexedDB open failed'));
+  });
+}
+async function dbGet(){
+  const db=await openRecoveryDb();
+  return new Promise((resolve,reject)=>{
+    const tx=db.transaction(DB_STORE,'readonly');
+    const req=tx.objectStore(DB_STORE).get(DB_KEY);
+    req.onsuccess=()=>resolve(req.result||null);
+    req.onerror=()=>reject(req.error);
+    tx.oncomplete=()=>db.close();
+  });
+}
+async function dbPut(record){
+  const db=await openRecoveryDb();
+  return new Promise((resolve,reject)=>{
+    const tx=db.transaction(DB_STORE,'readwrite');
+    tx.objectStore(DB_STORE).put(record);
+    tx.oncomplete=()=>{db.close();resolve(true)};
+    tx.onerror=()=>{db.close();reject(tx.error)};
+  });
+}
+async function dbDelete(){
+  try{
+    const db=await openRecoveryDb();
+    await new Promise((resolve,reject)=>{
+      const tx=db.transaction(DB_STORE,'readwrite');
+      tx.objectStore(DB_STORE).delete(DB_KEY);
+      tx.oncomplete=()=>resolve(true);
+      tx.onerror=()=>reject(tx.error);
+    });
+    db.close();
+  }catch(_){}
+}
+async function canCacheSource(source){
+  if(!source||!source.size)return false;
+  if(source.size>MAX_SOURCE_CACHE)return false;
+  try{
+    const estimate=await navigator.storage?.estimate?.();
+    const free=(estimate?.quota||0)-(estimate?.usage||0);
+    if(free>0&&source.size>free*.55)return false;
+  }catch(_){}
+  return true;
+}
+async function beginRecovery(job,source,sourceName,characterRef=null,audioRef=null,approvedRemote=false){
+  const name=sourceName||source?.name||'source.mp4';
+  const ref=characterRef||currentCharacterRef||$('remoteCharacterRef')?.files?.[0]||null;
+  const providedAudio=Array.isArray(audioRef)?audioRef:(audioRef?[audioRef]:selectedAudioFiles());
+  const audioList=providedAudio.slice(0,8);
+  const audio=audioList[0]||null;
+  const refName=ref?.name||'character-reference.png';
+  const audioName=audio?.name||'audio.mp3';
+  const previous=recoveryMeta();
+  const approvalKey=remoteApprovalKey(job,source,ref,audioList);
+  const inheritedApproval=Boolean(
+    previous?.userApprovedRemote&&
+    previous?.approvalKey&&
+    previous.approvalKey===approvalKey
+  );
+  const userApprovedRemote=Boolean(approvedRemote||inheritedApproval);
+  const meta={
+    version:5,
+    phase:'prepared',
+    job:{...job,defer_start:false},
+    remoteJobId:'',
+    workerUrl:endpoint(),
+    workerSessionId:lastHealth?.session_id||'',
+    userApprovedRemote,
+    approvalKey:userApprovedRemote?approvalKey:'',
+    sourceName:name,
+    sourceType:source?.type||'video/mp4',
+    sourceSize:Number(source?.size||0),
+    sourceCached:false,
+    referenceName:refName,
+    referenceType:ref?.type||'image/png',
+    referenceSize:Number(ref?.size||0),
+    referenceCached:false,
+    audioName,
+    audioType:audio?.type||'audio/mpeg',
+    audioSize:audioList.reduce((sum,item)=>sum+Number(item?.size||0),0),
+    audioCount:audioList.length,
+    audioCached:false,
+    updatedAt:Date.now()
+  };
+  saveRecoveryMeta(meta);
+  let cachedSource=null,cachedReference=null,cachedAudio=null,cachedAudioTracks=[];
+  if(source&&await canCacheSource(source))cachedSource=source;
+  if(ref&&await canCacheSource(ref))cachedReference=ref;
+  for(const item of audioList){
+    if(await canCacheSource(item))cachedAudioTracks.push(item);
+    else {cachedAudioTracks=[];break}
+  }
+  cachedAudio=cachedAudioTracks[0]||null;
+  try{
+    await dbPut({id:DB_KEY,job:meta.job,source:cachedSource,sourceName:name,sourceType:meta.sourceType,reference:cachedReference,referenceName:refName,referenceType:meta.referenceType,audio:cachedAudio,audioTracks:cachedAudioTracks,audioName,audioType:meta.audioType,meta});
+    if(cachedSource||cachedReference||cachedAudioTracks.length){
+      meta.sourceCached=Boolean(cachedSource);
+      meta.referenceCached=Boolean(cachedReference);
+      meta.audioCached=audioList.length>0&&cachedAudioTracks.length===audioList.length;
+      saveRecoveryMeta(meta);
+      await dbPut({id:DB_KEY,job:meta.job,source:cachedSource,sourceName:name,sourceType:meta.sourceType,reference:cachedReference,referenceName:refName,referenceType:meta.referenceType,audio:cachedAudio,audioTracks:cachedAudioTracks,audioName,audioType:meta.audioType,meta});
+    }
+    const parts=[];
+    if(meta.sourceSize)parts.push(meta.sourceCached?'видео сохранено':'видео держится пока страница открыта');
+    if(meta.referenceSize)parts.push(meta.referenceCached?'фото персонажа сохранено':'фото персонажа держится пока страница открыта');
+    if(meta.audioSize)parts.push(meta.audioCached?('аудиодорожки сохранены: '+meta.audioCount):('аудио держится пока страница открыта: '+meta.audioCount));
+    setRecoveryStatus(parts.length?'Auto Recovery: '+parts.join(' • ')+'.':'Auto Recovery: Scene Pack сохранён.','ok');
+    requestRecoveryPersistence().catch(()=>{});
+  }catch(_){
+    meta.sourceCached=false;meta.referenceCached=false;meta.audioCached=false;saveRecoveryMeta(meta);
+    setRecoveryStatus('Auto Recovery: сохранены параметры job; локальный файл-кэш недоступен.','');
+  }
+  return meta;
+}
+async function patchRecovery(patch={},jobPatch=null){
+  const meta={...(recoveryMeta()||{}),...patch,updatedAt:Date.now()};
+  if(jobPatch)meta.job={...(meta.job||{}),...jobPatch};
+  saveRecoveryMeta(meta);
+  try{
+    const record=await dbGet()||{id:DB_KEY,source:null,sourceName:meta.sourceName,sourceType:meta.sourceType};
+    record.meta=meta;
+    record.job={...(record.job||meta.job||{}),...(jobPatch||{})};
+    await dbPut(record);
+  }catch(_){}
+  return meta;
+}
+async function getRecoveryBundle(){
+  const meta=recoveryMeta();
+  if(!meta)return null;
+  let record=null;
+  try{record=await dbGet()}catch(_){}
+  return {
+    meta,
+    job:{...(record?.job||meta.job||{})},
+    source:currentSourceFile||record?.source||null,
+    sourceName:record?.sourceName||meta.sourceName||'source.mp4',
+    reference:currentCharacterRef||record?.reference||null,
+    referenceName:record?.referenceName||meta.referenceName||'character-reference.png',
+    audio:currentAudioFile||record?.audio||null,
+    audioName:record?.audioName||meta.audioName||'audio.mp3',
+    audioTracks:currentAudioFiles.length?currentAudioFiles:(record?.audioTracks||((record?.audio)?[record.audio]:[]))
+  };
+}
+async function clearRecovery(){
+  saveRecoveryMeta(null);
+  await dbDelete();
+  currentSourceFile=null;
+  currentCharacterRef=null;
+  currentAudioFile=null;
+  currentAudioFiles=[];
+  setRecoveryStatus('Auto Recovery: готов.','ok');
+}
+async function readClipboardCode(){
+  if(!navigator.clipboard?.readText)throw new Error('Буфер обмена недоступен в этом браузере');
+  const text=await navigator.clipboard.readText();
+  if(!parseConnectCode(text))throw new Error('В буфере нет NOVA CONNECT CODE');
+  if($('remoteConnectCode'))$('remoteConnectCode').value=text;
+  return true;
+}
+async function tryClipboardReconnect(){
+  if(!autoRecoverEnabled()||!recoveryMeta()||!navigator.clipboard?.readText)return false;
+  try{
+    const text=await navigator.clipboard.readText();
+    if(!text||!parseConnectCode(text))return false;
+    if($('remoteConnectCode'))$('remoteConnectCode').value=text;
+    setRecoveryStatus('Auto Recovery: найден новый Connect Code в буфере. Переподключаюсь…','busy');
+    await connect();
+    return true;
+  }catch(_){return false}
+}
+function parseConnectCode(value){
+  const raw=String(value||'').trim();
+  if(!raw)return false;
+  let data=null;
+  try{
+    if(raw.startsWith('{'))data=JSON.parse(raw);
+    else if(raw.startsWith('NOVA_CONNECT='))data=JSON.parse(raw.slice('NOVA_CONNECT='.length));
+    else if(raw.includes('|')){const [url,tok]=raw.split('|',2);data={url,token:tok}}
+  }catch(_){data=null}
+  if(!data?.url||!data?.token)return false;
+  if($('remoteUrl'))$('remoteUrl').value=String(data.url).trim();
+  if($('remoteToken'))$('remoteToken').value=String(data.token).trim();
+  saveConnection();
+  return true;
+}
+function hasRenderableIntent(){return Boolean(($('remoteSource')?.files?.[0])||(($('prompt')?.value||'').trim()))}
+function humanMotionIntent(){
+  const q=($('prompt')?.value||'').toLowerCase();
+  const selected=$('humanMotionMode')?.value||'auto';
+  let mode=selected;
+  if(mode==='auto'){
+    if(/\b(run|running|sprint)\b|бег|беж|спринт/.test(q))mode='run';
+    else if(/\b(dance|dancing)\b|танц/.test(q))mode='dance';
+    else if(/\b(walk|walking|stride|gait)\b|ходьб|ид[её]т|идти|шага/.test(q))mode='walk';
+    else if(/motion.?transfer|openpose|skeleton|pose.?control|скелет|поз[аы]|движени[ея] человека/.test(q))mode='motion-reference';
+    else if(/\b(animate|alive|move|moving|motion)\b|ожив|двига|движени|шевел/.test(q))mode='natural';
+    else mode='none';
+  }
+  return {enabled:mode!=='none',mode};
+}
+function musicCreationIntent(){
+  const q=($('prompt')?.value||'').toLowerCase().replace(/ё/g,'е');
+  if($('remoteMusicEnabled')?.checked)return true;
+  return /(?:созд|сдел|сгенер|сочин|сыграй|собер).{0,35}(?:музык|аккомпанемент|гитар|пиан|фортеп|аккордеон|бас|синт).{0,45}(?:аккорд|bpm|темп)|(?:по|из)\s+аккорд.{0,35}(?:музык|аккомпанемент|гитар|пиан|аккордеон)|(?:chord|chords).{0,30}(?:music|guitar|piano|accordion|bass|synth)/.test(q);
+}
+function musicSpecFromPrompt(){
+  const raw=($('prompt')?.value||'').replace(/ё/g,'е');
+  const q=raw.toLowerCase();
+  const chordMatches=raw.match(/\b[A-Ga-g](?:#|b)?(?:maj7|min7|m7|m|7|sus2|sus4|5|dim|aug)?\b/g)||[];
+  const chords=(chordMatches.length?chordMatches.join(' '):($('remoteMusicChords')?.value||'Am D G Em')).trim();
+  const bpmMatch=q.match(/\b(\d{2,3})\s*(?:bpm|бпм|удар(?:ов)?\s*(?:в|за)\s*мин)/)||q.match(/темп\D{0,10}(\d{2,3})/);
+  const bpm=Math.max(30,Math.min(240,Number(bpmMatch?.[1]||$('remoteMusicBpm')?.value||90)));
+  let instrument=String($('remoteMusicInstrument')?.value||'guitar');
+  if(/аккордеон|accordion/.test(q))instrument='accordion';
+  else if(/фортеп|пиан|piano/.test(q))instrument='piano';
+  else if(/\bбас|bass/.test(q))instrument='bass';
+  else if(/синт|synth/.test(q))instrument='synth';
+  else if(/гитар|guitar/.test(q))instrument='guitar';
+  let format=String($('remoteMusicFormat')?.value||'wav');
+  if(/\bmp3\b/.test(q))format='mp3';
+  else if(/\bwav\b/.test(q))format='wav';
+  const repeatMatch=q.match(/(?:повтор(?:и|ить)?|(?:сделай|сыграй)\s*)?(\d{1,2})\s*(?:раз|раза|повтор)/);
+  const repeatWords={один:1,одна:1,два:2,две:2,три:3,четыре:4,пять:5,шесть:6,семь:7,восемь:8};
+  const repeatWordMatch=q.match(/\b(один|одна|два|две|три|четыре|пять|шесть|семь|восемь)\s+раз(?:а)?\b/);
+  const repeats=Math.max(1,Math.min(32,Number(repeatMatch?.[1]||repeatWords[repeatWordMatch?.[1]]||$('remoteMusicRepeats')?.value||1)));
+  const beatsMatch=q.match(/(?:по\s*)?(\d{1,2}(?:[.,]\d+)?)\s*(?:удара|ударов|дол[ия]|beat)/);
+  const beatsPerChord=Math.max(.5,Math.min(16,Number(String(beatsMatch?.[1]||$('remoteMusicBeats')?.value||4).replace(',','.'))));
+  const audioMix=audioMixConfig();
+  const source=Boolean($('remoteSource')?.files?.[0]||currentSourceFile);
+  const explicitMix=/подмеш|добав.*видео|смеш.*видео|mix.*video|into.*video/.test(q);
+  const explicitReplace=/замен.*(?:музык|звук).*видео|replace.*music/.test(q);
+  const mixIntoVideo=source&&($('remoteMusicMixVideo')?.checked||explicitMix||explicitReplace);
+  let musicVolume=Number($('remoteMusicVolume')?.value||60)/100;
+  const musicPct=q.match(/(?:музык\w*|аккомпанемент)\D{0,18}(\d{1,3})\s*%/)
+    || q.match(/(?:подмеш|добав.*видео|смеш.*видео)\D{0,28}(\d{1,3})\s*%/)
+    || q.match(/видео\D{0,12}(\d{1,3})\s*%/);
+  if(musicPct)musicVolume=clampPct(musicPct[1],60)/100;
+  if($('remoteMusicChords'))$('remoteMusicChords').value=chords;
+  if($('remoteMusicBpm'))$('remoteMusicBpm').value=String(Math.round(bpm));
+  if($('remoteMusicInstrument'))$('remoteMusicInstrument').value=instrument;
+  if($('remoteMusicFormat'))$('remoteMusicFormat').value=format;
+  if($('remoteMusicRepeats'))$('remoteMusicRepeats').value=String(repeats);
+  if($('remoteMusicBeats'))$('remoteMusicBeats').value=String(beatsPerChord);
+  if($('remoteMusicVolume'))$('remoteMusicVolume').value=String(Math.round(musicVolume*100));
+  if($('remoteMusicMixVideo')&&source&&explicitMix)$('remoteMusicMixVideo').checked=true;
+  return {
+    chords:chords.split(/[\s,;|]+/).filter(Boolean),
+    bpm,instrument,format,
+    beats_per_chord:beatsPerChord,
+    repeats,
+    requested_video_mix:Boolean(explicitMix||explicitReplace),
+    mix_into_video:mixIntoVideo,
+    mix_mode:explicitReplace?'replace':'mix',
+    original_volume:audioMix.source_volume,
+    music_volume:Math.max(0,Math.min(4,musicVolume)),
+    master_volume:audioMix.master_volume
+  };
+}
+
+function audioFadeConfig(){
+  const q=($('prompt')?.value||'').toLowerCase().replace(/ё/g,'е');
+  let fadeIn=Math.max(0,Math.min(60,Number($('remoteMusicFadeIn')?.value||0)));
+  let fadeOut=Math.max(0,Math.min(60,Number($('remoteMusicFadeOut')?.value||0)));
+  const read=(patterns,fallback)=>{
+    for(const re of patterns){
+      const m=q.match(re);
+      if(m)return Math.max(0,Math.min(60,Number(String(m[1]).replace(',','.'))));
+    }
+    return fallback;
+  };
+  const both=q.match(/(?:появлен\w*|вход\w*|fade\s*in).{0,30}(?:затухан\w*|выход\w*|fade\s*out).{0,20}(?:по\s*)?(\d+(?:[.,]\d+)?)\s*(?:сек|с\b)/)
+    || q.match(/(?:плавн\w*).{0,20}(?:вход|выход|появ|затух).{0,25}(?:по\s*)?(\d+(?:[.,]\d+)?)\s*(?:сек|с\b)/);
+  if(both){
+    const v=Math.max(0,Math.min(60,Number(String(both[1]).replace(',','.'))));
+    fadeIn=v;fadeOut=v;
+  }
+  fadeIn=read([
+    /(?:плавн\w*\s*)?(?:появлен\w*|появля\w*|нарастан\w*|вход\w*|fade\s*in)\D{0,24}(\d+(?:[.,]\d+)?)\s*(?:сек|с\b)/,
+    /(?:за\s*)?(\d+(?:[.,]\d+)?)\s*(?:сек|с\b).{0,18}(?:появлен\w*|появля\w*|fade\s*in)/
+  ],fadeIn);
+  fadeOut=read([
+    /(?:плавн\w*\s*)?(?:затухан\w*|затух\w*|исчезнов\w*|выход\w*|fade\s*out)\D{0,24}(\d+(?:[.,]\d+)?)\s*(?:сек|с\b)/,
+    /(?:за\s*)?(\d+(?:[.,]\d+)?)\s*(?:сек|с\b).{0,18}(?:затухан\w*|затух\w*|fade\s*out)/
+  ],fadeOut);
+  if(/плавн\w*\s*появ|fade\s*in/.test(q)&&!fadeIn)fadeIn=2;
+  if(/плавн\w*\s*затух|плавн\w*\s*исчез|fade\s*out/.test(q)&&!fadeOut)fadeOut=2;
+  if($('remoteMusicFadeIn'))$('remoteMusicFadeIn').value=String(fadeIn);
+  if($('remoteMusicFadeOut'))$('remoteMusicFadeOut').value=String(fadeOut);
+  return {fade_in:fadeIn,fade_out:fadeOut};
+}
+
+function mediaOperationIntent(){
+  const q=($('prompt')?.value||'').toLowerCase().replace(/ё/g,'е');
+  if(/смеш|смикс|миксуй|микс|mix.{0,25}(?:audio|track|music)|(?:добав|налож).{0,25}(?:музык|аудио|дорожк).{0,25}(?:к|с).*?(?:звук|аудио).*видео/.test(q))return 'mix_audio';
+  if(/(?:замен|подмен|постав|подстав).{0,30}(?:музык|звук|аудио).{0,30}(?:в|на).*видео|(?:налож).{0,30}(?:мой |новый )?(?:звук|аудио).{0,30}(?:на|в).{0,15}видео|replace.{0,20}(?:audio|music)|put.{0,20}audio.{0,20}(?:on|into).{0,20}video/.test(q))return 'replace_audio';
+  if(/громк|тише|громче|volume|убав.*звук|прибав.*звук|(?:музык\w*|оригинал\w*|звук видео|дорожк(?:а|и)?\s*\d+)\D{0,18}\d{1,3}\s*%/.test(q))return 'volume_adjust';
+  if(/плавн\w*.{0,20}(?:появ|затух|исчез)|fade\s*(?:in|out)|нарастан\w*.{0,12}музык|затухан\w*.{0,12}музык/.test(q))return 'mix_audio';
+  if(/экспорт|сохран.*mp4|готов.*mp4|сделай.*mp4|выведи.*mp4|export.*mp4|save.*mp4/.test(q))return 'export_mp4';
+  return 'none';
+}
+function audioMixConfig(){
+  const q=($('prompt')?.value||'').toLowerCase().replace(/ё/g,'е');
+  const count=Math.max(1,selectedAudioFiles().length);
+  let sourcePct=clampPct($('remoteOriginalVolume')?.value,100);
+  let trackPct=clampPct($('remoteAddedVolume')?.value,100);
+  let masterPct=clampPct($('remoteMasterVolume')?.value,100);
+
+  const read=(re,fallback)=>{
+    const m=q.match(re);
+    return m?clampPct(m[1],fallback):fallback;
+  };
+  sourcePct=read(/(?:оригинал(?:ьный)?(?: звук| аудио)?|звук видео|исходн\w* звук)\D{0,18}(\d{1,3})\s*%/,sourcePct);
+  trackPct=read(/(?:музык\w*|мой звук|добавленн\w* звук|аудио(?:дорожк\w*)?)\D{0,18}(\d{1,3})\s*%/,trackPct);
+  masterPct=read(/(?:общ\w* громк\w*|мастер|master)\D{0,18}(\d{1,3})\s*%/,masterPct);
+
+  if(/музык\w*.{0,15}тише/.test(q)&&!/музык\w*\D{0,18}\d{1,3}\s*%/.test(q))trackPct=50;
+  if(/музык\w*.{0,15}громче/.test(q)&&!/музык\w*\D{0,18}\d{1,3}\s*%/.test(q))trackPct=125;
+  if(/оригинал\w*.{0,15}тише/.test(q)&&!/оригинал\w*\D{0,18}\d{1,3}\s*%/.test(q))sourcePct=50;
+  if(/оригинал\w*.{0,15}громче/.test(q)&&!/оригинал\w*\D{0,18}\d{1,3}\s*%/.test(q))sourcePct=125;
+
+  const trackVolumes=Array(count).fill(trackPct/100);
+  for(let i=0;i<count;i++){
+    const n=i+1;
+    const re=new RegExp('(?:дорожк(?:а|и)?|track)\\s*'+n+'\\D{0,18}(\\d{1,3})\\s*%');
+    const m=q.match(re);
+    if(m)trackVolumes[i]=clampPct(m[1],trackPct)/100;
+  }
+
+  if($('remoteOriginalVolume'))$('remoteOriginalVolume').value=String(Math.round(sourcePct));
+  if($('remoteAddedVolume'))$('remoteAddedVolume').value=String(Math.round(trackPct));
+  if($('remoteMasterVolume'))$('remoteMasterVolume').value=String(Math.round(masterPct));
+
+  return {source_volume:sourcePct/100,track_volumes:trackVolumes,master_volume:masterPct/100};
+}
+function chosenEngine(){
+  const raw=$('remoteEngine')?.value||'auto';
+  if(raw!=='auto')return raw;
+  const q=($('prompt')?.value||'').toLowerCase();
+  const hasSource=Boolean($('remoteSource')?.files?.[0]||currentSourceFile);
+  if(musicCreationIntent())return 'music';
+  if(['replace_audio','mix_audio','volume_adjust','export_mp4'].includes(mediaOperationIntent())&&hasSource)return 'ffmpeg';
+  const human=humanMotionIntent();
+  const orbitIntent=/orbit|обл[её]т|вокруг|fly.?around|camera.*around/.test(q);
+  const fullOrbit=/360|полный круг|full circle|full orbit/.test(q);
+  const explicit3d=/blender|true.?3d|3d.?block|блокинг|blocking/.test(q);
+  if(/ffmpeg|конверт|перекод|encode|transcod|upscale|апскейл/.test(q)&&hasSource)return 'ffmpeg';
+  // Human locomotion is a generative motion-control task. A source clip is a
+  // driving/control video for WanGP, not a reason to stop at Blender pose preview.
+  if(hasSource&&human.enabled&&!explicit3d)return 'wangp';
+  // True camera orbit must be created in Blender first. When the resulting
+  // control MP4 is supplied on a second pass, realistic AI refinement may use WanGP.
+  if(!hasSource&&orbitIntent&&(fullOrbit||explicit3d))return 'blender';
+  if(/wang|wan2|ai video|генер.*видео|сгенер.*видео|реалистичн.*генер|замен.*персонаж|video.?to.?video/.test(q))return 'wangp';
+  if(!hasSource&&!explicit3d)return 'wangp';
+  return 'blender';
+}
+function motionConfig(){
+  try{return window.NOVA_MOTION_CONFIG?.()||{}}catch(_){return {}}
+}
+function buildJob(){
+  $('applyPrompt')?.click();
+  const c=motionConfig();
+  const quality=$('remoteQuality')?.value||'preview';
+  const prompt=($('prompt')?.value||'').trim();
+  const human=humanMotionIntent();
+  const hasMotionSource=Boolean($('remoteSource')?.files?.[0]||currentSourceFile);
+  const humanMotion={
+    ...human,
+    control_source:hasMotionSource?'source_video':'prompt_only',
+    prefer_pose_control:true,
+    full_body:true
+  };
+  const pack={
+    schema:'nova.scene-pack.v2',project:'NOVA Remote GPU',source_prompt:prompt,
+    duration:Number(c.duration||$('duration')?.value||5),format:c.ratio||$('ratio')?.value||'9:16',
+    style:c.style||$('style')?.value||'neon',motion:c.motion||$('motion')?.value||'slide',
+    camera:c.camera||$('camera')?.value||'static',vfx:c.vfx||$('vfx')?.value||'none',
+    vfx_intensity:Number(c.intensity||$('intensity')?.value||.65),human_motion:humanMotion,
+    render_policy:{preview_first:true,paid_generation:false,max_paid_tests:1}
+  };
+  const audioMix=audioMixConfig();
+  const fades=audioFadeConfig();
+  const musicSpec=musicSpecFromPrompt();
+  musicSpec.fade_in=fades.fade_in;
+  musicSpec.fade_out=fades.fade_out;
+  return {
+    schema:'nova.remote-job.v1',created_at:new Date().toISOString(),
+    source_prompt:prompt||'TUMSOEV cinematic scene',engine:chosenEngine(),quality,
+    media_action:mediaOperationIntent(),
+    source_volume:audioMix.source_volume,
+    track_volumes:audioMix.track_volumes,
+    master_volume:audioMix.master_volume,
+    track_fade_in:fades.fade_in,
+    track_fade_out:fades.fade_out,
+    music_spec:musicSpec,
+    duration:Number(pack.duration||5),ratio:pack.format||'9:16',fps:quality==='preview'?24:30,
+    style:pack.style,motion:pack.motion,camera:pack.camera,vfx:pack.vfx,
+    human_motion:humanMotion,
+    intensity:Number(pack.vfx_intensity||.65),mirror_drive:Boolean($('remoteMirrorDrive')?.checked),
+    scene_pack:pack
+  };
+}
+async function jsonFetch(url,options={}){
+  let response;
+  try{response=await fetch(url,options)}catch(error){error.network=true;throw error}
+  let data=null;try{data=await response.json()}catch(_){}
+  if(!response.ok){
+    const error=new Error(data?.detail||data?.message||('HTTP '+response.status));
+    error.status=response.status;throw error;
+  }
+  return data||{};
+}
+function clearPoll(){if(pollTimer){clearTimeout(pollTimer);pollTimer=0}}
+function clearRecoveryTimer(){if(recoveryTimer){clearTimeout(recoveryTimer);recoveryTimer=0}}
+async function connect({resume=true}={}){
+  const url=endpoint(),tok=token();
+  if(!url||!tok){setStatus('Вставь NOVA CONNECT CODE или Worker URL + Token.','error');return null}
+  saveConnection();setStatus('Проверяю Colab worker…','busy');setProgress(0);
+  try{
+    const data=await jsonFetch(url+'/health',{headers:authHeaders()});
+    lastHealth=data;pollFailures=0;recoveryAttempt=0;clearRecoveryTimer();setWaitingColab(false);
+    const gpu=data.gpu?.available?(data.gpu.name||'NVIDIA GPU'):'GPU не обнаружен';
+    const protocol=data.protocol_version!=null?'P'+data.protocol_version:'old';
+    const bits=[gpu,data.blender?'Blender ✓':'Blender —',data.ffmpeg?'FFmpeg ✓':'FFmpeg —',data.capabilities?.music_chords?'Music ✓':'Music —',data.wangp_api_ready?'WanGP API ✓':'WanGP —',protocol,data.free_disk_gb!=null?data.free_disk_gb+' GB free':''];
+    setStatus('Подключено: '+bits.filter(Boolean).join(' • '),'ok');
+    if(data.drive_mounted&&autoRecoverEnabled()&&$('remoteMirrorDrive'))$('remoteMirrorDrive').checked=true;
+    if(Number(data.protocol_version||0)<8){
+      setRecoveryStatus('Auto Recovery: worker старой версии. Для fade-in/fade-out перезапусти актуальный notebook.','error');
+    }else if(autoRecoverEnabled()){
+      setRecoveryStatus('Auto Recovery: worker '+(data.session_id||'')+' на связи.'+(data.drive_mounted?' Drive checkpoint включён.':''),'ok');
+    }
+    const recovery=recoveryMeta();
+    if(resume&&recovery?.diagnosticSelfTest&&recovery?.userApprovedRemote)setTimeout(()=>runRemoteSelfTest().catch(()=>{}),0);
+    else if(resume&&autoRecoverEnabled()&&recovery)setTimeout(()=>resumeOrRecover().catch(()=>{}),0);
+    else setTimeout(()=>{maybeAutoSend().catch(()=>{})},0);
+    return data;
+  }catch(error){
+    lastHealth=null;
+    setStatus('Не подключено: '+error.message,'error');
+    return null;
+  }
+}
+async function preflight(engine,hasSource){
+  const health=lastHealth||await connect({resume:false});
+  if(!health)throw new Error('Colab worker не подключён');
+  if(engine==='wangp'&&!health.wangp_api_ready){
+    if(humanMotionIntent().enabled){
+      throw new Error('WanGP motion-control не готов. Blender не подменяет генерацию человека: перезапусти актуальный GPU Worker.')
+    }
+    if(hasSource&&health.blender){setStatus('WanGP ещё не готов — временно переключаю на Blender.','busy');return 'blender'}
+    throw new Error('WanGP API не готов. Перезапусти Colab notebook с Run all.')
+  }
+  if(engine==='blender'&&!health.blender){
+    if(hasSource&&health.ffmpeg){setStatus('Blender недоступен — временно переключаю на FFmpeg.','busy');return 'ffmpeg'}
+    throw new Error('Blender не готов в Colab.')
+  }
+  if(engine==='ffmpeg'&&!health.ffmpeg)throw new Error('FFmpeg не готов в Colab.');
+  if(engine==='music'&&!health.capabilities?.music_chords)throw new Error('NOVA Music не готов. Перезапусти актуальный Colab notebook.');
+  return engine;
+}
+async function downloadResult(jobId){
+  try{
+    const ticket=await jsonFetch(endpoint()+'/jobs/'+encodeURIComponent(jobId)+'/download-ticket',{method:'POST',headers:authHeaders()});
+    const url=endpoint()+ticket.path;
+    const filename=ticket.filename||('NOVA_'+jobId+'.mp4');
+    const ext=(filename.split('.').pop()||'').toLowerCase();
+    const a=$('remoteResult');
+    if(a){
+      a.href=url;a.download=filename;a.classList.remove('hidden');
+      a.textContent=ext==='mp3'?'Открыть / сохранить MP3':ext==='wav'?'Открыть / сохранить WAV':'Открыть / сохранить готовый MP4';
+    }
+    const video=$('video');
+    if(video){
+      if(ext==='mp4'){video.src=url;video.classList.remove('hidden')}
+      else {video.removeAttribute('src');video.classList.add('hidden')}
+    }
+  }catch(error){setStatus('Рендер готов, но ссылка на файл не создалась: '+error.message,'error')}
+}
+async function uploadVideoChunks(jobId,file,filename,startIndex=0){
+  const chunkSize=8*1024*1024;
+  const total=Math.max(1,Math.ceil(file.size/chunkSize));
+  for(let index=Math.max(0,Math.min(total-1,Number(startIndex)||0));index<total;index++){
+    const start=index*chunkSize,end=Math.min(file.size,start+chunkSize);
+    let uploaded=false,lastError=null;
+    for(let attempt=1;attempt<=3&&!uploaded;attempt++){
+      const fd=new FormData();
+      fd.append('index',String(index));fd.append('total',String(total));fd.append('filename',filename||file.name||'source.mp4');
+      fd.append('chunk',file.slice(start,end),(filename||file.name||'source.mp4')+'.part');
+      try{
+        await jsonFetch(endpoint()+'/jobs/'+encodeURIComponent(jobId)+'/upload-chunk',{method:'POST',headers:authHeaders(),body:fd});
+        uploaded=true;
+      }catch(error){
+        lastError=error;
+        if(attempt<3){setStatus('Сеть прервалась. Повтор части '+(index+1)+'…','busy');await sleep(800*attempt)}
+      }
+    }
+    if(!uploaded)throw lastError||new Error('Не удалось загрузить часть видео');
+    const pct=Math.round(((index+1)/total)*12);
+    setProgress(pct);setStatus('Загружаю видео в Colab: '+(index+1)+'/'+total+' частей…','busy');
+    await patchRecovery({phase:'uploading',uploadPart:index+1,uploadTotal:total});
+  }
+}
+async function submitPreparedJob(inputJob,source,sourceName,{recovery=false,reference=null,referenceName='',audio=null,audioName='',audioTracks=null}={}){
+  if(sendBusy)return false;
+  if(!endpoint()||!token())throw new Error('Colab worker не подключён');
+  sendBusy=true;await holdWakeLock();
+  const btn=$('remoteSend');if(btn)btn.disabled=true;
+  const result=$('remoteResult');if(result)result.classList.add('hidden');
+  try{
+    const job={...inputJob};
+    job.engine=await preflight(job.engine||'auto',Boolean(source));
+    if(job.engine==='ffmpeg'&&!source)throw new Error('Для FFmpeg нужен исходный файл.');
+    const audioList=(Array.isArray(audioTracks)&&audioTracks.length?audioTracks:(audio?[audio]:selectedAudioFiles())).slice(0,8);
+    if(['replace_audio','mix_audio'].includes(job.media_action)&&!audioList.length)throw new Error('Для этой аудио-команды выбери хотя бы один аудиофайл.');
+    currentAudioFiles=audioList;
+    currentAudioFile=audioList[0]||null;
+    if(source)job.defer_start=true;
+    await patchRecovery({workerUrl:endpoint(),workerSessionId:lastHealth?.session_id||'',phase:'submitting'},job);
+    const characterRef=reference||currentCharacterRef||$('remoteCharacterRef')?.files?.[0]||null;
+    if(characterRef)currentCharacterRef=characterRef;
+    const fd=new FormData();fd.append('job_json',JSON.stringify(job));
+    if(characterRef)fd.append('reference',characterRef,referenceName||characterRef.name||'character-reference.png');
+    for(const [index,file] of audioList.entries())fd.append('audio_tracks',file,file.name||('audio-track-'+(index+1)+'.mp3'));
+    setProgress(1);setStatus(recovery?'Auto Recovery: создаю job в новой Colab-сессии…':'Создаю задачу на Colab GPU…','busy');
+    const data=await jsonFetch(endpoint()+'/jobs',{method:'POST',headers:authHeaders(),body:fd});
+    lastJobId=data.job_id;localStorage.setItem(LS_JOB,lastJobId);
+    await patchRecovery({remoteJobId:lastJobId,workerUrl:endpoint(),workerSessionId:lastHealth?.session_id||'',phase:source?'uploading':'running'},job);
+    if(source){
+      await uploadVideoChunks(lastJobId,source,sourceName||source.name||'source.mp4');
+      await jsonFetch(endpoint()+'/jobs/'+encodeURIComponent(lastJobId)+'/start',{method:'POST',headers:authHeaders()});
+      await patchRecovery({phase:'running'});
+    }
+    setStatus((recovery?'Восстановлено. ':'')+'Colab принял '+lastJobId+'. Рендер продолжается…','busy');
+    setRecoveryStatus('Auto Recovery: job '+lastJobId+' защищён.','ok');
+    poll(lastJobId);
+    return true;
+  }catch(error){
+    setStatus((recovery?'Восстановление не завершено: ':'Не удалось отправить: ')+error.message,'error');
+    if(autoRecoverEnabled())enterRecovery('submit failed: '+error.message);
+    else await releaseWakeLock();
+    return false;
+  }finally{
+    sendBusy=false;if(btn)btn.disabled=false;
+  }
+}
+async function poll(jobId){
+  clearPoll();
+  try{
+    const data=await jsonFetch(endpoint()+'/jobs/'+encodeURIComponent(jobId),{headers:authHeaders()});
+    pollFailures=0;recoveryAttempt=0;
+    setProgress(data.progress||0);
+    const state=data.status||'running';
+    const quality=String(data.quality||'preview').toLowerCase();
+    setEasyStep(quality==='final'?'final':state==='completed'?'preview':'gpu');
+    await patchRecovery({phase:quality==='final'?'final':state,remoteJobId:jobId,workerUrl:endpoint(),workerSessionId:lastHealth?.session_id||''});
+    setStatus((data.message||state)+(data.engine?' • '+data.engine:''),state==='error'?'error':state==='completed'?'ok':'busy');
+    if(state==='completed'){
+      localStorage.removeItem(LS_JOB);
+      if(fullAutoEnabled()&&quality==='preview'&&lastHealth?.capabilities?.preview_promote){
+        setStatus('Preview готов. FULL AUTO запускает Final без повторной загрузки…','busy');
+        await patchRecovery({phase:'promoting'}, {quality:'final',fps:30});
+        try{
+          const promoted=await jsonFetch(endpoint()+'/jobs/'+encodeURIComponent(jobId)+'/promote',{method:'POST',headers:authHeaders()});
+          lastJobId=promoted.job_id;localStorage.setItem(LS_JOB,lastJobId);
+          await patchRecovery({phase:'final',remoteJobId:lastJobId,workerSessionId:lastHealth?.session_id||''},{quality:'final',fps:30});
+          setProgress(0);poll(lastJobId);return;
+        }catch(error){
+          setStatus('Preview готов, но Final не запустился автоматически: '+error.message,'error');
+          if(autoRecoverEnabled())enterRecovery('final promote failed');
+          return;
+        }
+      }
+      await releaseWakeLock();await downloadResult(jobId);await clearRecovery();return;
+    }
+    if(state==='error'||state==='cancelled'){
+      localStorage.removeItem(LS_JOB);await releaseWakeLock();
+      setRecoveryStatus(state==='error'?'Auto Recovery: job завершился ошибкой; автоматический цикл остановлен.':'Auto Recovery: job отменён.','error');
+      return;
+    }
+    pollTimer=setTimeout(()=>poll(jobId),2200);
+  }catch(error){
+    pollFailures+=1;
+    if(error.status===404||pollFailures>=2){
+      enterRecovery(error.status===404?'job disappeared':'worker unreachable');
+      return;
+    }
+    setStatus('Связь с worker прервалась. Проверяю ещё раз…','error');
+    pollTimer=setTimeout(()=>poll(jobId),3500);
+  }
+}
+function recoveryDelay(){return Math.min(60000,5000*Math.pow(2,Math.min(recoveryAttempt,3)))}
+function enterRecovery(reason){
+  clearPoll();
+  if(!autoRecoverEnabled()){
+    setRecoveryStatus('Auto Recovery выключен.','error');releaseWakeLock();return;
+  }
+  patchRecovery({phase:'recovering',reason}).catch(()=>{});
+  setStatus('Colab-связь потеряна. NOVA пытается восстановить Remote GPU…','error');
+  setRecoveryStatus('Auto Recovery: '+reason+'. Проверяю старую сессию и жду новую, если Google её завершил.','busy');
+  scheduleRecoveryProbe(500);
+}
+function scheduleRecoveryProbe(delay=recoveryDelay()){
+  clearRecoveryTimer();
+  recoveryTimer=setTimeout(()=>recoveryProbe().catch(()=>{}),delay);
+}
+async function recoveryProbe(){
+  if(!autoRecoverEnabled()||!recoveryMeta())return;
+  recoveryAttempt+=1;
+  if(endpoint()&&token()){
+    const health=await connect({resume:false});
+    if(health){
+      await resumeOrRecover();
+      return;
+    }
+  }
+  const seconds=Math.round(recoveryDelay()/1000);
+  setRecoveryStatus('Auto Recovery: Colab пока недоступен. Повтор через '+seconds+' сек. Если runtime завершён Google, открой новый notebook; после нового Connect Code job восстановится сам.','busy');
+  scheduleRecoveryProbe();
+}
+async function tryDriveRestore(meta){
+  if(!lastHealth?.drive_mounted||!lastHealth?.capabilities?.drive_restore||!meta.remoteJobId)return false;
+  try{
+    const data=await jsonFetch(endpoint()+'/recovery/'+encodeURIComponent(meta.remoteJobId)+'/restore',{method:'POST',headers:authHeaders()});
+    lastJobId=data.job_id;localStorage.setItem(LS_JOB,lastJobId);
+    await patchRecovery({phase:'recovered-drive',remoteJobId:lastJobId,workerUrl:endpoint(),workerSessionId:lastHealth?.session_id||''});
+    setRecoveryStatus('Auto Recovery: job восстановлен из Google Drive checkpoint.','ok');
+    poll(lastJobId);return true;
+  }catch(error){
+    if(error.status!==404&&error.status!==409)setRecoveryStatus('Drive restore не сработал: '+error.message,'');
+    return false;
+  }
+}
+async function resubmitRecovery(){
+  const bundle=await getRecoveryBundle();
+  if(!bundle?.job)return false;
+  const needsSource=Number(bundle.meta.sourceSize||0)>0;
+  const needsAudio=Number(bundle.meta.audioSize||0)>0;
+  const source=bundle.source;
+  const audioTracks=(bundle.audioTracks||[]).slice(0,8);
+  const audio=bundle.audio||audioTracks[0]||null;
+  if(needsSource&&!source){
+    setRecoveryStatus('Auto Recovery сохранил job, но исходник слишком большой для iPhone-кэша. Выбери тот же видеофайл — отправка продолжится автоматически.','error');
+    return false;
+  }
+  if(needsAudio&&!audioTracks.length&&!audio){
+    setRecoveryStatus('Auto Recovery сохранил job, но аудиодорожки не остались в iPhone-кэше. Выбери те же файлы — NOVA продолжит автоматически.','error');
+    return false;
+  }
+  localStorage.removeItem(LS_JOB);lastJobId='';
+  setRecoveryStatus('Auto Recovery: пересоздаю '+String(bundle.job.quality||'preview')+' job в новой Colab-сессии…','busy');
+  return submitPreparedJob({...bundle.job,job_id:undefined,defer_start:false},source,bundle.sourceName,{recovery:true,reference:bundle.reference,referenceName:bundle.referenceName,audio,audioName:bundle.audioName,audioTracks});
+}
+async function resumeOrRecover(){
+  if(!autoRecoverEnabled())return false;
+  const meta=recoveryMeta();if(!meta)return false;
+  const currentSession=lastHealth?.session_id||'';
+  const sameSession=Boolean(currentSession&&meta.workerSessionId&&currentSession===meta.workerSessionId&&endpoint()===meta.workerUrl);
+  if(sameSession&&meta.remoteJobId){
+    try{
+      const data=await jsonFetch(endpoint()+'/jobs/'+encodeURIComponent(meta.remoteJobId),{headers:authHeaders()});
+      lastJobId=meta.remoteJobId;localStorage.setItem(LS_JOB,lastJobId);await holdWakeLock();
+      if(data.status==='uploading'){
+        const bundle=await getRecoveryBundle();
+        const source=bundle?.source;
+        if(!source){
+          setRecoveryStatus('Auto Recovery: upload был прерван, но исходник не сохранился. Выбери тот же видеофайл — NOVA продолжит с нужной части.','error');
+          return false;
+        }
+        const startAt=Math.max(0,Number(data.upload_received)||0);
+        setRecoveryStatus('Auto Recovery: продолжаю upload с части '+(startAt+1)+'.','busy');
+        await uploadVideoChunks(lastJobId,source,bundle.sourceName,startAt);
+        await jsonFetch(endpoint()+'/jobs/'+encodeURIComponent(lastJobId)+'/start',{method:'POST',headers:authHeaders()});
+        await patchRecovery({phase:'running'});
+        poll(lastJobId);
+        return true;
+      }
+      if(data.status==='uploaded'){
+        setRecoveryStatus('Auto Recovery: видео уже загружено. Запускаю GPU render.','busy');
+        await jsonFetch(endpoint()+'/jobs/'+encodeURIComponent(lastJobId)+'/start',{method:'POST',headers:authHeaders()});
+        await patchRecovery({phase:'running'});
+        poll(lastJobId);
+        return true;
+      }
+      setRecoveryStatus('Auto Recovery: старая Colab-сессия вернулась, продолжаю job.','ok');
+      poll(lastJobId);
+      return true;
+    }catch(error){
+      if(error.status!==404){scheduleRecoveryProbe();return false}
+    }
+  }
+  if(await tryDriveRestore(meta))return true;
+  return resubmitRecovery();
+}
+function isHeavyAiRequest(){
+  const q=($('prompt')?.value||'').toLowerCase();
+  if(humanMotionIntent().enabled)return true;
+  return /text[- ]?to[- ]?video|image[- ]?to[- ]?video|video[- ]?to[- ]?video|wan\b|wangp|seedance|kling|higgsfield|генер.*(?:человек|персонаж|сцену с нуля)|созд.*(?:человек|персонаж|сцену с нуля)|замен.*(?:лиц|персонаж)|фотореал|photoreal|реалистичн.*(?:человек|персонаж)/.test(q);
+}
+async function runLocalEasy(){
+  if(localRenderBusy)return false;
+  const renderer=window.NOVA_LOCAL_RENDER;
+  if(typeof renderer!=='function'){
+    setEasyState('ЛОКАЛЬНЫЙ РЕНДЕР НЕДОСТУПЕН','Открой NOVA в свежем Safari/Chrome.','error');
+    return false;
+  }
+  $('applyPrompt')?.click();
+  const source=$('remoteSource')?.files?.[0]||currentSourceFile||null;
+  currentSourceFile=source;
+  localRenderBusy=true;setEasyStep('render');refreshEasyState();
+  try{
+    const result=await renderer(source);
+    const link=$('remoteResult');
+    if(link){
+      link.href=result.url;link.download='NOVA_Video.'+result.ext;
+      link.textContent='Открыть / сохранить готовое видео';
+      link.classList.remove('hidden');
+    }
+    setEasyStep('final');
+    setEasyButton('✅ ГОТОВО — СДЕЛАТЬ ЕЩЁ');
+    setEasyState('ГОТОВО','Видео создано прямо на iPhone. Colab не использовался.','ok');
+    return true;
+  }catch(error){
+    setEasyState('ОШИБКА РЕНДЕРА','Не удалось создать видео локально: '+error.message,'error');
+    return false;
+  }finally{
+    localRenderBusy=false;
+  }
+}
+async function maybeAutoSend(){
+  const meta=recoveryMeta();
+  if(!meta?.userApprovedRemote||!autoRecoverEnabled()||localStorage.getItem(LS_JOB)||!endpoint()||!token()||!hasRenderableIntent())return false;
+  if(['submitting','uploading','running','final','recovering','promoting'].includes(meta.phase))return false;
+  await send(true);
+  return true;
+}
+async function easyAction(){
+  const active=lastJobId||localStorage.getItem(LS_JOB);
+  const meta=recoveryMeta();
+  if(active||meta&&['recovering','uploading','running','final','promoting','submitting'].includes(meta.phase)){
+    if(active&&endpoint()&&token()){lastJobId=active;await holdWakeLock();poll(active);return}
+    if(meta?.userApprovedRemote){await recoverNow();return}
+  }
+
+  const mediaAction=mediaOperationIntent();
+  const prompt=($('prompt')?.value||'').toLowerCase().replace(/ё/g,'е');
+  const source=$('remoteSource')?.files?.[0]||currentSourceFile||null;
+  const audioTracks=selectedAudioFiles();
+  const audio=audioTracks[0]||null;
+  const reference=$('remoteCharacterRef')?.files?.[0]||currentCharacterRef||null;
+  const explicitFfmpeg=/ffmpeg|конверт|перекод|encode|transcod|upscale|апскейл/.test(prompt);
+  const explicitBlender=/blender|360|полный круг|orbit|облет|true.?3d|3d.?block|блокинг|blocking/.test(prompt);
+  const musicTask=musicCreationIntent();
+  const remoteNeeded=musicTask||['replace_audio','mix_audio','volume_adjust','export_mp4'].includes(mediaAction)||explicitFfmpeg||explicitBlender||isHeavyAiRequest();
+
+  if(musicTask){
+    const spec=musicSpecFromPrompt();
+    if(spec.requested_video_mix&&!source){
+      setEasyState('НУЖНО ВИДЕО','Команда просит сразу подмешать созданную музыку в видео. Выбери видеофайл — NOVA продолжит автоматически.','error');
+      return;
+    }
+  }
+
+  if(['replace_audio','mix_audio'].includes(mediaAction)&&(!source||!audioTracks.length)){
+    setEasyState('НУЖНЫ ФАЙЛЫ','Выбери видео и хотя бы одну аудиодорожку. NOVA поддерживает до 8 дорожек.','error');
+    return;
+  }
+  if(['volume_adjust','export_mp4'].includes(mediaAction)&&!source){
+    setEasyState('НУЖНО ВИДЕО','Выбери видео, к которому применить громкость или экспорт MP4.','error');
+    return;
+  }
+  if(explicitFfmpeg&&!source){
+    setEasyState('НУЖЕН ВИДЕОФАЙЛ','Для конвертации/кодирования выбери исходное видео.','error');
+    return;
+  }
+
+  if(remoteNeeded){
+    const actionLabel=musicTask
+      ?'NOVA Music: создать музыку по аккордам'
+      :mediaAction==='replace_audio'
+      ?'FFmpeg: заменить музыку в видео'
+      :mediaAction==='mix_audio'
+        ?'FFmpeg: смешать аудиодорожки'
+        :mediaAction==='volume_adjust'
+          ?'FFmpeg: изменить громкость'
+          :mediaAction==='export_mp4'
+            ?'FFmpeg: экспортировать MP4'
+            :explicitBlender?'Blender / 3D render'
+            :explicitFfmpeg?'FFmpeg media render'
+            :'WanGP / AI video';
+    if(!confirmRemoteCompute(actionLabel))return;
+
+    setAutoRecover(true);
+    const job=buildJob();
+    await beginRecovery(job,source,source?.name||'source.mp4',reference,audioTracks,true);
+    await patchRecovery({userApprovedRemote:true,phase:'prepared'});
+    await requestRecoveryPersistence();
+
+    if(endpoint()&&token()){
+      const health=await connect({resume:false});
+      if(health){
+        const engine=job.engine;
+        const ready=engine==='music'?health.capabilities?.music_chords:engine==='ffmpeg'?health.ffmpeg:engine==='blender'?health.blender:engine==='wangp'?health.wangp_api_ready:true;
+        if(ready){
+          setEasyState(engine==='music'?'NOVA MUSIC':engine==='ffmpeg'?'FFMPEG':engine==='blender'?'BLENDER':engine==='wangp'?'WANGP':'REMOTE GPU','Worker на связи. NOVA сама отправляет одобренное задание.','busy');
+          await send(true);
+          return;
+        }
+      }
+    }
+
+    setEasyState('ЗАПУСК COLAB','Worker не найден или устарел. NOVA открывает наш Google Colab и сохраняет задание для автоматического продолжения.','busy');
+    openColab();
+    return;
+  }
+
+  await runLocalEasy();
+}
+function openColab(){
+  const link=$('remoteColabLink');
+  const url=link?.href||'https://colab.research.google.com/github/magomedt149/nova-robot/blob/main/blender-colab/NOVA_Remote_GPU_Worker.ipynb';
+  setWaitingColab(true);
+  setStatus('Открываю Google Colab. Там только Run all → COPY & RETURN TO NOVA.','busy');
+  setRecoveryStatus('После возврата NOVA сама попробует подключиться и продолжить job.','busy');
+  const win=window.open(url,'_blank');
+  if(win)return true;
+  location.assign(url);
+  return true;
+}
+async function autoStart(){return easyAction()}
+async function runRemoteSelfTest(){
+  setEasyStep('render');
+  setProgress(5);
+  setStatus('Проверяю GPU, WanGP, Blender, FFmpeg и создание MP4…','busy');
+  try{
+    const result=await jsonFetch(endpoint()+'/self-test',{method:'POST',headers:authHeaders()});
+    const r=result.results||{};
+    const bits=[
+      r.gpu?.ok?'GPU ✓':'GPU —',
+      r.wangp?.ok?'WanGP ✓':'WanGP —',
+      r.hybrid_router?.ok?'Hybrid Photo→Motion ✓':'Hybrid —',
+      r.blender?.ok?'Blender MP4 ✓':'Blender —',
+      r.ffmpeg?.ok?'FFmpeg H.264/AAC ✓':'FFmpeg —',
+      r.music?.ok?'Music WAV/MP3 ✓':'Music —'
+    ];
+    setProgress(result.ok?100:50);
+    setStatus('Проверка: '+bits.join(' • '),result.ok?'ok':'error');
+    if(result.ok){
+      setEasyStep('final');
+      setEasyState('ВСЁ РАБОТАЕТ','Remote stack прошёл self-test: GPU, WanGP API, Hybrid Photo→Motion router, NOVA Music WAV/MP3, Blender MP4 и FFmpeg H.264/AAC.','ok');
+    }else{
+      setEasyState('ЕСТЬ ОШИБКА','Один из компонентов не прошёл self-test. Смотри статус выше.','error');
+    }
+    await patchRecovery({diagnosticSelfTest:false,userApprovedRemote:false,phase:'diagnostics-done'});
+    setAutoRecover(false);
+    return result;
+  }catch(error){
+    setStatus('Self-test не прошёл: '+error.message,'error');
+    setEasyState('ПРОВЕРКА НЕ ПРОШЛА','Перезапусти актуальный Colab notebook и повтори проверку.','error');
+    await patchRecovery({diagnosticSelfTest:false,userApprovedRemote:false,phase:'diagnostics-error'});
+    setAutoRecover(false);
+    return null;
+  }
+}
+async function testAll(){
+  if(!confirmRemoteCompute('Полная проверка WanGP + Blender + FFmpeg'))return;
+  setAutoRecover(true);
+  await patchRecovery({userApprovedRemote:true,diagnosticSelfTest:true,phase:'diagnostics'},buildJob());
+  const health=await connect({resume:false});
+  if(!health){
+    setEasyState('ЗАПУСК COLAB','Worker не найден. NOVA открывает Colab; после возврата self-test продолжится автоматически.','busy');
+    openColab();
+    return;
+  }
+  return runRemoteSelfTest();
+}
+
+async function testRender(){
+  if(!confirmRemoteCompute('Тест Remote GPU 1 секунда'))return;
+  const health=await connect({resume:false});if(!health)return;
+  if(!health.blender){setStatus('Для теста нужен Blender. Перезапусти Colab notebook.','error');return}
+  const job={schema:'nova.remote-job.v1',source_prompt:'NOVA Remote GPU self test, clean blocking scene',engine:'blender',quality:'preview',duration:1,ratio:'9:16',fps:24,mirror_drive:false};
+  await beginRecovery(job,null,'',null,null,true);
+  await submitPreparedJob(job,null,'',{recovery:false});
+}
+async function send(approved=false){
+  if(sendBusy)return;
+  if(!endpoint()||!token()){setStatus('Сначала подключи GPU worker.','error');return}
+  saveConnection();
+  const job=buildJob();
+  const source=$('remoteSource')?.files?.[0]||currentSourceFile||null;
+  const reference=$('remoteCharacterRef')?.files?.[0]||currentCharacterRef||null;
+  const audioTracks=selectedAudioFiles();
+  const audio=audioTracks[0]||null;
+
+  let explicitApproval=false;
+  if(approved){
+    if(!approvalMatches(job,source,reference,audioTracks)){
+      if(!confirmRemoteCompute('Изменённая задача Remote GPU'))return;
+      explicitApproval=true;
+    }
+  }else{
+    if(!confirmRemoteCompute('Отправка задачи на Remote GPU'))return;
+    explicitApproval=true;
+  }
+
+  currentSourceFile=source;
+  currentCharacterRef=reference;
+  currentAudioFiles=audioTracks;
+  currentAudioFile=audio;
+  await beginRecovery(job,source,source?.name||'source.mp4',reference,audioTracks,explicitApproval);
+  await submitPreparedJob(job,source,source?.name||'source.mp4',{recovery:false,reference,referenceName:reference?.name||'',audio,audioName:audio?.name||'',audioTracks});
+}
+async function cancel(){
+  const jobId=lastJobId||localStorage.getItem(LS_JOB);
+  clearPoll();clearRecoveryTimer();
+  if(jobId&&endpoint()&&token()){
+    try{await jsonFetch(endpoint()+'/jobs/'+encodeURIComponent(jobId),{method:'DELETE',headers:authHeaders()})}catch(_){}
+  }
+  localStorage.removeItem(LS_JOB);lastJobId='';await releaseWakeLock();await clearRecovery();setProgress(0);setStatus('Задание остановлено.','ok');
+}
+async function restoreCachedInputs(){
+  const bundle=await getRecoveryBundle();
+  if(!bundle)return null;
+  currentSourceFile=bundle.source||null;
+  currentCharacterRef=bundle.reference||null;
+  currentAudioFiles=(bundle.audioTracks||[]).slice(0,8);
+  currentAudioFile=bundle.audio||currentAudioFiles[0]||null;
+  const parts=[];
+  if(currentSourceFile)parts.push('видео восстановлено из iPhone-кэша');
+  else if(bundle.meta?.sourceSize)parts.push('видео не найдено в iPhone-кэше');
+  if(currentCharacterRef)parts.push('фото восстановлено из iPhone-кэша');
+  else if(bundle.meta?.referenceSize)parts.push('фото не найдено в iPhone-кэше');
+  if(currentAudioFile)parts.push('аудио восстановлено из iPhone-кэша');
+  else if(bundle.meta?.audioSize)parts.push('аудио не найдено в iPhone-кэше');
+  if(parts.length)setRecoveryStatus('После перезапуска: '+parts.join(' • ')+'.','ok');
+  return bundle;
+}
+async function resumeRunningJobAfterRestart(){
+  const jobId=localStorage.getItem(LS_JOB);
+  if(!jobId||!endpoint()||!token())return false;
+  try{
+    const health=await connect({resume:false});
+    if(!health)return false;
+    const data=await jsonFetch(endpoint()+'/jobs/'+encodeURIComponent(jobId),{headers:authHeaders()});
+    lastJobId=jobId;
+    if(data.status==='running'||data.status==='completed'){
+      setRecoveryStatus('После перезапуска найден активный job '+jobId+'. NOVA продолжает только наблюдение; новый GPU render не запускается.','ok');
+      poll(jobId);
+      return true;
+    }
+    if(['uploading','uploaded','queued'].includes(data.status)){
+      if(recoveryMeta()?.userApprovedRemote){
+        setRecoveryStatus('После перезапуска job '+jobId+' восстановлен в состоянии «'+data.status+'». Продолжаю автоматически — это уже одобренное задание.','busy');
+        await resumeOrRecover();
+      }else{
+        setRecoveryStatus('После перезапуска job '+jobId+' восстановлен в состоянии «'+data.status+'». Для продолжения нужно подтверждение.','busy');
+      }
+      return true;
+    }
+    if(data.status==='error'||data.status==='cancelled'){
+      setRecoveryStatus('Старый job найден, но он '+data.status+'. Локальные фото/видео сохранены для нового ручного запуска.','error');
+      return true;
+    }
+  }catch(_){}
+  return false;
+}
+
+async function recoverNow(){
+  const meta=recoveryMeta();
+  if(!meta?.userApprovedRemote&&!confirmRemoteCompute('Восстановление Remote GPU job'))return;
+  if(!endpoint()||!token()){
+    if(meta?.userApprovedRemote){
+      setRecoveryStatus('Worker не подключён. Открываю наш Colab для восстановления уже одобренного задания.','busy');
+      openColab();
+      return;
+    }
+    document.getElementById('remoteAdvanced')?.setAttribute('open','');
+    setRecoveryStatus('Для восстановления нужен Worker URL + Token или запуск нашего Colab.','error');
+    return;
+  }
+  const health=await connect({resume:false});
+  if(health)await resumeOrRecover();
+  else if(meta?.userApprovedRemote){openColab()}
+  else scheduleRecoveryProbe(1000);
+}
+async function restore(){
+  setupSimpleStudioMode();
+  if($('remoteUrl'))$('remoteUrl').value=localStorage.getItem(LS_URL)||'';
+  if($('remoteToken'))$('remoteToken').value=localStorage.getItem(LS_TOKEN)||'';
+  if($('remoteConnectCode'))$('remoteConnectCode').value='';
+  const params=new URLSearchParams(location.search);
+  const videoParam=params.get('video')==='1';
+  const autoParam=params.get('auto')==='1';
+  const colabParam=params.get('colab')==='1';
+  setFullAuto(false);
+  const pending=localStorage.getItem(LS_PENDING)||'';
+  if(pending&&$('prompt')){$('prompt').value=pending;localStorage.removeItem(LS_PENDING);$('applyPrompt')?.click()}
+  const saved=localStorage.getItem(LS_JOB);
+  const meta=recoveryMeta();
+  setAutoRecover(Boolean(meta?.userApprovedRemote||localStorage.getItem(LS_AUTORECOVER)==='1'));
+  const bundle=await restoreCachedInputs();
+  if(saved||meta||bundle){
+    const sourceOk=Boolean(bundle?.source);
+    const refOk=Boolean(bundle?.reference);
+    const audioOk=Boolean(bundle?.audio||(bundle?.audioTracks||[]).length);
+    const cached=[];
+    if(sourceOk)cached.push('видео ✓');
+    if(refOk)cached.push('фото ✓');
+    if(audioOk)cached.push('аудио ✓');
+    setRecoveryStatus('Recovery загружен после перезапуска'+(cached.length?' • '+cached.join(' • '):'')+(meta?.userApprovedRemote?' • одобренный job продолжится автоматически.':'.'),'ok');
+    const resumed=await resumeRunningJobAfterRestart();
+    if(meta?.userApprovedRemote&&!resumed)setTimeout(()=>recoverNow().catch(()=>{}),350);
+  }
+  if(videoParam){
+    const op=mediaOperationIntent();
+    if(op==='replace_audio')setEasyState('ЗАМЕНА МУЗЫКИ','Выбери видео и одну или несколько аудиодорожек. После выбора файлов NOVA продолжит сама.','ok');
+    else if(op==='mix_audio')setEasyState('МИКС ДОРОЖЕК','Выбери видео и до 8 аудиодорожек. Громкость можно задавать голосом в процентах.','ok');
+    else if(op==='volume_adjust')setEasyState('ГРОМКОСТЬ','Выбери видео. NOVA применит указанные уровни и экспортирует MP4.','ok');
+    else if(op==='export_mp4')setEasyState('ЭКСПОРТ MP4','Выбери видео. NOVA перекодирует его в H.264 + AAC MP4.','ok');
+    else setEasyState('SAFE AUTO','Команда перенесена в Motion Studio. NOVA сама выберет нужный движок; Remote GPU потребует подтверждение.','ok');
+  }
+  refreshEasyState();
+  if(colabParam)setTimeout(()=>openColab(),220);
+  else if(autoParam&&!['replace_audio','mix_audio','volume_adjust','export_mp4'].includes(mediaOperationIntent()))setTimeout(()=>autoStart().catch(()=>{}),220);
+}
+
+async function acceptHybridReferenceFromParent(event){
+  if(event.origin!==location.origin)return;
+  const data=event.data||{};
+  if(data.type!=='NOVA_HYBRID_REFERENCE')return;
+  const file=data.file;
+  if(!(file instanceof File)||!String(file.type||'').startsWith('image/')){
+    setStatus('Hybrid: NOVA не получила корректное фото reference.','error');
+    return;
+  }
+  currentCharacterRef=file;
+  const input=$('remoteCharacterRef');
+  if(input){
+    try{
+      const dt=new DataTransfer();
+      dt.items.add(file);
+      input.files=dt.files;
+    }catch(_){}
+  }
+  if(typeof data.prompt==='string'&&data.prompt.trim()&&$('prompt')){
+    $('prompt').value=data.prompt.trim();
+    $('applyPrompt')?.click();
+  }
+  if($('humanMotionMode')){
+    const requested=String(data.motionMode||'natural');
+    const allowed=new Set(['auto','natural','walk','run','dance','motion-reference','none']);
+    $('humanMotionMode').value=allowed.has(requested)?requested:'natural';
+  }
+  const meta=recoveryMeta();
+  if(meta){
+    await beginRecovery(
+      meta.job||buildJob(),
+      currentSourceFile,
+      currentSourceFile?.name||meta.sourceName||'source.mp4',
+      currentCharacterRef,
+      currentAudioFiles.length?currentAudioFiles:currentAudioFile,
+      false
+    );
+  }
+  setEasyState('HYBRID PHOTO ГОТОВО','Фото из NOVA Video PRO передано в Motion Studio. Человек будет анимирован через WanGP image-to-video; Remote GPU запустится только после твоего подтверждения.','ok');
+  setRecoveryStatus('Hybrid reference ✓ · фото сохранено для identity/image-to-video.','ok');
+  refreshEasyState();
+}
+window.addEventListener('message',event=>{acceptHybridReferenceFromParent(event).catch(error=>setStatus('Hybrid bridge: '+(error?.message||error),'error'))});
+
+$('remoteEasyAction')?.addEventListener('click',easyAction);
+$('remoteStudioToggle')?.addEventListener('click',toggleSimpleStudioMode);
+$('remoteAutoStart')?.addEventListener('click',autoStart);
+$('remoteAutoFinal')?.addEventListener('change',e=>setFullAuto(e.target.checked));
+$('remoteAutoRecover')?.addEventListener('change',e=>setAutoRecover(e.target.checked));
+$('remoteRecoverNow')?.addEventListener('click',recoverNow);
+$('remoteSelfTest')?.addEventListener('click',testAll);
+$('remoteTest')?.addEventListener('click',testRender);
+$('remoteCharacterRef')?.addEventListener('change',async e=>{
+  currentCharacterRef=e.target.files?.[0]||null;
+  const meta=recoveryMeta();
+  if(meta&&currentCharacterRef){
+    const updated=await beginRecovery(meta.job||buildJob(),currentSourceFile,currentSourceFile?.name||meta.sourceName||'source.mp4',currentCharacterRef,currentAudioFile,false);
+    setRecoveryStatus(updated.userApprovedRemote?'Фото персонажа восстановлено для уже одобренного job.':'Фото персонажа изменено. Для следующего Remote GPU запуска потребуется подтверждение.','ok');
+  }
+});
+$('remoteSource')?.addEventListener('change',async e=>{
+  currentSourceFile=e.target.files?.[0]||null;
+  refreshEasyState();
+  const meta=recoveryMeta();
+  if(meta&&meta.sourceSize&&currentSourceFile){
+    const updated=await beginRecovery(meta.job||buildJob(),currentSourceFile,currentSourceFile.name,currentCharacterRef,currentAudioFile,false);
+    setRecoveryStatus(updated.userApprovedRemote?'Исходник совпадает с уже одобренным job. Можно продолжать автоматически.':'Исходник выбран или изменён. Для следующего Remote GPU запуска потребуется подтверждение.','ok');
+  }
+  const params=new URLSearchParams(location.search);
+  if(params.get('auto')==='1'){
+    const op=mediaOperationIntent();
+    const audioReady=selectedAudioFiles().length>0;
+    const ready=(op==='replace_audio'||op==='mix_audio')?(currentSourceFile&&audioReady):(op==='volume_adjust'||op==='export_mp4')?Boolean(currentSourceFile):musicCreationIntent()?Boolean(currentSourceFile):false;
+    if(ready)setTimeout(()=>easyAction().catch(()=>{}),120);
+  }
+});
+$('remoteAudio')?.addEventListener('change',async e=>{
+  currentAudioFiles=Array.from(e.target.files||[]).slice(0,8);
+  currentAudioFile=currentAudioFiles[0]||null;
+  const meta=recoveryMeta();
+  if(meta&&currentAudioFiles.length){
+    await beginRecovery(meta.job||buildJob(),currentSourceFile,currentSourceFile?.name||meta.sourceName||'source.mp4',currentCharacterRef,currentAudioFiles,false);
+  }
+  if(currentAudioFiles.length)setEasyState('АУДИО ВЫБРАНО',currentAudioFiles.length+' дорожк(и). Если видео уже выбрано, NOVA продолжит автоматически и выберет FFmpeg.','ok');
+  refreshEasyState();
+  const params=new URLSearchParams(location.search);
+  if(params.get('auto')==='1'&&['replace_audio','mix_audio'].includes(mediaOperationIntent())&&currentSourceFile&&currentAudioFiles.length)setTimeout(()=>easyAction().catch(()=>{}),120);
+});
+['remoteOriginalVolume','remoteAddedVolume','remoteMasterVolume','remoteMusicEnabled','remoteMusicChords','remoteMusicBpm','remoteMusicInstrument','remoteMusicFormat','remoteMusicBeats','remoteMusicRepeats','remoteMusicVolume','remoteMusicFadeIn','remoteMusicFadeOut','remoteMusicMixVideo'].forEach(id=>{
+  $(id)?.addEventListener('change',()=>{buildJob();refreshEasyState()});
+});
+$('remoteConnect')?.addEventListener('click',()=>connect());
+$('remotePasteCode')?.addEventListener('click',async()=>{
+  try{setStatus('Читаю NOVA CONNECT CODE из буфера…','busy');await readClipboardCode();await connect()}
+  catch(error){setStatus(error.message,'error')}
+});
+$('remoteSend')?.addEventListener('click',()=>send(false));
+$('remoteCancel')?.addEventListener('click',cancel);
+$('remoteUrl')?.addEventListener('change',saveConnection);
+$('remoteToken')?.addEventListener('change',saveConnection);
+$('remoteConnectCode')?.addEventListener('change',async e=>{
+  if(parseConnectCode(e.target.value)){
+    setStatus('Connect Code принят. Проверяю worker…','busy');
+    const health=await connect();
+    if(health&&recoveryMeta()?.userApprovedRemote)await resumeOrRecover();
+  }else if(e.target.value.trim())setStatus('Не удалось прочитать NOVA CONNECT CODE.','error');
+});
+$('remoteConnectCode')?.addEventListener('paste',()=>setTimeout(async()=>{
+  const el=$('remoteConnectCode');
+  if(el&&parseConnectCode(el.value)){
+    setStatus('Connect Code принят. Проверяю worker…','busy');
+    const health=await connect();
+    if(health&&recoveryMeta()?.userApprovedRemote)await resumeOrRecover();
+  }
+},0));
+window.addEventListener('online',()=>{
+  refreshEasyState();
+  if(recoveryMeta()?.userApprovedRemote&&autoRecoverEnabled())recoverNow().catch(()=>{});
+});
+window.addEventListener('pageshow',()=>{
+  refreshEasyState();
+  if(localStorage.getItem(LS_WAITING)==='1'||recoveryMeta()?.userApprovedRemote){
+    tryClipboardReconnect().then(found=>{
+      if(!found&&endpoint()&&token())connect().then(health=>{if(health&&recoveryMeta()?.userApprovedRemote)resumeOrRecover().catch(()=>{})}).catch(()=>{});
+    }).catch(()=>{});
+  }
+});
+document.addEventListener('visibilitychange',()=>{
+  if(document.visibilityState==='visible'){
+    if(lastJobId||localStorage.getItem(LS_JOB))holdWakeLock();
+    if(recoveryMeta()?.userApprovedRemote&&autoRecoverEnabled()){
+      tryClipboardReconnect().then(found=>{
+        if(!found&&endpoint()&&token())connect().then(health=>{if(health)resumeOrRecover().catch(()=>{})}).catch(()=>{});
+      }).catch(()=>{});
+    }
+  }
+});
+restore().catch(()=>{});
+})();

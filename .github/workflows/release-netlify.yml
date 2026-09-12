@@ -1,0 +1,69 @@
+name: Release NOVA to Netlify
+
+on:
+  workflow_dispatch:
+    inputs:
+      note:
+        description: "Optional release note"
+        required: false
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: nova-production-release
+  cancel-in-progress: false
+
+jobs:
+  validate-and-release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Validate NOVA
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check app.js
+          node --check service-worker.js
+          node --check motion-studio/app.js
+          node --check motion-studio/director.js
+          node --check motion-studio/remote-gpu.js
+          python -m py_compile automation/remote_gpu_worker.py automation/nova_pipeline.py blender-colab/scripts/extract_pose.py
+          python3 -m json.tool version.json >/dev/null
+
+      - name: Create one production release marker
+        shell: bash
+        env:
+          RELEASE_NOTE: ${{ inputs.note }}
+        run: |
+          set -euo pipefail
+          VERSION="$(python3 -c 'import json; print(json.load(open("version.json"))["version"])')"
+          SOURCE_SHA="$(git rev-parse HEAD)"
+          RELEASED_AT="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+
+          {
+            echo "NOVA_VERSION=$VERSION"
+            echo "SOURCE_SHA=$SOURCE_SHA"
+            echo "RELEASED_AT=$RELEASED_AT"
+            echo "NOTE=$RELEASE_NOTE"
+          } > .netlify-release
+
+          git config user.name "NOVA Release Bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add .netlify-release
+          git commit -m "Release NOVA $VERSION to Netlify"
+          git push origin HEAD:main

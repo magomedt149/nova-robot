@@ -1,0 +1,6 @@
+{
+  "status": "WAITING_FOR_EXISTING_CREDENTIAL",
+  "mode": "FREE_TEST_ONLY",
+  "message": "No existing AUTOCALLS API credential was available to this GitHub Actions run.",
+  "paid_actions_enabled": false
+}

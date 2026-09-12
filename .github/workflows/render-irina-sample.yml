@@ -1,0 +1,68 @@
+name: Render Irina 12s Sample
+
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  render:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Piper
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install piper-tts
+
+      - name: Download Irina
+        run: |
+          python -m piper.download_voices ru_RU-irina-medium
+
+      - name: Synthesize clear Russian sample
+        shell: bash
+        run: |
+          cat > render.py <<'PY'
+          import wave
+          from piper import PiperVoice, SynthesisConfig
+
+          text = (
+              "Это Нова. "
+              "Сначала даём команду на сайте. "
+              "Затем нажимаем Сделать видео. "
+              "Нова запускает видеостудию и возвращает готовый ролик на айфон."
+          )
+
+          voice = PiperVoice.load(
+              "ru_RU-irina-medium.onnx",
+              config_path="ru_RU-irina-medium.onnx.json"
+          )
+          syn = SynthesisConfig(
+              length_scale=1.04,
+              noise_scale=0.667,
+              noise_w_scale=0.8,
+              normalize_audio=True
+          )
+          with wave.open("irina_clear.wav", "wb") as wav_file:
+              voice.synthesize_wav(text, wav_file, syn_config=syn)
+
+          with wave.open("irina_clear.wav", "rb") as wav_file:
+              duration = wav_file.getnframes() / wav_file.getframerate()
+              print(f"duration={duration:.3f}s")
+          PY
+          python render.py
+
+      - name: Upload Irina WAV
+        uses: actions/upload-artifact@v4
+        with:
+          name: nova-irina-clear-12s
+          path: irina_clear.wav
+          if-no-files-found: error
+          retention-days: 1

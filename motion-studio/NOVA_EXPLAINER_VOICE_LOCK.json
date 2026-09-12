@@ -1,0 +1,38 @@
+{
+  "id": "nova-explainer-voice-lock-v1",
+  "appliesTo": "NOVA / ChatGPT Studio Explainer",
+  "referenceVideo": "ScreenRecording_08-28-2026 04-23-21_1.mp4",
+  "updatedAt": "2026-09-03",
+  "defaultVoice": "liza",
+  "profiles": {
+    "liza": {
+      "displayName": "Лиза",
+      "provider": "HeyGen",
+      "providerVoiceName": "Elizabeth - Friendly",
+      "voiceId": "55f8c0f546884f9cbdefa113f5e7b682",
+      "locale": "ru-RU",
+      "preferredSpeed": 0.9,
+      "exactReferenceVoice": true,
+      "allowAutomaticSubstitution": false,
+      "note": "This is the previously selected female reference voice. Never label a Piper/system fallback as Liza."
+    },
+    "irina": {
+      "displayName": "Ирина",
+      "provider": "Piper / vits-web",
+      "voiceId": "ru_RU-irina-medium",
+      "locale": "ru-RU",
+      "freeLocal": true,
+      "allowAutomaticSubstitution": false,
+      "note": "Free alternative only when Tumsoev explicitly selects Irina. Do not use a system voice and call it Irina."
+    }
+  },
+  "rules": [
+    "For NOVA Studio Explainer, use Liza by default because that is the reference-video voice profile.",
+    "If Liza exact provider is unavailable, stop and report that exact Liza is unavailable; do not silently switch voices.",
+    "If Tumsoev explicitly selects Irina, use real Piper ru_RU-irina-medium only.",
+    "Never route an explicitly selected iPhone/Mac/system Russian voice through Piper.",
+    "No paid TTS call or provider usage without explicit approval after cost is shown.",
+    "Keep narration as one continuous phrase or a small number of long chunks to avoid clicks and chopped pauses.",
+    "Normalize final speech to approximately -16 to -17 LUFS, true peak <= -2 dBTP, add 5-15 ms microfades at edits, and avoid inserted pauses longer than needed."
+  ]
+}

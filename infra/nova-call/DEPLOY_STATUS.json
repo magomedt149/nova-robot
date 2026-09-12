@@ -1,0 +1,10 @@
+{
+  "status": "WAITING_FOR_UBUNTU_HOST",
+  "domain": "call.tumsoev.com",
+  "turn_domain": "turn.call.tumsoev.com",
+  "automated_installer": true,
+  "github_deploy_workflow": "manual-only",
+  "free_internet_calls": true,
+  "pstn_calls": false,
+  "message": "Infrastructure is ready in GitHub. Actual server start requires a reachable Ubuntu host, DNS A records, and SSH deployment credentials."
+}

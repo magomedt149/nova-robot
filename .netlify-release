@@ -1,0 +1,4 @@
+NOVA_VERSION=27.25.0
+SOURCE_SHA=e1c506d487746b882c1e2cc9970023962b7b647f
+RELEASED_AT=2026-09-07T07:27:00Z
+NOTE=Publish current NOVA camera and glasses update after Netlify 404

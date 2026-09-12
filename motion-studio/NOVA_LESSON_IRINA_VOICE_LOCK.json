@@ -1,0 +1,104 @@
+{
+  "id": "nova-lessons-irina-voice-lock-v4",
+  "scope": "all future NOVA lesson narration, stories and Russian speech",
+  "enabled": true,
+  "defaultVoice": "irina",
+  "voice": {
+    "provider": "Piper / vits-web",
+    "voiceId": "ru_RU-irina-medium",
+    "displayName": "Ирина",
+    "locale": "ru-RU",
+    "locked": true,
+    "mustBeExactVoice": true,
+    "allowSystemFallback": false,
+    "allowAutomaticVoiceSubstitution": false,
+    "allowPitchShift": false,
+    "allowFormantShift": false,
+    "allowTimbreChange": false,
+    "pitchFactor": 1.0,
+    "formantFactor": 1.0
+  },
+  "contentPolicy": {
+    "textMayChangeEveryRender": true,
+    "storiesMayChangeEveryRender": true,
+    "lessonsMayChangeEveryRender": true,
+    "synthesizeFreshAudioForEveryNewText": true,
+    "mustSpeakExactProvidedText": true,
+    "allowOldAudioSampleReuse": false,
+    "allowDemoPhraseReuse": false,
+    "allowPhraseLooping": false,
+    "allowTextParaphraseDuringTts": false
+  },
+  "freeVideoWorkflow": {
+    "permanentDefault": true,
+    "paidAiCreditsAllowed": false,
+    "preferredOrder": [
+      "local/browser Piper ru_RU-irina-medium",
+      "local FFmpeg / Remotion / Canvas-SVG-CSS explainer render",
+      "short GitHub Actions render only when exact Piper Irina is unavailable locally"
+    ],
+    "githubActionsPolicy": {
+      "allowedAsFreeFallback": true,
+      "avoidUnnecessaryRuns": true,
+      "oneRenderOnlyByDefault": true,
+      "neverGenerateVariantsAutomatically": true
+    },
+    "videoRule": "Create the visual story from the current prompt and create fresh narration from the current text. Do not reuse an old video or narration track as a substitute for new content."
+  },
+  "audioFreshnessDiagnostics": {
+    "required": true,
+    "checkRenderedAudio": true,
+    "rejectSelfRepeatedFragments": true,
+    "rejectPreviousRenderAudioReuse": true,
+    "minimumRepeatedFragmentSeconds": 1.0,
+    "historyRenders": 24,
+    "historyMaxAgeDays": 90,
+    "mustPassBeforeRenderIsAccepted": true
+  },
+  "delivery": {
+    "pace": "natural, calm, clear Russian",
+    "preferredSentencePauseSeconds": 0.22,
+    "preferredQuestionPauseSeconds": 0.26,
+    "maxPauseSeconds": 0.32,
+    "phraseEndingFadeMs": "8-15",
+    "phraseAttackFadeMs": "5-10"
+  },
+  "allowedPostProcessing": {
+    "normalization": true,
+    "gentleCompression": true,
+    "clickRemoval": true,
+    "microfades": true,
+    "pauseCleanup": true,
+    "pitchChange": false,
+    "formantChange": false,
+    "voiceStyleTransfer": false
+  },
+  "mastering": {
+    "sampleRateHz": 48000,
+    "channels": 1,
+    "integratedLufsTarget": -16.5,
+    "truePeakDbtp": -2.0,
+    "warmthEq": "+0.6 dB around 180 Hz",
+    "clarityEq": "+0.3 dB around 3.2 kHz",
+    "compression": "gentle 1.2:1"
+  },
+  "rules": [
+    "Use real Piper ru_RU-irina-medium for every NOVA lesson, story and Russian narration by default.",
+    "The words and story may change freely; the Irina voice must not change.",
+    "For every new text, synthesize a fresh TTS track from that exact text using Irina.",
+    "Never reuse an old demo phrase or old lesson audio as the narration for new text.",
+    "Never loop or repeat a previous Irina phrase to fill video duration.",
+    "Create NOVA explainer videos for free by default using local/browser/open-source tools.",
+    "If exact Piper Irina is unavailable locally, a short GitHub Actions render is the allowed free fallback; avoid unnecessary Actions runs.",
+    "Never spend paid AI credits for this workflow unless the user explicitly changes this rule.",
+    "Before accepting a new render, run audio freshness diagnostics on the final rendered audio.",
+    "Reject a render when it contains a repeated audio fragment of about one second or longer inside itself.",
+    "Reject a render when its audio reuses a matching fragment of about one second or longer from recent previous renders.",
+    "Never change Irina pitch, formants, timbre or voice identity.",
+    "Never apply Liza-style or any voice-style transfer to Irina.",
+    "Never substitute eSpeak, iPhone/macOS system voices or another TTS and call it Irina.",
+    "Only normalize level, clean clicks, trim excessive silence and apply tiny microfades.",
+    "Keep natural punctuation-driven pauses around 0.20-0.30 seconds.",
+    "Changing this locked voice or free-first workflow requires an explicit new user request."
+  ]
+}

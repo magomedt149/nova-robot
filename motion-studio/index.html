@@ -1,0 +1,329 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <meta name="theme-color" content="#070910" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Motion Studio" />
+  <title>TUMSOEV Motion + VFX Studio — FREE</title>
+  <link rel="manifest" href="./manifest.webmanifest" />
+  <link rel="apple-touch-icon" href="../icon-192.png" />
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <main class="app">
+    <section class="panel">
+      <div class="eyebrow">TUMSOEV / FREE MOTION</div>
+      <h1>Motion + VFX Studio</h1>
+      <p class="lead">Motion, камера, VFX и Auto Director прямо в браузере. Без кредитов.</p>
+
+      <label>Опиши сцену или анимацию
+        <textarea id="prompt" rows="3" placeholder="Например: двое в комнате, кино, 5 секунд, камера orbit, дождь"></textarea>
+      </label>
+      <button id="applyPrompt" class="secondary">Применить описание</button>
+
+      <div class="directorBox">
+        <div class="directorHead"><strong>NOVA Auto Director</strong><span>ZERO CREDIT</span></div>
+        <p>Автоматически собирает shot plan, blocking, объектив и continuity до платной генерации.</p>
+        <button id="autoDirector" class="directorBtn">🎬 Собрать сцену автоматически</button>
+        <div id="directorSummary" class="directorSummary">Ожидает описание сцены.</div>
+        <pre id="shotPlan" class="shotPlan hidden"></pre>
+        <div class="directorActions">
+          <button id="downloadScenePack" class="secondary" disabled>Scene Pack</button>
+          <button id="downloadBlender" class="secondary" disabled>Blender</button>
+          <button id="copyFinalPrompt" class="secondary" disabled>AI Prompt</button>
+        </div>
+      </div>
+
+      <label>Главный текст<input id="title" value="TUMSOEV" maxlength="80"></label>
+      <label>Подзаголовок<input id="subtitle" value="FREE MOTION STUDIO" maxlength="100"></label>
+
+      <div class="grid2">
+        <label>Длительность
+          <select id="duration"><option>3</option><option selected>5</option><option>8</option><option>10</option><option>15</option></select>
+        </label>
+        <label>Формат
+          <select id="ratio"><option selected>16:9</option><option>9:16</option></select>
+        </label>
+      </div>
+
+      <div class="grid2">
+        <label>Стиль
+          <select id="style">
+            <option value="neon" selected>Неон</option>
+            <option value="gold">Кино / золото</option>
+            <option value="clean">Чистый</option>
+            <option value="redcyan">Красно-голубой 3D</option>
+            <option value="hologram">Голограмма</option>
+          </select>
+        </label>
+        <label>Движение
+          <select id="motion">
+            <option value="slide" selected>Слайд</option>
+            <option value="rise">Подъём</option>
+            <option value="float">Плавание</option>
+            <option value="zoom">Приближение</option>
+            <option value="pulse">Пульс</option>
+          </select>
+        </label>
+      </div>
+
+      <div class="grid2 vfx-grid">
+        <label>Камера
+          <select id="camera">
+            <option value="static" selected>Статичная</option>
+            <option value="push">Push-in</option>
+            <option value="orbit">Orbit</option>
+            <option value="handheld">Handheld</option>
+          </select>
+        </label>
+        <label>VFX
+          <select id="vfx">
+            <option value="none" selected>Без эффекта</option>
+            <option value="sparks">Искры</option>
+            <option value="smoke">Дым</option>
+            <option value="fog">Туман</option>
+            <option value="rain">Дождь</option>
+            <option value="lightning">Молния</option>
+            <option value="debris">Обломки</option>
+            <option value="fire">Огонь</option>
+            <option value="explosion">Взрыв</option>
+          </select>
+        </label>
+      </div>
+
+      <label>Сила VFX
+        <select id="intensity">
+          <option value="0.35">Лёгкая</option>
+          <option value="0.65" selected>Средняя</option>
+          <option value="1">Сильная</option>
+        </select>
+      </label>
+
+      <section class="preset-panel" aria-label="Готовые VFX пресеты">
+        <div class="preset-head">
+          <b>Готовые VFX пресеты</b>
+          <span>Нажми — настройки применятся и сразу появятся в предпросмотре.</span>
+        </div>
+        <div class="preset-grid-buttons">
+          <button class="preset-chip" type="button" data-preset="fire">🔥 <b>Огонь</b><small>5с • средняя</small></button>
+          <button class="preset-chip" type="button" data-preset="smoke">💨 <b>Дым</b><small>8с • средняя</small></button>
+          <button class="preset-chip" type="button" data-preset="sparks">✨ <b>Искры</b><small>5с • сильная</small></button>
+          <button class="preset-chip" type="button" data-preset="lightning">⚡ <b>Молния</b><small>5с • сильная</small></button>
+          <button class="preset-chip" type="button" data-preset="debris">🪨 <b>Обломки</b><small>8с • средняя</small></button>
+          <button class="preset-chip" type="button" data-preset="explosion">💥 <b>Взрыв</b><small>5с • сильная</small></button>
+          <button class="preset-chip" type="button" data-preset="fog">🌫️ <b>Туман</b><small>10с • лёгкая</small></button>
+          <button class="preset-chip" type="button" data-preset="rain">🌧️ <b>Дождь</b><small>10с • средняя</small></button>
+        </div>
+        <div id="presetInfo" class="preset-info">Выбери пресет. После этого силу, длительность, камеру и эффект можно изменить вручную.</div>
+      </section>
+
+      <section id="remoteGpu" class="remote-gpu-panel" aria-label="Удалённый GPU Google Colab">
+        <div class="remote-gpu-head"><strong>✨ NOVA VIDEO</strong><span>SAFE AUTO</span></div>
+        <p>NOVA сначала пытается использовать уже подключённый worker. Если для одобренной команды нужен Colab, NOVA сама откроет наш notebook, сохранит job и продолжит после возврата. Платные API автоматически не запускаются.</p>
+
+        <div class="remote-easy-card">
+          <div class="remote-easy-top"><b>Простой режим</b><span id="remoteEasyState">ГОТОВ К ЗАПУСКУ</span></div>
+          <button id="remoteEasyAction" class="remote-easy-action" type="button">✨ СДЕЛАТЬ ВИДЕО</button>
+          <div id="remoteEasyText" class="remote-easy-text">Нажми один раз. Для локальных задач NOVA работает на iPhone; для WanGP/Blender/FFmpeg попросит одно подтверждение, а затем сама подключит или откроет Colab и доведёт одобренный job до MP4.</div>
+          <div id="remoteSteps" class="remote-steps" aria-label="Этапы рендера">
+            <span data-step="input" class="active">1 · Задача</span>
+            <span data-step="render">2 · Рендер</span>
+            <span data-step="final">3 · Готово</span>
+          </div>
+          <label class="remote-source-easy">Видео движения / исходник
+            <input id="remoteSource" type="file" accept="video/mp4,video/quicktime,video/webm,video/x-matroska,video/*">
+          </label>
+          <label class="remote-source-easy">Музыка / аудиодорожки — до 8 файлов
+            <input id="remoteAudio" type="file" multiple accept="audio/mpeg,audio/wav,audio/mp4,audio/aac,audio/flac,audio/ogg,audio/*">
+            <small>Голосом: «замени музыку», «смешай дорожки», «музыка 35%, оригинал 80%». NOVA сама выберет FFmpeg.</small>
+          </label>
+          <div class="grid3 remote-audio-levels">
+            <label>Оригинальный звук %
+              <input id="remoteOriginalVolume" type="number" min="0" max="400" step="5" value="100" inputmode="numeric">
+            </label>
+            <label>Добавленные дорожки %
+              <input id="remoteAddedVolume" type="number" min="0" max="400" step="5" value="100" inputmode="numeric">
+            </label>
+            <label>Общая громкость %
+              <input id="remoteMasterVolume" type="number" min="0" max="400" step="5" value="100" inputmode="numeric">
+            </label>
+          </div>
+          <details class="remote-music-box">
+            <summary>🎵 Музыка по аккордам — бесплатно</summary>
+            <label class="remote-check"><input id="remoteMusicEnabled" type="checkbox"> <span><b>Создать музыку:</b> включить NOVA Music для этой задачи.</span></label>
+            <label>Аккорды
+              <input id="remoteMusicChords" value="Am D G Em" placeholder="Am D G Em">
+            </label>
+            <div class="grid3">
+              <label>Темп BPM
+                <input id="remoteMusicBpm" type="number" min="30" max="240" value="90" inputmode="numeric">
+              </label>
+              <label>Инструмент
+                <select id="remoteMusicInstrument">
+                  <option value="guitar" selected>Гитара</option>
+                  <option value="piano">Пианино</option>
+                  <option value="accordion">Аккордеон</option>
+                  <option value="bass">Бас</option>
+                  <option value="synth">Синтезатор</option>
+                </select>
+              </label>
+              <label>Формат
+                <select id="remoteMusicFormat">
+                  <option value="wav" selected>WAV</option>
+                  <option value="mp3">MP3</option>
+                </select>
+              </label>
+            </div>
+            <div class="grid3">
+              <label>Долей на аккорд
+                <input id="remoteMusicBeats" type="number" min="0.5" max="16" step="0.5" value="4">
+              </label>
+              <label>Повторов
+                <input id="remoteMusicRepeats" type="number" min="1" max="32" value="1">
+              </label>
+              <label>Музыка %
+                <input id="remoteMusicVolume" type="number" min="0" max="400" step="5" value="60">
+              </label>
+            </div>
+            <div class="grid2">
+              <label>Плавное появление, сек
+                <input id="remoteMusicFadeIn" type="number" min="0" max="60" step="0.5" value="0" inputmode="decimal">
+              </label>
+              <label>Плавное затухание, сек
+                <input id="remoteMusicFadeOut" type="number" min="0" max="60" step="0.5" value="0" inputmode="decimal">
+              </label>
+            </div>
+            <label class="remote-check"><input id="remoteMusicMixVideo" type="checkbox"> <span><b>Подмешать в видео:</b> если выбран видеофайл, сразу собрать MP4.</span></label>
+            <small>Пример голосом: «Нова, создай гитару Am D G Em, 90 BPM, MP3» или «…и подмешай в видео на 35%».</small>
+          </details>
+          <label class="remote-source-easy">Персонаж / фото — необязательно
+            <input id="remoteCharacterRef" type="file" accept="image/jpeg,image/png,image/webp,image/*">
+            <small>Фото отвечает за внешность и может быть единственным входом для Hybrid image-to-video. Если добавлено driving-video, оно управляет движением. Для лучшего identity lock используй чёткое фото одного человека.</small>
+          </label>
+          <label class="remote-source-easy">Движение человека
+            <select id="humanMotionMode">
+              <option value="auto" selected>Авто — NOVA определит по тексту</option>
+              <option value="natural">Естественное движение / оживить фото</option>
+              <option value="walk">Ходьба</option>
+              <option value="run">Бег</option>
+              <option value="dance">Танец</option>
+              <option value="motion-reference">Повторить движение из видео</option>
+              <option value="none">Не управлять телом</option>
+            </select>
+            <small>Только фото → WanGP image-to-video. Фото + видео → видео используется как driving/control reference. Remote GPU запускается только после твоего подтверждения и FREE LOCK.</small>
+          </label>
+        </div>
+
+        <div class="remote-progress"><i id="remoteProgressBar"></i><span id="remoteProgressText">0%</span></div>
+        <div id="remoteStatus" class="remote-status">Готово: NOVA сама выберет локальный режим, WanGP, Blender или FFmpeg.</div>
+        <div id="remoteRecoveryStatus" class="remote-recovery-status">Auto Recovery включается только для задания, которое ты сам подтвердил.</div>
+        <a id="remoteResult" class="download hidden">Открыть готовый MP4</a>
+
+        <details id="remoteAdvanced" class="remote-advanced">
+          <summary>Ручной Remote GPU — только при необходимости</summary>
+          <button id="remoteStudioToggle" class="secondary remote-studio-toggle" type="button">🎛️ Показать все настройки студии</button>
+          <div class="remote-advanced-body">
+            <p class="remote-advanced-note">Для обычной работы этот блок не нужен. NOVA может автоматически открыть наш Colab только после твоего явного подтверждения конкретного задания. FREE LOCK продолжает блокировать платные API и неожиданные внешние запуски.</p>
+            <div class="permanent-gpu-setup">
+              <b>Постоянный GPU — один раз настроить</b>
+              <p>На Windows дважды нажми установщик. Worker сам стартует с Windows и публикуется по стабильному HTTPS через Tailscale Funnel.</p>
+              <a class="download permanent-gpu-download" href="../automation/NOVA_GPU_INSTALL_WINDOWS.cmd" download>🪟 Скачать NOVA GPU Installer для Windows</a>
+              <a class="download permanent-gpu-download" href="../automation/install_permanent_gpu_worker.sh" download>🐧 Скачать installer для Linux</a>
+              <small>После установки вставь NOVA CONNECT CODE один раз. Потом тяжёлые AI‑задачи запускаются без Colab и без Run all.</small>
+            </div>
+            <div class="remote-smart-actions">
+              <button id="remoteAutoStart" type="button">⚡ АВТО: COLAB + РЕНДЕР</button>
+              <button id="remoteSelfTest" class="secondary" type="button">✅ ПРОВЕРИТЬ ВСЁ</button>
+              <button id="remoteTest" class="secondary" type="button">🧪 Blender MP4 1 сек</button>
+            </div>
+            <label class="remote-check"><input id="remoteAutoFinal" type="checkbox" disabled> <span><b>Full Auto Final:</b> остаётся выключен по FREE LOCK, чтобы не тратить лишний GPU.</span></label>
+            <label class="remote-check"><input id="remoteAutoRecover" type="checkbox"> <span><b>Auto Recovery:</b> после твоего подтверждения сохраняет job/видео/аудио и продолжает после возврата из Colab.</span></label>
+
+            <label>Быстрое подключение
+              <input id="remoteConnectCode" autocomplete="off" placeholder="Вставь NOVA CONNECT CODE из Colab">
+            </label>
+            <button id="remotePasteCode" class="secondary remote-paste" type="button">📋 Вставить код из буфера и подключить</button>
+
+            <div class="grid2 remote-connection-grid">
+              <label>Worker URL
+                <input id="remoteUrl" inputmode="url" autocomplete="off" placeholder="https://…trycloudflare.com">
+              </label>
+              <label>Token
+                <input id="remoteToken" type="password" autocomplete="off" placeholder="NOVA token из Colab">
+              </label>
+            </div>
+
+            <div class="grid2">
+              <label>Движок
+                <select id="remoteEngine">
+                  <option value="auto" selected>Auto</option>
+                  <option value="blender">Blender GPU</option>
+                  <option value="wangp">WanGP</option>
+                  <option value="ffmpeg">FFmpeg</option>
+                  <option value="music">NOVA Music — аккорды</option>
+                </select>
+              </label>
+              <label>Качество
+                <select id="remoteQuality">
+                  <option value="preview" selected>Preview — быстро</option>
+                  <option value="final">Final — 1080p</option>
+                </select>
+              </label>
+            </div>
+
+            <label class="remote-check"><input id="remoteMirrorDrive" type="checkbox"> <span>Drive checkpoint — усиленное восстановление, если Google Drive уже смонтирован.</span></label>
+
+            <div class="remote-actions">
+              <button id="remoteConnect" class="secondary" type="button">Проверить GPU</button>
+              <button id="remoteSend" type="button">🔒 Подтвердить и отправить на GPU</button>
+              <button id="remoteCancel" class="secondary" type="button">Стоп</button>
+            </div>
+            <div id="remoteHint" class="remote-hint">SAFE AUTO: первая отправка на Remote GPU требует твоего подтверждения. После этого NOVA может автоматически восстановить только этот уже одобренный job.</div>
+            <button id="remoteRecoverNow" class="secondary remote-recover-now" type="button">♻️ Восстановить сейчас</button>
+            <details class="remote-colab-fallback">
+              <summary>Google Colab notebook</summary>
+              <a id="remoteColabLink" class="remote-colab-link" href="https://colab.research.google.com/github/magomedt149/nova-robot/blob/main/blender-colab/NOVA_Remote_GPU_Worker.ipynb" target="_blank" rel="noopener">Открыть NOVA Remote GPU Worker</a>
+              <small>NOVA открывает этот notebook автоматически, если одобренному заданию нужен Remote GPU и живой worker не найден.</small>
+            </details>
+          </div>
+        </details>
+      </section>
+
+      <div class="actions">
+        <button id="preview" class="secondary">▶ Предпросмотр</button>
+        <button id="render">Сгенерировать видео</button>
+      </div>
+      <div id="status" class="status">Готово. Генерация выполняется на твоём устройстве.</div>
+      <a id="download" class="download hidden" download>Скачать видео</a>
+    </section>
+
+    <section class="stageWrap">
+      <div class="canvasShell">
+        <canvas id="canvas" width="1280" height="720"></canvas>
+      </div>
+      <div class="badges"><span>NO API KEY</span><span>NO CREDITS</span><span>AUTO DIRECTOR</span><span>LOCAL VFX</span><span>30 FPS</span></div>
+      <video id="video" controls playsinline class="video hidden"></video>
+    </section>
+  </main>
+  <script src="./app.js"></script>
+  <script src="./director.js"></script>
+  <script src="./remote-gpu.js"></script>
+  <script src="./diagnostics.js"></script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', async () => {
+        try {
+          const registration = await navigator.serviceWorker.register('./service-worker.js?v=30', {
+            scope: './',
+            updateViaCache: 'none'
+          });
+          registration.update().catch(() => {});
+        } catch (_) {}
+      });
+    }
+  </script>
+</body>
+</html>

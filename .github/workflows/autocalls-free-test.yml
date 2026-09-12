@@ -1,0 +1,36 @@
+name: Autocalls FREE Test
+
+on:
+  workflow_dispatch:
+    inputs:
+      assistant_uuid:
+        description: "Autocalls assistant UUID"
+        required: true
+        type: string
+      message:
+        description: "Optional FREE test message"
+        required: false
+        default: "Привет! Это бесплатный тест NOVA."
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  free-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout NOVA
+        uses: actions/checkout@v4
+
+      - name: Run Autocalls FREE test
+        env:
+          AUTOCALLS_ASSISTANT_UUID: ${{ inputs.assistant_uuid }}
+          AUTOCALLS_TEST_MESSAGE: ${{ inputs.message }}
+        run: |
+          python3 automation/autocalls_free_test.py             --assistant-uuid "$AUTOCALLS_ASSISTANT_UUID"             --message "$AUTOCALLS_TEST_MESSAGE"
+
+      - name: Safety note
+        run: |
+          echo "FREE_TEST_ONLY: this workflow does not place phone calls, buy numbers, or use paid messaging endpoints."
