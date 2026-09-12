@@ -1,0 +1,58 @@
+name: Wolf Blender FREE Smoke Test
+
+on:
+  push:
+    branches:
+      - test/wolf-motion-blender
+    paths:
+      - 'blender/wolf-motion/**'
+      - '.github/workflows/wolf-blender-smoke-test.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  blender-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Blender
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y blender
+          blender --version
+
+      - name: Run headless Blender smoke test
+        run: |
+          mkdir -p blender/wolf-motion/exports
+          blender --background --python blender/wolf-motion/ci_smoke_test.py
+
+      - name: Validate exported GLB and report
+        run: |
+          test -s blender/wolf-motion/exports/wolf_motion_smoke.glb
+          test -s blender/wolf-motion/exports/wolf_motion_smoke_report.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          p = Path('blender/wolf-motion/exports/wolf_motion_smoke_report.json')
+          report = json.loads(p.read_text(encoding='utf-8'))
+          assert report['status'] == 'PASS', report
+          assert report['fps'] == 24, report
+          assert sorted(report['actions']) == sorted(['WOLF_IDLE','WOLF_WALK','WOLF_RUN','WOLF_HOWL']), report
+          assert report['glb_bytes'] > 1000, report
+          print(json.dumps(report, ensure_ascii=False, indent=2))
+          PY
+
+      - name: Upload first GLB test artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: wolf-motion-first-glb
+          path: |
+            blender/wolf-motion/exports/wolf_motion_smoke.glb
+            blender/wolf-motion/exports/wolf_motion_smoke_report.json
+          if-no-files-found: error
+          retention-days: 7
