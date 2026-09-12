@@ -1,4 +1,4 @@
-name: NOVA FREE — Check & GitHub Pages
+name: NOVA FREE — Checks
 
 on:
   push:
@@ -7,21 +7,25 @@ on:
 
 permissions:
   contents: read
-  pages: write
-  id-token: write
 
-# GitHub Pages allows only one active deployment. Do not cancel an in-flight
-# deployment: cancelling here can leave Pages reporting the old deployment as
-# "in progress" for a few seconds and make the next run fail red. Queue runs
-# instead, so the newest commit deploys after the previous one finishes.
+# IMPORTANT:
+# GitHub Pages for this repository is already deployed by GitHub's native
+# Pages branch pipeline. A second actions/deploy-pages job races with that
+# native deployment and causes red failures such as:
+# "Deployment request failed ... due to in progress deployment".
+#
+# This workflow therefore owns validation only. The native Pages pipeline is
+# the single deployment owner. This keeps NOVA FREE, avoids duplicate deploys,
+# and makes every push deterministic.
 concurrency:
-  group: nova-pages
-  cancel-in-progress: false
+  group: nova-free-checks-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   check:
     name: FREE checks
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - name: Checkout NOVA
         uses: actions/checkout@v5
@@ -37,6 +41,8 @@ jobs:
           test -f nova-health.js
           test -f nova-auto-montage.js
           test -f automation/validate_frontend.py
+          test -f blender-colab/NOVA_Wolf_Auto_Worker.ipynb
+          test -f blender-colab/scripts/render_wolf_cinema_auto.py
           echo "NOVA critical files: OK"
 
       - name: Check JavaScript syntax
@@ -47,6 +53,16 @@ jobs:
             node --check "$file"
           done < <(find . -type f -name '*.js' -not -path './.git/*' -print0)
           echo "JavaScript syntax: OK"
+
+      - name: Check Python syntax
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m py_compile \
+            automation/*.py \
+            blender-colab/scripts/*.py \
+            tests/*.py
+          echo "Python syntax: OK"
 
       - name: Validate frontend structure
         shell: bash
@@ -60,43 +76,27 @@ jobs:
           set -euo pipefail
           python3 tests/run_static_tests.py
 
+      - name: Validate dedicated FREE wolf notebook
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          p = Path('blender-colab/NOVA_Wolf_Auto_Worker.ipynb')
+          data = json.loads(p.read_text(encoding='utf-8'))
+          assert data.get('nbformat') == 4
+          assert data.get('cells')
+          text = p.read_text(encoding='utf-8')
+          assert 'NOVA_WOLF_AUTO_V1' in text
+          assert 'runtime.unassign()' in text
+          assert 'без WanGP' in text
+          print('FREE wolf notebook: OK')
+          PY
+
       - name: Enforce FREE LOCK
         shell: bash
         run: |
           set -euo pipefail
-          echo "No Netlify deploy, no paid API, no GPU job is started by this workflow."
-
-  deploy:
-    name: Deploy GitHub Pages
-    needs: check
-    runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - name: Checkout NOVA
-        uses: actions/checkout@v5
-
-      - name: Prepare static site
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p _site
-          rsync -a \
-            --exclude '.git/' \
-            --exclude '.github/' \
-            --exclude '_site/' \
-            ./ _site/
-          test -f _site/index.html
-
-      - name: Configure GitHub Pages
-        uses: actions/configure-pages@v5
-
-      - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: _site
-
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
+          echo "No Netlify deploy, no paid API, no paid GPU job, and no duplicate Pages deploy is started by this workflow."
+          echo "GitHub native Pages pipeline remains the single deployment owner."
