@@ -1,0 +1,107 @@
+name: Wolf Procedural FREE E2E
+
+on:
+  push:
+    branches:
+      - test/wolf-motion-full-pipeline
+    paths:
+      - 'blender/wolf-motion/**'
+      - '.github/workflows/wolf-procedural-e2e.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  wolf-e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Blender, NumPy and FFmpeg
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y blender python3-numpy ffmpeg
+          blender --version
+          ffmpeg -version | head -n 1
+
+      - name: Generate rigged procedural wolf GLB
+        run: |
+          mkdir -p blender/wolf-motion/assets/model blender/wolf-motion/motion_refs blender/wolf-motion/exports
+          blender --background --python blender/wolf-motion/generate_procedural_wolf.py
+          test -s blender/wolf-motion/assets/model/wolf.glb
+          test -s blender/wolf-motion/exports/procedural_wolf_report.json
+
+      - name: Generate exact-duration synthetic motion-reference clips
+        run: |
+          ROOT=blender/wolf-motion/motion_refs
+          ffmpeg -y -f lavfi -i color=c=gray:s=640x360:r=24:d=3.0 -an -c:v libx264 -pix_fmt yuv420p "$ROOT/idle.mp4" >/dev/null 2>&1
+          ffmpeg -y -f lavfi -i color=c=gray:s=640x360:r=24:d=2.0 -an -c:v libx264 -pix_fmt yuv420p "$ROOT/walk.mp4" >/dev/null 2>&1
+          ffmpeg -y -f lavfi -i color=c=gray:s=640x360:r=24:d=1.0 -an -c:v libx264 -pix_fmt yuv420p "$ROOT/run.mp4" >/dev/null 2>&1
+          ffmpeg -y -f lavfi -i color=c=gray:s=640x360:r=24:d=3.5 -an -c:v libx264 -pix_fmt yuv420p "$ROOT/howl.mp4" >/dev/null 2>&1
+          test -s "$ROOT/idle.mp4"
+          test -s "$ROOT/walk.mp4"
+          test -s "$ROOT/run.mp4"
+          test -s "$ROOT/howl.mp4"
+
+      - name: Asset preflight
+        run: |
+          python blender/wolf-motion/asset_preflight.py
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          p=Path('blender/wolf-motion/exports/asset_preflight_report.json')
+          r=json.loads(p.read_text())
+          assert r['status']=='READY_FOR_REAL_WOLF_PIPELINE', r
+          assert not r['missing'], r
+          print(json.dumps(r,indent=2))
+          PY
+
+      - name: Validate real wolf structure and re-export GLB
+        run: |
+          blender --background --python blender/wolf-motion/real_model_validate.py
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          p=Path('blender/wolf-motion/exports/real_model_validation_report.json')
+          r=json.loads(p.read_text())
+          assert r['status']=='PASS_STRUCTURE_ONLY', r
+          assert r['mesh_objects'] >= 1, r
+          assert r['bones'] >= 10, r
+          assert sorted(r['actions']) == sorted(['WOLF_IDLE','WOLF_WALK','WOLF_RUN','WOLF_HOWL']), r
+          assert r['glb_bytes'] > 1000, r
+          print(json.dumps(r,indent=2))
+          PY
+
+      - name: Verify GLB header
+        run: |
+          python - <<'PY'
+          import struct
+          from pathlib import Path
+          for p in [Path('blender/wolf-motion/assets/model/wolf.glb'), Path('blender/wolf-motion/exports/wolf_real_pipeline_validation.glb')]:
+              data=p.read_bytes()[:12]
+              magic, version, total=struct.unpack('<4sII',data)
+              assert magic==b'glTF', (p,magic)
+              assert version==2, (p,version)
+              assert total==p.stat().st_size, (p,total,p.stat().st_size)
+              print(p, 'GLB2_OK', p.stat().st_size)
+          PY
+
+      - name: Upload complete wolf E2E artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: wolf-procedural-e2e
+          path: |
+            blender/wolf-motion/assets/model/wolf.glb
+            blender/wolf-motion/motion_refs/idle.mp4
+            blender/wolf-motion/motion_refs/walk.mp4
+            blender/wolf-motion/motion_refs/run.mp4
+            blender/wolf-motion/motion_refs/howl.mp4
+            blender/wolf-motion/exports/procedural_wolf_report.json
+            blender/wolf-motion/exports/asset_preflight_report.json
+            blender/wolf-motion/exports/real_model_validation_report.json
+            blender/wolf-motion/exports/wolf_real_pipeline_validation.glb
+          if-no-files-found: error
+          retention-days: 7
