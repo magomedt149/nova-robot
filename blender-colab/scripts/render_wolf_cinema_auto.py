@@ -32,6 +32,11 @@ def parse_args():
     p.add_argument("--fps", type=int, default=24)
     p.add_argument("--ratio", choices=["16:9", "9:16"], default="16:9")
     p.add_argument("--quality", choices=["preview", "final"], default="final")
+    p.add_argument(
+        "--ci-smoke",
+        action="store_true",
+        help="Render a lightweight sampled preview, then encode the required output FPS/size.",
+    )
     return p.parse_args(args_after_separator())
 
 
@@ -148,7 +153,7 @@ def animation_fcurves(obj, data_path, indices):
     ]
 
 
-def build_wolf():
+def build_wolf(frames: int = 240):
     dark = material("WolfDark", (0.055, 0.065, 0.075), 0.92)
     grey = material("WolfGrey", (0.25, 0.29, 0.33), 0.92)
     light = material("WolfLight", (0.54, 0.59, 0.64), 0.94)
@@ -197,8 +202,8 @@ def build_wolf():
     # Gentle howl motion: head + muzzle + jaw. Small enough to preserve framing.
     animated = [head, muzzle, mouth, jaw]
     start = 1
-    mid = 120
-    end_plus = 241
+    mid = max(2, 1 + frames // 2)
+    end_plus = frames + 1
     for obj in animated:
         obj.rotation_mode = "XYZ"
         base = obj.rotation_euler.copy()
@@ -293,10 +298,11 @@ def verify_orbit(scene, cam, frames):
 
 def configure_render(args, output: Path):
     scene = bpy.context.scene
-    frames = max(24, int(round(args.duration * args.fps)))
+    render_fps = min(int(args.fps), 6) if args.ci_smoke else int(args.fps)
+    frames = max(render_fps, int(round(args.duration * render_fps)))
     scene.frame_start = 1
     scene.frame_end = frames
-    scene.render.fps = int(args.fps)
+    scene.render.fps = render_fps
     try:
         scene.render.engine = "BLENDER_EEVEE_NEXT"
     except Exception:
@@ -307,9 +313,11 @@ def configure_render(args, output: Path):
 
     if args.ratio == "16:9":
         resolution = (1920, 1080) if args.quality == "final" else (960, 540)
+        render_resolution = (320, 180) if args.ci_smoke else resolution
     else:
         resolution = (1080, 1920) if args.quality == "final" else (540, 960)
-    scene.render.resolution_x, scene.render.resolution_y = resolution
+        render_resolution = (180, 320) if args.ci_smoke else resolution
+    scene.render.resolution_x, scene.render.resolution_y = render_resolution
     scene.render.resolution_percentage = 100
     raw = output.with_name(output.stem + ".blender.mp4")
     try:
@@ -327,18 +335,23 @@ def configure_render(args, output: Path):
         raw.mkdir(parents=True)
         scene.render.image_settings.file_format = "PNG"
         scene.render.filepath = str(raw / "frame_")
-    return frames, raw, resolution
+    return frames, raw, resolution, render_fps, render_resolution
 
 
-def faststart(raw: Path, output: Path, fps: int):
+def faststart(raw: Path, output: Path, input_fps: int, output_fps: int, output_resolution):
     ffmpeg = shutil.which("ffmpeg")
+    video_filter = (
+        f"scale={output_resolution[0]}:{output_resolution[1]}:"
+        f"flags=lanczos,fps={output_fps}"
+    )
     if raw.is_dir():
         if not ffmpeg:
             raise RuntimeError("ffmpeg is required to encode Blender PNG frames")
         subprocess.run([
             ffmpeg, "-y", "-hide_banner", "-loglevel", "error",
-            "-framerate", str(fps), "-start_number", "1",
+            "-framerate", str(input_fps), "-start_number", "1",
             "-i", str(raw / "frame_%04d.png"),
+            "-vf", video_filter,
             "-c:v", "libx264", "-pix_fmt", "yuv420p",
             "-movflags", "+faststart", "-an", str(output)
         ], check=True)
@@ -350,6 +363,7 @@ def faststart(raw: Path, output: Path, fps: int):
         return
     subprocess.run([
         ffmpeg, "-y", "-hide_banner", "-loglevel", "error", "-i", str(raw),
+        "-vf", video_filter,
         "-c:v", "libx264", "-pix_fmt", "yuv420p", "-movflags", "+faststart", "-an", str(output)
     ], check=True)
     if raw != output:
@@ -362,18 +376,21 @@ def main():
     output.parent.mkdir(parents=True, exist_ok=True)
 
     clear_scene()
+    frames, raw, resolution, render_fps, render_resolution = configure_render(args, output)
     build_world()
-    build_wolf()
-    frames, raw, resolution = configure_render(args, output)
+    build_wolf(frames)
     cam, rig, target = setup_orbit(frames)
     report = verify_orbit(bpy.context.scene, cam, frames)
     report.update({
         "marker": MARKER,
         "duration": args.duration,
         "fps": args.fps,
+        "render_fps": render_fps,
         "ratio": args.ratio,
         "quality": args.quality,
+        "ci_smoke": args.ci_smoke,
         "resolution": list(resolution),
+        "render_resolution": list(render_resolution),
         "output": str(output),
         "camera": cam.name,
         "rig": rig.name,
@@ -394,7 +411,7 @@ def main():
             raise RuntimeError(f"Blender did not produce frame sequence: {raw}")
     elif not raw.is_file() or raw.stat().st_size <= 0:
         raise RuntimeError(f"Blender did not produce video: {raw}")
-    faststart(raw, output, args.fps)
+    faststart(raw, output, render_fps, args.fps, resolution)
     if not output.is_file() or output.stat().st_size <= 0:
         raise RuntimeError(f"Final MP4 is missing: {output}")
     print("NOVA WOLF AUTO READY:", output)

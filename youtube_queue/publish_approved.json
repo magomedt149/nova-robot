@@ -1,7 +1,0 @@
-{
-  "approved": false,
-  "date": "",
-  "content_id": "",
-  "privacy_status": "public",
-  "note": "Set approved=true, date and content_id only after the user has watched that exact preview and explicitly says to publish it."
-}

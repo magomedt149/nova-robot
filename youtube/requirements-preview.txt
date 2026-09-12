@@ -1,2 +1,0 @@
-Pillow==12.3.0
-piper-tts==1.8.0

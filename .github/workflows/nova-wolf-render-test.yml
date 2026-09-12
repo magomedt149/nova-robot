@@ -40,6 +40,7 @@ jobs:
       - name: Render 10-second wolf test
         env:
           NOVA_BLENDER_BIN: /tmp/blender-5.2.1-linux-x64/blender
+          LIBGL_ALWAYS_SOFTWARE: '1'
         run: |
           set -euo pipefail
           mkdir -p artifacts
@@ -50,7 +51,8 @@ jobs:
             --duration 10 \
             --fps 24 \
             --ratio 16:9 \
-            --quality preview
+            --quality preview \
+            --ci-smoke
           test -s artifacts/NOVA_WOLF_GITHUB_FREE_10s.mp4
           ffprobe -v error -show_entries format=duration -of default=nw=1:nk=1 artifacts/NOVA_WOLF_GITHUB_FREE_10s.mp4
 
