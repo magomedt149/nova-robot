@@ -51,12 +51,12 @@
     const box = document.createElement('div');
     box.id = 'novaWhisperBox';
     box.innerHTML = `
-      <div class="nova-media-note" style="margin-top:12px"><b>🗣️ MP4 без SRT — локальный Whisper + авто-спикеры</b><br>Видео не отправляется на сервер. NOVA извлекает аудио, распознаёт до 2 минут, локально оценивает мужской/женский голос, назначает Дениса/Ирину и сохраняет исходные тайминги субтитров без сдвига.</div>
+      <div class="nova-media-note" style="margin-top:12px"><b>🗣️ MP4 без SRT — локальный Whisper + эвристическая оценка голоса</b><br>Видео не отправляется на сервер. NOVA извлекает аудио, распознаёт до 2 минут и приблизительно распределяет реплики между Денисом/Ириной по высоте голоса. Это эвристика, а не точное распознавание личности говорящего. Исходные тайминги субтитров сохраняются без сдвига.</div>
       <div class="nova-media-grid">
         <div class="nova-media-field"><label for="novaWhisperModel">Whisper</label><select id="novaWhisperModel"><option value="small">Small — точнее, тяжелее</option><option value="tiny">Tiny — быстрее, легче</option></select></div>
         <div class="nova-media-field"><label for="novaWhisperLanguage">Язык исходной речи</label><select id="novaWhisperLanguage"><option value="auto">Авто</option><option value="ru">Русский</option><option value="en">English</option></select></div>
       </div>
-      <div class="nova-media-actions"><button class="nova-media-btn primary" id="novaLocalWhisper" type="button">Whisper + спикеры: MP4 → RU MP3 + EN SRT</button></div>`;
+      <div class="nova-media-actions"><button class="nova-media-btn primary" id="novaLocalWhisper" type="button">Whisper + оценка голоса: MP4 → RU MP3 + EN SRT</button></div>`;
     exactButton.insertAdjacentElement('afterend', box);
 
     if (/iPhone|iPad|iPod|Android/i.test(navigator.userAgent)) $('#novaWhisperModel').value = 'tiny';
@@ -354,7 +354,7 @@
     return '';
   }
 
-  function diarizeByGender(segments, pcm) {
+  function assignVoicesByPitchHeuristic(segments, pcm) {
     const measures = segments.map((segment) => {
       const pitch = analyzeSegmentPitch(segment, pcm, TARGET_RATE);
       return { ...segment, pitchHz: pitch.hz, speakerConfidence: pitch.confidence };
@@ -554,16 +554,16 @@
     })).filter((item) => item.text && item.start < MAX_SECONDS);
 
     const source = normalizeSourceLanguage(recognized.language, recognized.text || original.map((s) => s.text).join(' '));
-    status(`Whisper готов: ${original.length} сегментов. Определяю говорящих локально по голосу…`);
+    status(`Whisper готов: ${original.length} сегментов. Приблизительно распределяю реплики по высоте голоса…`);
 
-    const diarized = diarizeByGender(original, pcm);
-    assertTimingsPreserved(original, diarized);
-    const maleCount = diarized.filter((s) => s.voice === 'denis').length;
-    const femaleCount = diarized.filter((s) => s.voice === 'irina').length;
-    status(`Спикеры готовы: мужских сегментов ${maleCount}, женских ${femaleCount}. Тайминги сохранены без изменений.`);
+    const voiceEstimated = assignVoicesByPitchHeuristic(original, pcm);
+    assertTimingsPreserved(original, voiceEstimated);
+    const maleCount = voiceEstimated.filter((s) => s.voice === 'denis').length;
+    const femaleCount = voiceEstimated.filter((s) => s.voice === 'irina').length;
+    status(`Эвристическая оценка готова: реплик с низкой высотой голоса ${maleCount}, с высокой ${femaleCount}. Это приблизительное распределение, не идентификация говорящих. Тайминги сохранены без изменений.`);
 
-    const russian = source === 'ru' ? diarized.map((s) => ({ ...s })) : await translateSegments(diarized, source, 'ru');
-    const english = source === 'en' ? diarized.map((s) => ({ ...s })) : await translateSegments(diarized, source, 'en');
+    const russian = source === 'ru' ? voiceEstimated.map((s) => ({ ...s })) : await translateSegments(voiceEstimated, source, 'ru');
+    const english = source === 'en' ? voiceEstimated.map((s) => ({ ...s })) : await translateSegments(voiceEstimated, source, 'en');
     assertTimingsPreserved(original, russian);
     assertTimingsPreserved(original, english);
 
@@ -581,19 +581,19 @@
     const srt = new Blob([segmentsToSrt(english)], { type: 'application/x-subrip;charset=utf-8' });
     const rawSrt = new Blob([segmentsToSrt(original)], { type: 'application/x-subrip;charset=utf-8' });
     const base = file.name.replace(/\.[^.]+$/, '') || 'NOVA_video';
-    addDownload(mp3, `${base}_WHISPER_RU_AUTO_SPEAKERS.mp3`, '⬇ Русский MP3 · авто-спикеры');
+    addDownload(mp3, `${base}_WHISPER_RU_VOICE_HEURISTIC.mp3`, '⬇ Русский MP3 · эвристическая оценка голоса');
     addDownload(srt, `${base}_WHISPER_EN.srt`, '⬇ English SRT · исходные тайминги');
     addDownload(rawSrt, `${base}_WHISPER_original.srt`, '⬇ Original transcript SRT');
-    status(`✅ Готово локально: Whisper ${model}, Денис/Ирина по голосу, русский MP3 + English SRT. Тайминги не изменены. Платных AI-кредитов нет.`);
-    return { file, model, sourceLanguage: source, original, diarized, russian, english, mp3, srt, rawSrt };
+    status(`✅ Готово локально: Whisper ${model}, приблизительное распределение Денис/Ирина по высоте голоса, русский MP3 + English SRT. Это не точная идентификация говорящих. Тайминги не изменены. Платных AI-кредитов нет.`);
+    return { file, model, sourceLanguage: source, original, voiceEstimated, russian, english, mp3, srt, rawSrt };
   }
 
   ensureUi();
   window.NovaWhisper = Object.freeze({
     maxSeconds: MAX_SECONDS,
     transcribeVideo: localWhisperDub,
-    diarizeSegments(segments, pcm) {
-      const result = diarizeByGender(segments, pcm);
+    estimateVoicesByPitch(segments, pcm) {
+      const result = assignVoicesByPitchHeuristic(segments, pcm);
       assertTimingsPreserved(segments, result);
       return result;
     }
