@@ -1,7 +1,7 @@
 (() => {
   'use strict';
 
-  const VERSION = '27.31.0';
+  const VERSION = '27.31.1';
   const $ = (selector) => document.querySelector(selector);
   const $$ = (selector) => [...document.querySelectorAll(selector)];
 
@@ -1694,19 +1694,16 @@
       .replace(/\s+/g, ' ')
       .trim();
 
-    // Require an explicit navigation intent. A bare “домой” is intentionally
-    // not enough because iPhone speech recognition can surface it accidentally.
-    const russianRoute = /^(?:нова\s+)?(?:построй\s+|открой\s+|включи\s+|запусти\s+)?(?:маршрут|навигацию|навигатор|дорогу)\s*(?:домой|до\s+дома|к\s+дому)$/.test(text);
-    const russianWakeHome = /^нова\s+(?:домой|до\s+дома|к\s+дому)$/.test(text);
-    const englishRoute = /^(?:nova\s+)?(?:open\s+|start\s+|show\s+)?(?:route|directions|navigation)\s*(?:home|to\s+home)$/.test(text);
-    const englishWakeHome = /^nova\s+(?:home|to\s+home)$/.test(text);
-    return russianRoute || russianWakeHome || englishRoute || englishWakeHome;
+    // Navigation requires the complete owner-selected phrase.
+    // Short fragments and greetings must never open Maps.
+    return text === 'нова маршрут домой';
   }
 
   function launchHomeNavigation() {
     const now = Date.now();
     if (navigationInFlight || now - lastNavigationAt < 8000) return true;
     navigationInFlight = true;
+    micWanted = false;
     lastNavigationAt = now;
     clearTimeout(recognitionTimer);
     try { recognition?.abort?.(); } catch (_) {}
@@ -1770,9 +1767,6 @@
         ['Привет, Нова', 10],
         ['Привет Нова', 10],
         ['Нова', 9],
-        ['Маршрут домой', 10],
-        ['Построй маршрут домой', 10],
-        ['Открой навигатор домой', 10],
         ['Нова маршрут домой', 10],
         ['Hey Nova', 10]
       ].map(([phrase, boost]) => new PhraseAPI(phrase, boost));
@@ -1835,18 +1829,12 @@
         const result = event.results[i];
         const candidates = recognitionCandidates(result);
         const wakeCandidate = candidates.find(isNovaWakePhrase);
-        const navigationCandidate = candidates.find(isHomeNavigationCommand);
+        const navigationCandidate = result.isFinal && isHomeNavigationCommand(candidates[0])
+          ? candidates[0] : '';
         const fragment = navigationCandidate || wakeCandidate || candidates[0] || '';
         if (result.isFinal) finalParts.push(fragment);
         else {
           interim += `${fragment} `;
-          if (navigationCandidate) {
-            setStatusKey('status.heard', 'listening', { text: navigationCandidate });
-            if (dispatchRecognizedText(navigationCandidate)) {
-              try { instance.stop?.(); } catch (_) { /* navigation command is complete enough */ }
-            }
-            return;
-          }
           if (wakeCandidate) {
             setStatusKey('status.heard', 'listening', { text: wakeCandidate });
             if (dispatchRecognizedText(wakeCandidate)) {
