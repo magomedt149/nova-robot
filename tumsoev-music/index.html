@@ -40,5 +40,528 @@ let synth=false;$('#synth').onclick=()=>{synth=!synth;$('#synth').classList.togg
 function pitch(buf,sr){let n=buf.length,r=0;for(let x of buf)r+=x*x;r=Math.sqrt(r/n);if(r<.02)return-1;let c=new Array(n).fill(0);for(let i=0;i<n;i++)for(let j=0;j<n-i;j++)c[i]+=buf[j]*buf[j+i];let d=0;while(c[d]>c[d+1])d++;let m=-1,p=-1;for(let i=d;i<n;i++)if(c[i]>m){m=c[i];p=i}return p>0?sr/p:-1}function noteName(f){let m=Math.round(69+12*Math.log2(f/440)),names=['C','C♯','D','D♯','E','F','F♯','G','G♯','A','A♯','B'];return names[(m+1200)%12]+(Math.floor(m/12)-1)}$('#mic').onclick=async()=>{if(micStream){micStream.getTracks().forEach(t=>t.stop());micStream=null;$('#mic').textContent='Включить микрофон';$('#hz').textContent='Микрофон выключен';return}try{ac=ac||new(window.AudioContext||window.webkitAudioContext)();await ac.resume();micStream=await navigator.mediaDevices.getUserMedia({audio:true});let s=ac.createMediaStreamSource(micStream);micAn=ac.createAnalyser();micAn.fftSize=1024;s.connect(micAn);micData=new Float32Array(micAn.fftSize);$('#mic').textContent='Выключить микрофон';micLoop()}catch(e){$('#hz').textContent='Разреши микрофон в Safari.'}};function micLoop(){if(!micStream)return;requestAnimationFrame(micLoop);micAn.getFloatTimeDomainData(micData);let rms=Math.sqrt(micData.reduce((s,v)=>s+v*v,0)/micData.length);$('#meter').style.width=Math.min(100,rms*500)+'%';let f=pitch(micData,ac.sampleRate);if(f>60&&f<1300){$('#note').textContent=noteName(f);$('#hz').textContent=f.toFixed(1)+' Hz';if($('#follow').checked)followSynth(f)}}function followSynth(f){if(!osc){osc=ac.createOscillator();gain=ac.createGain();osc.type='sine';gain.gain.value=.035;osc.connect(gain);gain.connect(ac.destination);osc.start()}osc.frequency.setTargetAtTime(f,ac.currentTime,.05)}$('#follow').onchange=e=>{if(gain)gain.gain.setTargetAtTime(e.target.checked?.035:0,ac.currentTime,.03)};
 $('#idea').onclick=async()=>{ac=ac||new(window.AudioContext||window.webkitAudioContext)();await ac.resume();$('#ideaStatus').textContent='Играет 12-секундный фламенко-эскиз...';let st=ac.currentTime+.05,ns=[220,261.63,329.63,293.66,246.94,220,196,164.81];ns.forEach((f,i)=>{let o=ac.createOscillator(),g=ac.createGain();o.type='triangle';o.frequency.value=f;g.gain.setValueAtTime(.001,st+i*1.4);g.gain.linearRampToValueAtTime(.08,st+i*1.4+.03);g.gain.exponentialRampToValueAtTime(.001,st+i*1.4+1.1);o.connect(g);g.connect(ac.destination);o.start(st+i*1.4);o.stop(st+i*1.4+1.2)});setTimeout(()=>$('#ideaStatus').textContent='Готово.',12000)};(async()=>{await openDB();await load()})();
 </script>
+<script>
+
+(() => {
+'use strict';
+// TUMSOEV_RUSSIAN_COVER_V1
+if (window.__tumsoevRussianCoverInstalled) return;
+window.__tumsoevRussianCoverInstalled = true;
+
+const COVER_SR = 44100;
+const COVER_SECONDS = 142;
+const DENIS_VOICES = ['ru_RU-denis-medium','ru_RU-dmitri-medium','ru_RU-ruslan-medium'];
+const PIPER_IMPORT = 'https://cdn.jsdelivr.net/npm/@diffusionstudio/vits-web@1.0.3/+esm';
+const LAME_URL = 'https://cdn.jsdelivr.net/npm/lamejs@1.2.1/lame.min.js';
+
+const SLOTS = [
+  [14.6,20.0],[20.2,25.2],[25.6,31.5],[32.0,37.3],[37.8,43.1],[43.4,48.0],
+  [48.2,52.1],[52.3,56.5],[56.7,60.8],[61.0,65.2],[65.4,68.8],[69.0,73.0],
+  [73.2,78.0],[78.1,82.8],[83.0,88.2],[111.4,117.8],[118.0,124.7],
+  [125.0,128.0],[128.0,131.0],[131.1,134.4],[134.6,138.0]
+];
+
+const DEFAULT_LYRICS = [
+  'Над горами рассвет, а во мне всё жива дорога',
+  'Сколько зим я прошёл, но тебя не сумел забыть',
+  'Где бы ни был теперь, моё сердце ведёт меня к дому',
+  'Я прошу у небес: сохрани тех, кого я люблю',
+  'Через ветер и ночь я знакомые голоса слышу',
+  'И однажды вернусь туда, где свет моего очага',
+  'Позови меня — я через годы услышу',
+  'Я вернусь к тебе, родная земля',
+  'Пусть дороги ведут далеко за туманы',
+  'Но душа всё равно остаётся с тобой',
+  'Будь спокойна, родная, дождись меня',
+  'Я найду свою дорогу домой',
+  'Я прошу у небес: сохрани тех, кого люблю',
+  'Через ветер и ночь я знакомые голоса слышу',
+  'И однажды вернусь туда, где свет моего очага',
+  'Позови меня — я через годы услышу',
+  'Я вернусь к тебе, родная земля',
+  'Пусть хранит тебя Бог',
+  'Пусть хранит наш дом',
+  'Родная земля',
+  'Я вернулся домой'
+].join('\n');
+
+let piper = null;
+let audioCtx = null;
+let backingBuffer = null;
+let backingUrl = '';
+let micStream = null;
+let recorder = null;
+let recordChunks = [];
+let lastOutputUrl = '';
+let recordingStartedAt = 0;
+
+const q = (s) => document.querySelector(s);
+const db = (value) => Math.pow(10, Number(value || 0) / 20);
+const clamp = (v,a,b) => Math.max(a, Math.min(b, v));
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+function status(text) {
+  const n = q('#coverStatus');
+  if (n) n.textContent = text;
+}
+function cleanLines() {
+  return String(q('#coverLyrics')?.value || '')
+    .split(/\n/)
+    .map((x) => x.trim())
+    .filter((x) => x && !/^\[.*\]$/.test(x));
+}
+function setSliderLabel(id, suffix) {
+  const input = q('#' + id);
+  const out = q('#' + id + 'Value');
+  if (!input || !out) return;
+  const update = () => { out.textContent = input.value + suffix; };
+  input.addEventListener('input', update);
+  update();
+}
+function addCoverStyles() {
+  if (q('#tumsoevCoverStyles')) return;
+  const s = document.createElement('style');
+  s.id = 'tumsoevCoverStyles';
+  s.textContent = [
+    '.cover-card{margin-top:12px;border-color:#4a3025;background:linear-gradient(180deg,#19120f,#0e0b0a)}',
+    '.cover-head{display:flex;justify-content:space-between;gap:8px;align-items:center;margin-bottom:7px}',
+    '.cover-badge{font-size:10px;border:1px solid #63402f;border-radius:999px;padding:6px 8px;color:#f4b992}',
+    '.cover-note{font-size:12px;color:#b9aaa1;line-height:1.45;margin:7px 0}',
+    '.cover-grid{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-top:9px}',
+    '.cover-field{display:grid;gap:5px;font-size:12px;color:#c9b7ac}',
+    '.cover-field input[type=range]{width:100%}',
+    '.cover-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}',
+    '.cover-actions button{margin:0}',
+    '.cover-audio{width:100%;margin-top:11px}',
+    '.cover-download{display:none;margin-top:9px;text-decoration:none;text-align:center;padding:12px;border-radius:14px;background:#173c2f;color:#bff5dc;font-weight:800}',
+    '.cover-download.on{display:block}',
+    '.cover-danger{color:#ffcb98}',
+    '@media(max-width:470px){.cover-grid,.cover-actions{grid-template-columns:1fr}}'
+  ].join('');
+  document.head.appendChild(s);
+}
+function addCoverUi() {
+  addCoverStyles();
+  const ai = q('#ai');
+  if (!ai || q('#russianCoverCard')) return;
+  const card = document.createElement('div');
+  card.id = 'russianCoverCard';
+  card.className = 'card cover-card';
+  card.innerHTML = [
+    '<div class="cover-head"><b>🇷🇺 Русский кавер 2:22</b><span class="cover-badge">FREE · LOCAL MIX</span></div>',
+    '<div class="cover-note">Загрузи исходную песню. TUMVEXA оставит её голос тихим подголоском и положит русский вокал сверху. Можно сделать бесплатное демо голосом Денис или записать своё настоящее пение. Для записи лучше AirPods/наушники.</div>',
+    '<label class="cover-field">Основа / исходная песня<input id="coverBacking" class="inp" type="file" accept="audio/*"></label>',
+    '<label class="cover-field" style="margin-top:9px">Русский текст — 21 строка под готовые таймкоды<textarea id="coverLyrics" rows="12"></textarea></label>',
+    '<div class="cover-grid">',
+      '<label class="cover-field">Исходная песня / подголосок <b id="coverBackingDbValue"></b><input id="coverBackingDb" type="range" min="-18" max="0" step="1" value="-7"></label>',
+      '<label class="cover-field">Русский вокал <b id="coverVocalDbValue"></b><input id="coverVocalDb" type="range" min="-12" max="4" step="1" value="-2"></label>',
+      '<label class="cover-field">Хор / ширина <b id="coverChorusValue"></b><input id="coverChorus" type="range" min="0" max="100" step="5" value="65"></label>',
+      '<label class="cover-field">Реверб <b id="coverReverbValue"></b><input id="coverReverb" type="range" min="0" max="100" step="5" value="35"></label>',
+      '<label class="cover-field">Эхо <b id="coverDelayValue"></b><input id="coverDelay" type="range" min="0" max="100" step="5" value="18"></label>',
+      '<label class="cover-field">Сдвиг записи <b id="coverOffsetValue"></b><input id="coverOffset" type="range" min="-400" max="400" step="10" value="0"></label>',
+    '</div>',
+    '<div class="cover-actions">',
+      '<button id="coverDemo" class="primary" type="button">🎙 Денис — демо вокала</button>',
+      '<button id="coverRecord" class="secondary" type="button">⏺ Записать мой вокал</button>',
+      '<button id="coverStop" class="secondary" type="button" disabled>⏹ Стоп записи</button>',
+      '<button id="coverMixOnly" class="secondary" type="button">✨ Свести основу</button>',
+    '</div>',
+    '<audio id="coverPlayer" class="cover-audio" controls playsinline></audio>',
+    '<div id="coverStatus" class="status">Готово. Платные API и кредиты не используются.</div>',
+    '<a id="coverDownload" class="cover-download" download="Tumsoev_Russian_Cover.mp3">⬇ Скачать русский MP3</a>',
+    '<div class="cover-note cover-danger">Денис — бесплатный голосовой эскиз ритма, а не полноценная модель AI-пения. Для настоящего пения используй кнопку записи своего вокала.</div>'
+  ].join('');
+  ai.appendChild(card);
+  q('#coverLyrics').value = DEFAULT_LYRICS;
+  setSliderLabel('coverBackingDb',' dB');
+  setSliderLabel('coverVocalDb',' dB');
+  setSliderLabel('coverChorus','%');
+  setSliderLabel('coverReverb','%');
+  setSliderLabel('coverDelay','%');
+  setSliderLabel('coverOffset',' ms');
+
+  const chips = q('#home .chips');
+  if (chips && !q('#coverShortcut')) {
+    const b = document.createElement('button');
+    b.id = 'coverShortcut';
+    b.className = 'chip';
+    b.textContent = 'Русский кавер';
+    b.onclick = () => {
+      if (typeof go === 'function') go('ai');
+      setTimeout(() => q('#russianCoverCard')?.scrollIntoView({behavior:'smooth',block:'start'}), 80);
+    };
+    chips.appendChild(b);
+  }
+}
+
+async function ensureAudioContext() {
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  if (audioCtx.state === 'suspended') await audioCtx.resume();
+  return audioCtx;
+}
+async function decodeFile(file) {
+  const ctx = await ensureAudioContext();
+  return ctx.decodeAudioData((await file.arrayBuffer()).slice(0));
+}
+async function prepareBacking() {
+  const file = q('#coverBacking')?.files?.[0];
+  if (!file) throw new Error('Сначала выбери MP3/WAV исходной песни.');
+  if (!backingBuffer) backingBuffer = await decodeFile(file);
+  if (backingUrl) URL.revokeObjectURL(backingUrl);
+  backingUrl = URL.createObjectURL(file);
+  const player = q('#coverPlayer');
+  if (player && player.src !== backingUrl) player.src = backingUrl;
+  return {file,buffer:backingBuffer};
+}
+function resetBackingCache() {
+  backingBuffer = null;
+  if (backingUrl) URL.revokeObjectURL(backingUrl);
+  backingUrl = '';
+  const dl = q('#coverDownload');
+  if (dl) dl.classList.remove('on');
+}
+function makeImpulse(ctx, seconds, decay) {
+  const frames = Math.max(1, Math.floor(ctx.sampleRate * seconds));
+  const impulse = ctx.createBuffer(2, frames, ctx.sampleRate);
+  for (let c = 0; c < 2; c++) {
+    const d = impulse.getChannelData(c);
+    for (let i = 0; i < frames; i++) {
+      const env = Math.pow(1 - i / frames, decay);
+      d[i] = (Math.random() * 2 - 1) * env;
+    }
+  }
+  return impulse;
+}
+function connectVoiceChain(ctx, source, destination, dryGainValue, reverbAmount, delayAmount) {
+  const hp = ctx.createBiquadFilter();
+  hp.type = 'highpass';
+  hp.frequency.value = 90;
+  hp.Q.value = 0.7;
+
+  const body = ctx.createBiquadFilter();
+  body.type = 'peaking';
+  body.frequency.value = 285;
+  body.Q.value = 1.1;
+  body.gain.value = -2;
+
+  const presence = ctx.createBiquadFilter();
+  presence.type = 'peaking';
+  presence.frequency.value = 3200;
+  presence.Q.value = 0.9;
+  presence.gain.value = 1.5;
+
+  const comp = ctx.createDynamicsCompressor();
+  comp.threshold.value = -20;
+  comp.knee.value = 5;
+  comp.ratio.value = 3.2;
+  comp.attack.value = 0.008;
+  comp.release.value = 0.16;
+
+  const dry = ctx.createGain();
+  dry.gain.value = dryGainValue;
+
+  source.connect(hp).connect(body).connect(presence).connect(comp);
+  comp.connect(dry).connect(destination);
+
+  const convolver = ctx.createConvolver();
+  convolver.buffer = makeImpulse(ctx, 3.2, 2.4);
+  const revSend = ctx.createGain();
+  revSend.gain.value = reverbAmount;
+  const revWet = ctx.createGain();
+  revWet.gain.value = 0.55;
+  comp.connect(revSend).connect(convolver).connect(revWet).connect(destination);
+
+  const delay = ctx.createDelay(1);
+  delay.delayTime.value = 0.255;
+  const delaySend = ctx.createGain();
+  delaySend.gain.value = delayAmount;
+  const feedback = ctx.createGain();
+  feedback.gain.value = 0.22;
+  const delayWet = ctx.createGain();
+  delayWet.gain.value = 0.45;
+  comp.connect(delaySend).connect(delay);
+  delay.connect(feedback).connect(delay);
+  delay.connect(delayWet).connect(destination);
+}
+function automateChorus(gain, amount) {
+  const a = clamp(amount / 100,0,1);
+  gain.setValueAtTime(0.018 * a, 0);
+  gain.linearRampToValueAtTime(0.07 * a, 48.2);
+  gain.linearRampToValueAtTime(0.11 * a, 69.0);
+  gain.linearRampToValueAtTime(0.025 * a, 89.0);
+  gain.setValueAtTime(0.025 * a, 105.0);
+  gain.linearRampToValueAtTime(0.18 * a, 111.4);
+  gain.linearRampToValueAtTime(0.22 * a, 118.0);
+  gain.setValueAtTime(0.22 * a, 130.0);
+  gain.linearRampToValueAtTime(0.07 * a, 140.0);
+}
+async function renderMix(vocalBuffer) {
+  const backing = (await prepareBacking()).buffer;
+  const duration = Math.max(backing.duration, vocalBuffer?.duration || 0, COVER_SECONDS);
+  const frames = Math.ceil(duration * COVER_SR);
+  const ctx = new OfflineAudioContext(2, frames, COVER_SR);
+
+  const master = ctx.createDynamicsCompressor();
+  master.threshold.value = -3.5;
+  master.knee.value = 2;
+  master.ratio.value = 12;
+  master.attack.value = 0.002;
+  master.release.value = 0.08;
+  master.connect(ctx.destination);
+
+  const back = ctx.createBufferSource();
+  back.buffer = backing;
+  const backGain = ctx.createGain();
+  backGain.gain.value = db(q('#coverBackingDb')?.value || -7);
+  back.connect(backGain).connect(master);
+  back.start(0);
+
+  if (vocalBuffer) {
+    const startOffset = Number(q('#coverOffset')?.value || 0) / 1000;
+    const startAt = Math.max(0, startOffset);
+    const sourceOffset = Math.max(0, -startOffset);
+    const vocalDb = db(q('#coverVocalDb')?.value || -2);
+    const reverb = clamp(Number(q('#coverReverb')?.value || 35) / 100,0,1) * 0.42;
+    const echo = clamp(Number(q('#coverDelay')?.value || 18) / 100,0,1) * 0.45;
+
+    const main = ctx.createBufferSource();
+    main.buffer = vocalBuffer;
+    connectVoiceChain(ctx, main, master, vocalDb, reverb, echo);
+    main.start(startAt, sourceOffset);
+
+    const chorusAmount = Number(q('#coverChorus')?.value || 65);
+    [-8,8].forEach((cents,index) => {
+      const s = ctx.createBufferSource();
+      s.buffer = vocalBuffer;
+      if ('detune' in s) s.detune.value = cents;
+      const g = ctx.createGain();
+      automateChorus(g.gain, chorusAmount);
+      if (ctx.createStereoPanner) {
+        const p = ctx.createStereoPanner();
+        p.pan.value = index === 0 ? -0.62 : 0.62;
+        s.connect(g).connect(p).connect(master);
+      } else {
+        s.connect(g).connect(master);
+      }
+      s.start(startAt, sourceOffset);
+    });
+  }
+
+  status('Сведение: EQ, компрессия, хор, реверб и финальный подъём…');
+  return ctx.startRendering();
+}
+function floatTo16(samples) {
+  const out = new Int16Array(samples.length);
+  for (let i = 0; i < samples.length; i++) {
+    const s = clamp(samples[i], -1, 1);
+    out[i] = s < 0 ? Math.round(s * 32768) : Math.round(s * 32767);
+  }
+  return out;
+}
+function loadLame() {
+  if (window.lamejs?.Mp3Encoder) return Promise.resolve();
+  return new Promise((resolve,reject) => {
+    const old = q('#tumsoevLame');
+    if (old) {
+      old.addEventListener('load',resolve,{once:true});
+      old.addEventListener('error',reject,{once:true});
+      return;
+    }
+    const s = document.createElement('script');
+    s.id = 'tumsoevLame';
+    s.src = LAME_URL;
+    s.onload = resolve;
+    s.onerror = () => reject(new Error('MP3-кодек не загрузился.'));
+    document.head.appendChild(s);
+  });
+}
+async function encodeMp3(buffer) {
+  await loadLame();
+  const left = floatTo16(buffer.getChannelData(0));
+  const right = floatTo16(buffer.numberOfChannels > 1 ? buffer.getChannelData(1) : buffer.getChannelData(0));
+  const enc = new window.lamejs.Mp3Encoder(2, buffer.sampleRate, 192);
+  const chunks = [];
+  const block = 1152;
+  for (let i = 0; i < left.length; i += block) {
+    const mp3 = enc.encodeBuffer(left.subarray(i,i+block), right.subarray(i,i+block));
+    if (mp3.length) chunks.push(new Uint8Array(mp3));
+  }
+  const tail = enc.flush();
+  if (tail.length) chunks.push(new Uint8Array(tail));
+  return new Blob(chunks,{type:'audio/mpeg'});
+}
+async function publishMix(rendered, label) {
+  status('Кодирую MP3 192 kbps…');
+  const blob = await encodeMp3(rendered);
+  if (lastOutputUrl) URL.revokeObjectURL(lastOutputUrl);
+  lastOutputUrl = URL.createObjectURL(blob);
+  const player = q('#coverPlayer');
+  if (player) player.src = lastOutputUrl;
+  const link = q('#coverDownload');
+  if (link) {
+    link.href = lastOutputUrl;
+    link.download = 'Tumsoev_Russian_Cover_' + label + '.mp3';
+    link.classList.add('on');
+  }
+  status('✅ Готово: русский MP3 собран локально. Исходная песня осталась тихим подголоском.');
+}
+async function ensurePiper() {
+  if (piper) return piper;
+  status('Первый запуск Дениса: загружаю бесплатную голосовую модель…');
+  piper = await import(PIPER_IMPORT);
+  return piper;
+}
+async function synthLine(text) {
+  const engine = await ensurePiper();
+  let lastError = null;
+  for (const voiceId of DENIS_VOICES) {
+    try {
+      return await engine.predict({text:text,voiceId:voiceId});
+    } catch (e) { lastError = e; }
+  }
+  throw lastError || new Error('Голос Денис не загрузился.');
+}
+async function blobToMono(blob) {
+  const b = await (await ensureAudioContext()).decodeAudioData((await blob.arrayBuffer()).slice(0));
+  const data = new Float32Array(b.getChannelData(0));
+  return {data:data,sampleRate:b.sampleRate};
+}
+function resampleToLength(input, inRate, frames) {
+  const out = new Float32Array(frames);
+  if (!input.length || frames <= 0) return out;
+  const maxPos = Math.max(1,input.length - 1);
+  for (let i = 0; i < frames; i++) {
+    const p = i * maxPos / Math.max(1,frames - 1);
+    const a = Math.floor(p), b = Math.min(input.length - 1,a + 1), t = p - a;
+    out[i] = input[a] * (1 - t) + input[b] * t;
+  }
+  return out;
+}
+async function buildDenisDemo() {
+  await prepareBacking();
+  const lines = cleanLines();
+  if (!lines.length) throw new Error('Русский текст пустой.');
+  if (lines.length !== SLOTS.length) status('Таймкоды рассчитаны на 21 строку. Сейчас строк: ' + lines.length + '. Использую доступные по порядку.');
+  const total = Math.ceil(COVER_SECONDS * COVER_SR);
+  const out = new Float32Array(total);
+  const count = Math.min(lines.length,SLOTS.length);
+  for (let i = 0; i < count; i++) {
+    status('Денис: строка ' + (i+1) + '/' + count + '…');
+    const blob = await synthLine(lines[i]);
+    const mono = await blobToMono(blob);
+    const start = Math.round(SLOTS[i][0] * COVER_SR);
+    const frames = Math.max(1,Math.round((SLOTS[i][1] - SLOTS[i][0]) * COVER_SR));
+    const fitted = resampleToLength(mono.data, mono.sampleRate, frames);
+    const fade = Math.min(Math.round(0.025 * COVER_SR), Math.floor(frames / 3));
+    for (let n = 0; n < frames && start + n < out.length; n++) {
+      let env = 1;
+      if (n < fade) env = n / Math.max(1,fade);
+      if (n > frames - fade) env = Math.min(env,(frames - n) / Math.max(1,fade));
+      out[start+n] += fitted[n] * env * 0.92;
+    }
+  }
+  const ctx = await ensureAudioContext();
+  const buffer = ctx.createBuffer(1,total,COVER_SR);
+  buffer.copyToChannel(out,0);
+  return buffer;
+}
+async function makeDenisDemo() {
+  q('#coverDemo').disabled = true;
+  try {
+    const vocal = await buildDenisDemo();
+    const mix = await renderMix(vocal);
+    await publishMix(mix,'DENIS_DEMO');
+  } finally {
+    q('#coverDemo').disabled = false;
+  }
+}
+async function countdown() {
+  for (let n = 3; n >= 1; n--) {
+    status('Запись начнётся через ' + n + '… Надень наушники.');
+    await sleep(650);
+  }
+}
+function supportedRecorderType() {
+  const types = ['audio/mp4','audio/webm;codecs=opus','audio/webm'];
+  return types.find((t) => window.MediaRecorder?.isTypeSupported?.(t)) || '';
+}
+async function startRecording() {
+  if (!window.MediaRecorder) throw new Error('Запись MediaRecorder не поддерживается этим браузером.');
+  const prep = await prepareBacking();
+  await countdown();
+  micStream = await navigator.mediaDevices.getUserMedia({
+    audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:false}
+  });
+  recordChunks = [];
+  const mimeType = supportedRecorderType();
+  recorder = new MediaRecorder(micStream, mimeType ? {mimeType:mimeType} : undefined);
+  recorder.ondataavailable = (e) => { if (e.data?.size) recordChunks.push(e.data); };
+  recorder.onstop = async () => {
+    try {
+      const blob = new Blob(recordChunks,{type:mimeType || 'audio/webm'});
+      status('Запись готова. Свожу русский вокал с исходным подголоском…');
+      const vocal = await decodeFile(blob);
+      const mix = await renderMix(vocal);
+      await publishMix(mix,'RECORDED');
+    } catch (e) {
+      status('Ошибка сведения записи: ' + (e.message || e));
+    } finally {
+      micStream?.getTracks?.().forEach((t) => t.stop());
+      micStream = null;
+      recorder = null;
+      q('#coverRecord').disabled = false;
+      q('#coverStop').disabled = true;
+    }
+  };
+  recorder.start(250);
+  recordingStartedAt = performance.now();
+  const player = q('#coverPlayer');
+  player.src = backingUrl;
+  player.currentTime = 0;
+  player.onended = () => stopRecording();
+  await player.play();
+  q('#coverRecord').disabled = true;
+  q('#coverStop').disabled = false;
+  status('🔴 Запись идёт. Пой русский текст поверх основы.');
+}
+function stopRecording() {
+  const player = q('#coverPlayer');
+  if (player && !player.paused) player.pause();
+  if (recorder && recorder.state !== 'inactive') recorder.stop();
+}
+async function mixOnly() {
+  q('#coverMixOnly').disabled = true;
+  try {
+    await prepareBacking();
+    const mix = await renderMix(null);
+    await publishMix(mix,'BACKING');
+  } finally {
+    q('#coverMixOnly').disabled = false;
+  }
+}
+
+function bind() {
+  addCoverUi();
+  q('#coverBacking')?.addEventListener('change', async () => {
+    resetBackingCache();
+    try {
+      await prepareBacking();
+      status('Основа загружена. Можно делать демо Денис или записывать своё пение.');
+    } catch (e) { status(e.message || String(e)); }
+  });
+  q('#coverDemo')?.addEventListener('click', () => makeDenisDemo().catch((e) => status('Ошибка: ' + (e.message || e))));
+  q('#coverRecord')?.addEventListener('click', () => startRecording().catch((e) => {
+    q('#coverRecord').disabled = false;
+    q('#coverStop').disabled = true;
+    micStream?.getTracks?.().forEach((t) => t.stop());
+    micStream = null;
+    status('Ошибка записи: ' + (e.message || e));
+  }));
+  q('#coverStop')?.addEventListener('click', stopRecording);
+  q('#coverMixOnly')?.addEventListener('click', () => mixOnly().catch((e) => status('Ошибка: ' + (e.message || e))));
+}
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', bind,{once:true}); else bind();
+})();
+</script>
 </body>
 </html>
