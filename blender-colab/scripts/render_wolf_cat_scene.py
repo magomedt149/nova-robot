@@ -197,9 +197,18 @@ def build_cat():
     return rig, mirror
 
 def camera():
-    target=empty("Camera_Target",(0.4,0,1.15))
-    d=bpy.data.cameras.new("Camera"); cam=bpy.data.objects.new("Camera",d); bpy.context.collection.objects.link(cam)
-    cam.location=(.45,-11.6,3.10); d.lens=52; look_at(cam,target.location); bpy.context.scene.camera=cam
+    # Deterministic front camera: local -Z points toward +Y after X rotation.
+    d=bpy.data.cameras.new("Camera")
+    cam=bpy.data.objects.new("Camera",d)
+    bpy.context.collection.objects.link(cam)
+    cam.location=(0.35,-12.0,3.05)
+    cam.rotation_mode="XYZ"
+    cam.rotation_euler=(math.radians(80.0),0.0,0.0)
+    d.lens=46
+    d.sensor_width=36
+    d.clip_start=0.05
+    d.clip_end=100.0
+    bpy.context.scene.camera=cam
     return cam
 
 def setup_render(a, out):
