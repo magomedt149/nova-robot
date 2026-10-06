@@ -44,9 +44,16 @@ jobs:
       - name: Smooth preview to 24 fps
         run: |
           set -euo pipefail
-          ffmpeg -y -hide_banner -loglevel error             -i artifacts/NOVA_SUPER_APP_WOLF_GINGER_CAT.mp4             -vf "minterpolate=fps=24:mi_mode=mci:mc_mode=aobmc:me_mode=bidir:vsbmc=1"             -c:v libx264 -pix_fmt yuv420p -crf 20 -movflags +faststart             artifacts/NOVA_SUPER_APP_WOLF_GINGER_CAT_24.mp4
+          ffmpeg -y -hide_banner -loglevel error             -i artifacts/NOVA_SUPER_APP_WOLF_GINGER_CAT.mp4             -vf "fps=24"             -c:v libx264 -pix_fmt yuv420p -crf 20 -movflags +faststart             artifacts/NOVA_SUPER_APP_WOLF_GINGER_CAT_24.mp4
           mv artifacts/NOVA_SUPER_APP_WOLF_GINGER_CAT_24.mp4 artifacts/NOVA_SUPER_APP_WOLF_GINGER_CAT.mp4
           ffprobe -v error -show_entries stream=width,height,r_frame_rate -show_entries format=duration -of json artifacts/NOVA_SUPER_APP_WOLF_GINGER_CAT.mp4
+          DURATION="$(ffprobe -v error -show_entries format=duration -of default=nw=1:nk=1 artifacts/NOVA_SUPER_APP_WOLF_GINGER_CAT.mp4)"
+          python3 - "$DURATION" <<\'PY\'
+          import sys
+          duration=float(sys.argv[1])
+          assert 4.8 <= duration <= 5.2, f"diagnostic duration must be 5s, got {duration:.3f}s"
+          print(f"Nova 3D duration: {duration:.3f}s")
+          PY
           python3 - <<'PY'
           import json
           from pathlib import Path

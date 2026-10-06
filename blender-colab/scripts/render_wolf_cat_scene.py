@@ -90,16 +90,16 @@ def build_ground():
     bpy.context.object.data.materials.append(ground)
     bpy.context.object.name="Studio_Ground"
     scene=bpy.context.scene
-    scene.world.color=(0.006,0.008,0.012)
-    area("Warm_Key",(-3,-4,7),1000,5.0,(1.0,.48,.20),(0,0,1.2))
-    area("Cool_Rim",(4,2,5),700,4.0,(.18,.38,1.0),(0,0,1.4))
-    area("Soft_Fill",(0,-5,3),400,4.0,(1.0,.82,.65),(0,0,1.0))
+    scene.world.color=(0.025,0.030,0.040)
+    area("Warm_Key",(-3,-4,7),1800,5.0,(1.0,.55,.28),(0,0,1.2))
+    area("Cool_Rim",(4,2,5),1100,4.0,(.24,.45,1.0),(0,0,1.4))
+    area("Soft_Fill",(0,-5,3),900,4.0,(1.0,.86,.72),(0,0,1.0))
 
 def build_wolf():
     rig=empty("WOLF_MASTER",(6.0,0,0))
-    dark=mat("WolfDark",(.035,.045,.055),.9)
-    grey=mat("WolfGrey",(.23,.27,.31),.88)
-    light=mat("WolfLight",(.53,.57,.60),.9)
+    dark=mat("WolfDark",(.085,.095,.11),.9)
+    grey=mat("WolfGrey",(.36,.40,.45),.88)
+    light=mat("WolfLight",(.64,.67,.70),.9)
     black=mat("WolfBlack",(.008,.008,.01),.5)
     eye=mat("WolfEye",(.82,.62,.18),.32, emission=(.34,.17,.02), strength=.6)
 
