@@ -24,7 +24,7 @@ def clear():
     bpy.ops.object.delete(use_global=False)
 
 def mat(name, color, rough=.72, emission=None, strength=0):
-    m=bpy.data.materials.new(name); m.use_nodes=True
+    m=bpy.data.materials.new(name); m.use_nodes=True; m.diffuse_color=(*color,1.0)
     b=m.node_tree.nodes.get("Principled BSDF")
     b.inputs["Base Color"].default_value=(*color,1)
     b.inputs["Roughness"].default_value=rough
@@ -206,11 +206,19 @@ def setup_render(a, out):
     scene=bpy.context.scene
     scene.frame_start=1; scene.frame_end=max(2,int(round(a.duration*a.fps)))
     scene.render.fps=a.fps
-    try: scene.render.engine="BLENDER_EEVEE_NEXT"
-    except Exception: pass
     if a.preview:
+        try:
+            scene.render.engine="BLENDER_WORKBENCH"
+            scene.display.shading.light="STUDIO"
+            scene.display.shading.color_type="MATERIAL"
+            scene.display.shading.show_shadows=True
+            scene.display.shading.show_cavity=True
+        except Exception:
+            scene.render.engine="BLENDER_EEVEE_NEXT"
         w,h=320,180
     else:
+        try: scene.render.engine="BLENDER_EEVEE_NEXT"
+        except Exception: pass
         w,h=1280,720
     scene.render.resolution_x=w; scene.render.resolution_y=h; scene.render.resolution_percentage=100
     scene.render.image_settings.file_format="PNG"
