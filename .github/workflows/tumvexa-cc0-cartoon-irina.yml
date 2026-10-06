@@ -1,0 +1,126 @@
+name: TUMVEXA CC0 Cartoon + Irina Voice
+
+on:
+  push:
+    paths:
+      - '.github/workflows/tumvexa-cc0-cartoon-irina.yml'
+      - 'blender-colab/scripts/render_cc0_story.py'
+      - 'config/NOVA_IRINA_MASTER_PRESET.json'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  BLENDER_DIR: '/tmp/blender-5.2.1-linux-x64'
+
+jobs:
+  render_and_voice:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Install free tools
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends ffmpeg curl unzip xz-utils libegl1
+          curl -L --fail --retry 3 -A "Mozilla/5.0"             https://download.blender.org/release/Blender5.2/blender-5.2.1-linux-x64.tar.xz             -o /tmp/blender.tar.xz
+          tar -xf /tmp/blender.tar.xz -C /tmp
+          "$BLENDER_DIR/blender" --version | head -n 3
+
+      - name: Download CC0 characters
+        run: |
+          set -euo pipefail
+          mkdir -p assets/cc0/wolf assets/cc0/cat artifacts
+          curl -L --fail --retry 3 -A "Mozilla/5.0"             "https://opengameart.org/sites/default/files/3dwolf_blend.zip"             -o assets/cc0/wolf/wolf.zip
+          unzip -q assets/cc0/wolf/wolf.zip -d assets/cc0/wolf/unpacked
+          WOLF_BLEND="$(find assets/cc0/wolf/unpacked -type f -iname '*.blend' | head -n 1)"
+          test -n "$WOLF_BLEND"
+          cp "$WOLF_BLEND" assets/cc0/wolf/wolf.blend
+          curl -L --fail --retry 3 -A "Mozilla/5.0"             "https://opengameart.org/sites/default/files/CatPilot.blend"             -o assets/cc0/cat/cat.blend
+
+      - name: Render same 60 second cartoon
+        env:
+          LIBGL_ALWAYS_SOFTWARE: '1'
+        run: |
+          set -euo pipefail
+          "$BLENDER_DIR/blender" -b             --python blender-colab/scripts/render_cc0_story.py             --             --cat "$GITHUB_WORKSPACE/assets/cc0/cat/cat.blend"             --wolf "$GITHUB_WORKSPACE/assets/cc0/wolf/wolf.blend"             --output "$GITHUB_WORKSPACE/artifacts/base.mp4"             --duration 60             --fps 6
+          test -s artifacts/base.mp4
+          test -s artifacts/base.srt
+          test -s artifacts/base.blend
+
+      - name: Smooth video and burn Russian subtitles
+        run: |
+          set -euo pipefail
+          ffmpeg -y -hide_banner -loglevel error             -i artifacts/base.mp4             -vf "minterpolate=fps=24:mi_mode=mci:mc_mode=aobmc:me_mode=bidir:vsbmc=1"             -c:v libx264 -profile:v baseline -level 3.1 -pix_fmt yuv420p -crf 21 -movflags +faststart             artifacts/smooth.mp4
+          ffmpeg -y -hide_banner -loglevel error             -i artifacts/smooth.mp4             -vf "subtitles=artifacts/base.srt:force_style='FontName=DejaVu Sans,FontSize=20,PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,BorderStyle=1,Outline=2,Shadow=0,Alignment=2,MarginV=20'"             -c:v libx264 -profile:v baseline -level 3.1 -pix_fmt yuv420p -crf 20 -movflags +faststart             -an artifacts/picture.mp4
+
+      - name: Download exact Irina Piper voice
+        run: |
+          set -euo pipefail
+          curl -L --fail --retry 3             -o /tmp/piper.tar.gz             https://github.com/rhasspy/piper/releases/download/2023.11.14-2/piper_linux_x86_64.tar.gz
+          tar -xzf /tmp/piper.tar.gz -C /tmp
+          curl -L --fail --retry 3             -o /tmp/ru_RU-irina-medium.onnx             https://huggingface.co/rhasspy/piper-voices/resolve/main/ru/ru_RU/irina/medium/ru_RU-irina-medium.onnx
+          curl -L --fail --retry 3             -o /tmp/ru_RU-irina-medium.onnx.json             https://huggingface.co/rhasspy/piper-voices/resolve/main/ru/ru_RU/irina/medium/ru_RU-irina-medium.onnx.json
+          echo "8ff38212d23da300bbe3705c645e6e5b9475f0bfde01558eb17813e22acaaaaa  /tmp/ru_RU-irina-medium.onnx" | sha256sum -c -
+
+      - name: Synthesize Irina dialogue
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/irina
+          cat > artifacts/irina/01.txt <<'TXT'
+          Волк и Рыжик.
+          TXT
+          cat > artifacts/irina/02.txt <<'TXT'
+          Какая тихая ночь...
+          TXT
+          cat > artifacts/irina/03.txt <<'TXT'
+          Кто там?
+          TXT
+          cat > artifacts/irina/04.txt <<'TXT'
+          Не бойся. Я просто ищу дорогу.
+          TXT
+          cat > artifacts/irina/05.txt <<'TXT'
+          Тогда пойдём вместе.
+          TXT
+          cat > artifacts/irina/06.txt <<'TXT'
+          Ты правда меня не боишься?
+          TXT
+          cat > artifacts/irina/07.txt <<'TXT'
+          Друзей узнают не по виду.
+          TXT
+          cat > artifacts/irina/08.txt <<'TXT'
+          Иногда дружба начинается с одного шага.
+          TXT
+
+          for n in 01 02 03 04 05 06 07 08; do
+            /tmp/piper/piper               --model /tmp/ru_RU-irina-medium.onnx               --config /tmp/ru_RU-irina-medium.onnx.json               --output_file "artifacts/irina/${n}.wav"               < "artifacts/irina/${n}.txt"
+            ffmpeg -y -hide_banner -loglevel error               -i "artifacts/irina/${n}.wav"               -af "highpass=f=90,equalizer=f=2200:width_type=q:width=1.2:g=2.5,equalizer=f=3800:width_type=q:width=1.1:g=1.8,lowpass=f=8500"               -ar 48000 -ac 1 "artifacts/irina/${n}_master.wav"
+          done
+
+      - name: Place Irina voice on subtitle timings
+        run: |
+          set -euo pipefail
+          ffmpeg -y -hide_banner -loglevel error             -f lavfi -i "anullsrc=r=48000:cl=mono:d=60"             -i artifacts/irina/01_master.wav             -i artifacts/irina/02_master.wav             -i artifacts/irina/03_master.wav             -i artifacts/irina/04_master.wav             -i artifacts/irina/05_master.wav             -i artifacts/irina/06_master.wav             -i artifacts/irina/07_master.wav             -i artifacts/irina/08_master.wav             -filter_complex "              [1:a]adelay=250:all=1[a1];              [2:a]adelay=5750:all=1[a2];              [3:a]adelay=12250:all=1[a3];              [4:a]adelay=20250:all=1[a4];              [5:a]adelay=29250:all=1[a5];              [6:a]adelay=38250:all=1[a6];              [7:a]adelay=46250:all=1[a7];              [8:a]adelay=54250:all=1[a8];              [0:a][a1][a2][a3][a4][a5][a6][a7][a8]amix=inputs=9:duration=first:dropout_transition=0,              loudnorm=I=-14:LRA=5:TP=-1[aout]"             -map "[aout]" -ar 48000 -ac 2 -c:a aac -b:a 192k             artifacts/irina_track.m4a
+
+      - name: Mux iPhone-compatible final
+        run: |
+          set -euo pipefail
+          ffmpeg -y -hide_banner -loglevel error             -i artifacts/picture.mp4 -i artifacts/irina_track.m4a             -map 0:v:0 -map 1:a:0             -c:v copy -c:a copy -shortest -movflags +faststart             artifacts/TUMVEXA_WOLF_RYZHIK_IRINA_IPHONE.mp4
+          ffmpeg -v error -i artifacts/TUMVEXA_WOLF_RYZHIK_IRINA_IPHONE.mp4 -f null -
+          ffprobe -v error             -show_entries stream=index,codec_name,profile,width,height,r_frame_rate,sample_rate,channels             -show_entries format=duration             -of json artifacts/TUMVEXA_WOLF_RYZHIK_IRINA_IPHONE.mp4
+
+      - name: Upload final with Irina
+        uses: actions/upload-artifact@v4
+        with:
+          name: TUMVEXA-WOLF-RYZHIK-IRINA
+          path: |
+            artifacts/TUMVEXA_WOLF_RYZHIK_IRINA_IPHONE.mp4
+            artifacts/base.srt
+            artifacts/base.blend
+            artifacts/irina_track.m4a
+          if-no-files-found: error
+          retention-days: 7
