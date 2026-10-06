@@ -217,14 +217,14 @@ def setup_render(a, out):
     scene.render.fps=a.fps
     if a.preview:
         try:
-            scene.render.engine="BLENDER_WORKBENCH"
+            scene.render.engine="BLENDER_EEVEE_NEXT"
             scene.display.shading.light="STUDIO"
             scene.display.shading.color_type="MATERIAL"
             scene.display.shading.show_shadows=True
             scene.display.shading.show_cavity=True
         except Exception:
             scene.render.engine="BLENDER_EEVEE_NEXT"
-        w,h=320,180
+        w,h=480,270
     else:
         try: scene.render.engine="BLENDER_EEVEE_NEXT"
         except Exception: pass
