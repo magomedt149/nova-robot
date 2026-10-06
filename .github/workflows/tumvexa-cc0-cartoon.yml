@@ -1,10 +1,6 @@
-name: TUMVEXA CC0 Cat Wolf 60s Cartoon
+name: Nova Super App · LEGACY imported CC0 60s (manual only)
 
 on:
-  push:
-    paths:
-      - '.github/workflows/tumvexa-cc0-cartoon.yml'
-      - 'blender-colab/scripts/render_cc0_story.py'
   workflow_dispatch:
 
 permissions:

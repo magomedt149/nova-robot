@@ -34,6 +34,9 @@ jobs:
           test -f manifest.webmanifest
           test -f nova-health.js
           test -f nova-auto-montage.js
+          test -f nova-blender-camera.js
+          test -f blender-agent/nova_blender_http_gateway.py
+          test -f blender-colab/scripts/render_wolf_cat_scene.py
           test -f automation/validate_frontend.py
           test -f blender-colab/NOVA_Wolf_Auto_Worker.ipynb
           test -f blender-colab/scripts/render_wolf_cinema_auto.py
@@ -55,6 +58,7 @@ jobs:
           python3 -m py_compile \
             automation/*.py \
             blender-colab/scripts/*.py \
+            blender-agent/*.py \
             tests/*.py
           echo "Python syntax: OK"
 
@@ -69,6 +73,26 @@ jobs:
         run: |
           set -euo pipefail
           python3 tests/run_static_tests.py
+
+      - name: Diagnose Nova Super App 3D wiring
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          render=Path('blender-colab/scripts/render_wolf_cat_scene.py').read_text(encoding='utf-8')
+          ui=Path('nova-blender-camera.js').read_text(encoding='utf-8')
+          gateway=Path('blender-agent/nova_blender_http_gateway.py').read_text(encoding='utf-8')
+          assert 'NOVA_SUPER_APP_WOLF_CAT_V2' in render
+          assert 'scene.render.engine="BLENDER_EEVEE"' in render
+          assert 'BLENDER_WORKBENCH' not in render
+          assert 'BLENDER_EEVEE_NEXT' not in render
+          assert 'quadruped-v2' in render
+          assert 'NovaBlenderAgent' in ui and 'nbaDiag' in ui and 'async function diagnose()' in ui
+          for tool in ('scan_scene','preview_sequence','check_flow','check_loop','auto_refine','full_cycle'):
+              assert tool in gateway
+          print('Nova Super App 3D diagnostics: OK')
+          PY
 
       - name: Validate dedicated FREE wolf notebook
         shell: bash

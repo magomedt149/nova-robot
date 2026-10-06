@@ -1,4 +1,4 @@
-name: TUMVEXA Wolf + Ginger Cat FREE Blender Render
+name: Nova Super App · 3D Wolf + Ginger Cat · 5s Diagnostic
 
 on:
   push:
@@ -37,24 +37,34 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p artifacts
-          "$BLENDER_DIR/blender" -b             --python blender-colab/scripts/render_wolf_cat_scene.py             --             --output "$GITHUB_WORKSPACE/artifacts/TUMVEXA_WOLF_GINGER_CAT.mp4"             --duration 7             --fps 8             --preview
-          test -s artifacts/TUMVEXA_WOLF_GINGER_CAT.mp4
-          test -s artifacts/TUMVEXA_WOLF_GINGER_CAT.blend
+          "$BLENDER_DIR/blender" -b             --python blender-colab/scripts/render_wolf_cat_scene.py             --             --output "$GITHUB_WORKSPACE/artifacts/NOVA_SUPER_APP_WOLF_GINGER_CAT.mp4"             --duration 5             --fps 8             --preview
+          test -s artifacts/NOVA_SUPER_APP_WOLF_GINGER_CAT.mp4
+          test -s artifacts/NOVA_SUPER_APP_WOLF_GINGER_CAT.blend
 
       - name: Smooth preview to 24 fps
         run: |
           set -euo pipefail
-          ffmpeg -y -hide_banner -loglevel error             -i artifacts/TUMVEXA_WOLF_GINGER_CAT.mp4             -vf "minterpolate=fps=24:mi_mode=mci:mc_mode=aobmc:me_mode=bidir:vsbmc=1"             -c:v libx264 -pix_fmt yuv420p -crf 20 -movflags +faststart             artifacts/TUMVEXA_WOLF_GINGER_CAT_24.mp4
-          mv artifacts/TUMVEXA_WOLF_GINGER_CAT_24.mp4 artifacts/TUMVEXA_WOLF_GINGER_CAT.mp4
-          ffprobe -v error -show_entries stream=width,height,r_frame_rate -show_entries format=duration -of json artifacts/TUMVEXA_WOLF_GINGER_CAT.mp4
+          ffmpeg -y -hide_banner -loglevel error             -i artifacts/NOVA_SUPER_APP_WOLF_GINGER_CAT.mp4             -vf "minterpolate=fps=24:mi_mode=mci:mc_mode=aobmc:me_mode=bidir:vsbmc=1"             -c:v libx264 -pix_fmt yuv420p -crf 20 -movflags +faststart             artifacts/NOVA_SUPER_APP_WOLF_GINGER_CAT_24.mp4
+          mv artifacts/NOVA_SUPER_APP_WOLF_GINGER_CAT_24.mp4 artifacts/NOVA_SUPER_APP_WOLF_GINGER_CAT.mp4
+          ffprobe -v error -show_entries stream=width,height,r_frame_rate -show_entries format=duration -of json artifacts/NOVA_SUPER_APP_WOLF_GINGER_CAT.mp4
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          p=Path('artifacts/NOVA_SUPER_APP_WOLF_GINGER_CAT.json')
+          data=json.loads(p.read_text())
+          assert data['marker']=='NOVA_SUPER_APP_WOLF_CAT_V2'
+          assert data['render_engine']=='BLENDER_EEVEE'
+          assert data['anatomy']=='quadruped-v2'
+          print('Nova 3D artifact diagnostics: OK')
+          PY
 
       - name: Upload video and Blender scene
         uses: actions/upload-artifact@v4
         with:
-          name: TUMVEXA-WOLF-GINGER-CAT
+          name: NOVA-SUPER-APP-3D-DIAGNOSTIC
           path: |
-            artifacts/TUMVEXA_WOLF_GINGER_CAT.mp4
-            artifacts/TUMVEXA_WOLF_GINGER_CAT.blend
-            artifacts/TUMVEXA_WOLF_GINGER_CAT.json
+            artifacts/NOVA_SUPER_APP_WOLF_GINGER_CAT.mp4
+            artifacts/NOVA_SUPER_APP_WOLF_GINGER_CAT.blend
+            artifacts/NOVA_SUPER_APP_WOLF_GINGER_CAT.json
           if-no-files-found: error
           retention-days: 7

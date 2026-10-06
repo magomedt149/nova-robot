@@ -1,20 +1,20 @@
 #!/usr/bin/env python3
-"""TUMVEXA FREE Blender scene: our stylized wolf approaches a ginger cat; cat turns left."""
+"""Nova Super App FREE Blender scene: quadruped wolf approaches a ginger cat; cat turns left."""
 from __future__ import annotations
 import argparse, json, math, shutil, subprocess, sys
 from pathlib import Path
 import bpy
 from mathutils import Vector
 
-MARKER = "TUMVEXA_WOLF_CAT_V1"
+MARKER = "NOVA_SUPER_APP_WOLF_CAT_V2"
 
 def argv():
     return sys.argv[sys.argv.index("--")+1:] if "--" in sys.argv else []
 
 def parse_args():
     p=argparse.ArgumentParser()
-    p.add_argument("--output", default="TUMVEXA_WOLF_CAT.mp4")
-    p.add_argument("--duration", type=float, default=7.0)
+    p.add_argument("--output", default="NOVA_SUPER_APP_WOLF_CAT.mp4")
+    p.add_argument("--duration", type=float, default=5.0)
     p.add_argument("--fps", type=int, default=24)
     p.add_argument("--preview", action="store_true")
     return p.parse_args(argv())
@@ -166,36 +166,37 @@ def build_wolf():
 
 def build_cat():
     rig=empty("GINGER_CAT_MASTER",(-1.30,0,0))
-    orange=mat("GingerBase",(.78,.20,.035),.82)
-    cream=mat("GingerCream",(.95,.63,.30),.86)
-    stripe=mat("GingerStripe",(.36,.055,.012),.9)
-    pink=mat("CatPink",(.76,.22,.18),.62)
-    eye=mat("CatAmber",(.95,.52,.05),.30, emission=(.30,.10,.00), strength=.55)
-    black=mat("CatPupil",(.006,.006,.006),.45)
+    orange=mat("GingerBase",(.72,.16,.025),.88)
+    cream=mat("GingerCream",(.92,.55,.25),.9)
+    stripe=mat("GingerStripe",(.28,.035,.008),.94)
+    pink=mat("CatPink",(.70,.20,.17),.68)
+    eye=mat("CatAmber",(.88,.48,.04),.34, emission=(.22,.07,.00), strength=.35)
+    black=mat("CatPupil",(.004,.004,.004),.5)
 
-    uv("Cat_Body",(0,0,1.02),(.90,.43,.47),orange,rig)
-    chest=uv("Cat_Chest",(.58,-.01,1.05),(.42,.40,.54),cream,rig)
-    neck=uv("Cat_Neck",(.70,0,1.38),(.32,.34,.38),orange,rig)
-    head=uv("Cat_Head",(.88,0,1.67),(.46,.39,.42),orange,rig)
-    uv("Cat_Muzzle",(1.20,-.01,1.58),(.30,.28,.21),cream,rig)
-    uv("Cat_Nose",(1.42,-.01,1.61),(.075,.085,.065),pink,rig)
-    for s,y in (("L",-.22),("R",.22)):
-        cone("Cat_Ear_"+s,(.82,y,2.05),.19,.55,orange,rig)
-        uv("Cat_Eye_"+s,(1.17,y*.88,1.75),(.07,.047,.07),eye,rig,20,12)
-        uv("Cat_Pupil_"+s,(1.225,y*.88,1.75),(.022,.018,.048),black,rig,16,10)
+    # Feline proportions: horizontal torso, small head, slim legs, low paws.
+    uv("Cat_Body",(0,0,.76),(1.02,.35,.39),orange,rig)
+    chest=uv("Cat_Chest",(.56,-.01,.81),(.40,.32,.43),cream,rig)
+    neck=uv("Cat_Neck",(.73,0,1.02),(.25,.25,.29),orange,rig)
+    head=uv("Cat_Head",(.91,0,1.27),(.36,.32,.34),orange,rig)
+    uv("Cat_Muzzle",(1.18,-.01,1.20),(.24,.23,.16),cream,rig)
+    uv("Cat_Nose",(1.37,-.01,1.22),(.055,.065,.045),pink,rig)
+    for s,y in (("L",-.18),("R",.18)):
+        cone("Cat_Ear_"+s,(.84,y,1.59),.145,.43,orange,rig)
+        uv("Cat_Eye_"+s,(1.15,y*.9,1.33),(.047,.034,.050),eye,rig,20,12)
+        uv("Cat_Pupil_"+s,(1.19,y*.9,1.33),(.014,.012,.035),black,rig,16,10)
 
     legs=[]
-    for i,(x,y) in enumerate(((.42,-.25),(.42,.25),(-.48,-.25),(-.48,.25))):
-        leg=cyl("Cat_Leg_"+str(i),(x,y,.48),.11,.68,orange,rig); legs.append(leg)
-        uv("Cat_Paw_"+str(i),(x+.06,y,.14),(.24,.18,.10),cream,rig,22,14)
+    for i,(x,y) in enumerate(((.50,-.23),(.50,.23),(-.52,-.23),(-.52,.23))):
+        leg=cyl("Cat_Leg_"+str(i),(x,y,.36),.075,.55,orange,rig); legs.append(leg)
+        uv("Cat_Paw_"+str(i),(x+.04,y,.085),(.17,.12,.07),cream,rig,22,14)
 
-    tail1=uv("Cat_Tail_1",(-.88,0,1.12),(.58,.18,.18),orange,rig); tail1.rotation_euler[1]=math.radians(22)
-    tail2=uv("Cat_Tail_2",(-1.28,0,1.42),(.48,.15,.15),stripe,rig); tail2.rotation_euler[1]=math.radians(45)
+    tail1=uv("Cat_Tail_1",(-.96,0,.82),(.66,.13,.13),orange,rig); tail1.rotation_euler[1]=math.radians(18)
+    tail2=uv("Cat_Tail_2",(-1.47,0,1.02),(.55,.105,.105),stripe,rig); tail2.rotation_euler[1]=math.radians(42)
 
-    # Tabby stripes as dark soft masses along back.
-    for i,x in enumerate((-.48,-.22,.05,.31,.56)):
-        s=uv("Cat_Stripe_"+str(i),(x,-.39,1.33+(.04 if i==2 else 0)),(.08,.035,.28),stripe,rig,18,10)
-        s.rotation_euler[1]=math.radians(18 if i<2 else -10)
+    # Ginger tabby markings kept subtle so the silhouette reads as a real quadruped cat.
+    for i,x in enumerate((-.50,-.23,.04,.30,.55)):
+        s=uv("Cat_Stripe_"+str(i),(x,-.315,.98+(.025 if i==2 else 0)),(.065,.025,.20),stripe,rig,18,10)
+        s.rotation_euler[1]=math.radians(14 if i<2 else -8)
 
     # Cat notices the approaching wolf, turns its head first, then pivots LEFT clearly.
     rig.rotation_mode="XYZ"
@@ -248,19 +249,15 @@ def setup_render(a, out):
     # Preview rendering samples this timeline instead of moving/scaling keyframes.
     scene.frame_start=1; scene.frame_end=168
     scene.render.fps=24
+    # Blender 5.2 exposes Eevee as BLENDER_EEVEE. Workbench is intentionally
+    # forbidden for Nova Super App 3D output because it hides material/lighting bugs.
+    try:
+        scene.render.engine="BLENDER_EEVEE"
+    except Exception as exc:
+        raise RuntimeError(f"Eevee unavailable in this Blender build: {exc}")
     if a.preview:
-        try:
-            scene.render.engine="BLENDER_WORKBENCH"
-            scene.display.shading.light="STUDIO"
-            scene.display.shading.color_type="MATERIAL"
-            scene.display.shading.show_shadows=True
-            scene.display.shading.show_cavity=True
-        except Exception:
-            scene.render.engine="BLENDER_EEVEE_NEXT"
         w,h=480,270
     else:
-        try: scene.render.engine="BLENDER_EEVEE_NEXT"
-        except Exception: pass
         w,h=1280,720
     scene.render.resolution_x=w; scene.render.resolution_y=h; scene.render.resolution_percentage=100
     scene.render.image_settings.file_format="PNG"
@@ -287,7 +284,7 @@ def main():
     report.write_text(json.dumps({
         "marker":MARKER,"output":str(out),"blend":str(blend),"duration":a.duration,
         "fps":a.fps,"resolution":list(res),"wolf":"WOLF_MASTER","cat":"GINGER_CAT_MASTER",
-        "mirror":"GINGER_CAT_MIRROR","mirror_scale_x":-1,"paid_api":False
+        "mirror":"GINGER_CAT_MIRROR","mirror_scale_x":-1,"paid_api":False,"render_engine":scene.render.engine,"anatomy":"quadruped-v2"
     },indent=2),encoding="utf-8")
     bpy.ops.wm.save_as_mainfile(filepath=str(blend))
     if a.preview:
@@ -308,7 +305,7 @@ def main():
         bpy.ops.render.render(animation=True)
     encode(frames,out,a.fps)
     if not out.exists() or out.stat().st_size<1000: raise RuntimeError("MP4 missing")
-    print("TUMVEXA WOLF+CAT READY",out)
+    print("NOVA SUPER APP WOLF+CAT READY",out)
 
 if __name__=="__main__": main()
 

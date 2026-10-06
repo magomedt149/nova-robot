@@ -1,4 +1,4 @@
-name: TUMVEXA Irina Fast Track
+name: Nova Super App · Irina Fast Track
 
 on:
   push:
@@ -14,9 +14,11 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 8
     steps:
-      - name: Verify tools
+      - name: Install and verify free tools
         run: |
           set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends ffmpeg curl
           ffmpeg -version | head -n 1
           curl --version | head -n 1
 
@@ -60,6 +62,6 @@ jobs:
       - name: Upload
         uses: actions/upload-artifact@v4
         with:
-          name: TUMVEXA-IRINA-FAST
+          name: NOVA-SUPER-APP-IRINA-FAST
           path: out/irina_track.m4a
           retention-days: 7

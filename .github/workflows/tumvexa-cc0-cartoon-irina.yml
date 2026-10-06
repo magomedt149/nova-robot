@@ -1,11 +1,6 @@
-name: TUMVEXA CC0 Cartoon + Irina Voice
+name: Nova Super App · LEGACY imported CC0 + Irina (manual only)
 
 on:
-  push:
-    paths:
-      - '.github/workflows/tumvexa-cc0-cartoon-irina.yml'
-      - 'blender-colab/scripts/render_cc0_story.py'
-      - 'config/NOVA_IRINA_MASTER_PRESET.json'
   workflow_dispatch:
 
 permissions:
