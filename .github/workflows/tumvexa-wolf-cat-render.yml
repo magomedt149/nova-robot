@@ -37,7 +37,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p artifacts
-          "$BLENDER_DIR/blender" -b             --python blender-colab/scripts/render_wolf_cat_scene.py             --             --output "$GITHUB_WORKSPACE/artifacts/TUMVEXA_WOLF_GINGER_CAT.mp4"             --duration 7             --fps 6             --preview
+          "$BLENDER_DIR/blender" -b             --python blender-colab/scripts/render_wolf_cat_scene.py             --             --output "$GITHUB_WORKSPACE/artifacts/TUMVEXA_WOLF_GINGER_CAT.mp4"             --duration 7             --fps 2             --preview
           test -s artifacts/TUMVEXA_WOLF_GINGER_CAT.mp4
           test -s artifacts/TUMVEXA_WOLF_GINGER_CAT.blend
 
