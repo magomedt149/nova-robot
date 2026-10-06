@@ -209,7 +209,7 @@ def setup_render(a, out):
     try: scene.render.engine="BLENDER_EEVEE_NEXT"
     except Exception: pass
     if a.preview:
-        w,h=640,360
+        w,h=320,180
     else:
         w,h=1280,720
     scene.render.resolution_x=w; scene.render.resolution_y=h; scene.render.resolution_percentage=100
