@@ -1,0 +1,68 @@
+name: TUMVEXA Irina Track Only
+
+on:
+  push:
+    paths:
+      - '.github/workflows/tumvexa-irina-track-only.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  voice:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Install ffmpeg
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends ffmpeg curl
+
+      - name: Download exact Irina
+        run: |
+          set -euo pipefail
+          curl -L --fail --retry 3 -o /tmp/piper.tar.gz             https://github.com/rhasspy/piper/releases/download/2023.11.14-2/piper_linux_x86_64.tar.gz
+          tar -xzf /tmp/piper.tar.gz -C /tmp
+          curl -L --fail --retry 3 -o /tmp/irina.onnx             https://huggingface.co/rhasspy/piper-voices/resolve/main/ru/ru_RU/irina/medium/ru_RU-irina-medium.onnx
+          curl -L --fail --retry 3 -o /tmp/irina.onnx.json             https://huggingface.co/rhasspy/piper-voices/resolve/main/ru/ru_RU/irina/medium/ru_RU-irina-medium.onnx.json
+          echo "8ff38212d23da300bbe3705c645e6e5b9475f0bfde01558eb17813e22acaaaaa  /tmp/irina.onnx" | sha256sum -c -
+
+      - name: Synthesize phrases
+        run: |
+          set -euo pipefail
+          mkdir -p out
+          texts=(
+            "Волк и Рыжик."
+            "Какая тихая ночь..."
+            "Кто там?"
+            "Не бойся. Я просто ищу дорогу."
+            "Тогда пойдём вместе."
+            "Ты правда меня не боишься?"
+            "Друзей узнают не по виду."
+            "Иногда дружба начинается с одного шага."
+          )
+          i=1
+          for text in "${texts[@]}"; do
+            n=$(printf "%02d" "$i")
+            printf '%s\n' "$text" | /tmp/piper/piper               --model /tmp/irina.onnx               --config /tmp/irina.onnx.json               --output_file "out/${n}.wav"
+            ffmpeg -y -hide_banner -loglevel error -i "out/${n}.wav"               -af "highpass=f=90,equalizer=f=2200:width_type=q:width=1.2:g=2.5,equalizer=f=3800:width_type=q:width=1.1:g=1.8,lowpass=f=8500"               -ar 48000 -ac 1 "out/${n}_m.wav"
+            i=$((i+1))
+          done
+
+      - name: Build 60 second Irina track
+        run: |
+          set -euo pipefail
+          ffmpeg -y -hide_banner -loglevel error             -f lavfi -i "anullsrc=r=48000:cl=mono:d=60"             -i out/01_m.wav -i out/02_m.wav -i out/03_m.wav -i out/04_m.wav             -i out/05_m.wav -i out/06_m.wav -i out/07_m.wav -i out/08_m.wav             -filter_complex "              [1:a]adelay=250:all=1[a1];              [2:a]adelay=5750:all=1[a2];              [3:a]adelay=12250:all=1[a3];              [4:a]adelay=20250:all=1[a4];              [5:a]adelay=29250:all=1[a5];              [6:a]adelay=38250:all=1[a6];              [7:a]adelay=46250:all=1[a7];              [8:a]adelay=54250:all=1[a8];              [0:a][a1][a2][a3][a4][a5][a6][a7][a8]amix=inputs=9:duration=first:dropout_transition=0,              loudnorm=I=-14:LRA=5:TP=-1[a]"             -map "[a]" -ar 48000 -ac 2 -c:a aac -b:a 192k out/irina_track.m4a
+          ffmpeg -v error -i out/irina_track.m4a -f null -
+          ffprobe -v error -show_entries stream=codec_name,sample_rate,channels -show_entries format=duration -of json out/irina_track.m4a
+
+      - name: Upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: TUMVEXA-IRINA-TRACK
+          path: out/irina_track.m4a
+          retention-days: 7
