@@ -213,11 +213,13 @@ def camera():
 
 def setup_render(a, out):
     scene=bpy.context.scene
-    scene.frame_start=1; scene.frame_end=max(2,int(round(a.duration*a.fps)))
-    scene.render.fps=a.fps
+    # Keep the designed animation on its native 168-frame / 24 fps timeline.
+    # Preview rendering samples this timeline instead of moving/scaling keyframes.
+    scene.frame_start=1; scene.frame_end=168
+    scene.render.fps=24
     if a.preview:
         try:
-            scene.render.engine="BLENDER_EEVEE_NEXT"
+            scene.render.engine="BLENDER_WORKBENCH"
             scene.display.shading.light="STUDIO"
             scene.display.shading.color_type="MATERIAL"
             scene.display.shading.show_shadows=True
@@ -248,21 +250,7 @@ def main():
     a=parse_args(); out=Path(a.output).resolve(); out.parent.mkdir(parents=True,exist_ok=True)
     clear(); build_ground(); wolf=build_wolf(); cat,mirror=build_cat(); cam=camera()
     frames,res=setup_render(a,out)
-    # Ensure animation length matches requested duration by scaling fixed 168-frame design.
     scene=bpy.context.scene
-    end=scene.frame_end
-    if end!=168:
-        scale=end/168.0
-        for obj in bpy.data.objects:
-            ad=obj.animation_data
-            if ad and ad.action:
-                try: curves=ad.action.fcurves
-                except Exception: curves=[]
-                for fc in curves:
-                    for kp in fc.keyframe_points:
-                        kp.co.x=max(1.0,kp.co.x*scale)
-                        kp.handle_left.x=max(1.0,kp.handle_left.x*scale)
-                        kp.handle_right.x=max(1.0,kp.handle_right.x*scale)
     blend=out.with_suffix(".blend")
     report=out.with_suffix(".json")
     report.write_text(json.dumps({
@@ -271,7 +259,22 @@ def main():
         "mirror":"GINGER_CAT_MIRROR","mirror_scale_x":-1,"paid_api":False
     },indent=2),encoding="utf-8")
     bpy.ops.wm.save_as_mainfile(filepath=str(blend))
-    scene.frame_set(1); bpy.ops.render.render(animation=True)
+    if a.preview:
+        # Render a small number of evenly spaced samples across the whole
+        # 168-frame animation. This preserves the wolf approach and cat turn.
+        sample_count=max(2,int(round(a.duration*a.fps)))
+        source_frames=[
+            int(round(1 + i*(167.0/(sample_count-1))))
+            for i in range(sample_count)
+        ]
+        for idx,src_frame in enumerate(source_frames,1):
+            scene.frame_set(src_frame)
+            scene.render.filepath=str(frames/f"frame_{idx:04d}.png")
+            bpy.ops.render.render(write_still=True)
+    else:
+        scene.frame_set(1)
+        scene.render.filepath=str(frames/"frame_")
+        bpy.ops.render.render(animation=True)
     encode(frames,out,a.fps)
     if not out.exists() or out.stat().st_size<1000: raise RuntimeError("MP4 missing")
     print("TUMVEXA WOLF+CAT READY",out)
