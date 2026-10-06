@@ -2,7 +2,7 @@
   'use strict';
   if (window.NovaHealth) return;
 
-  const BUILD = '27.31.1';
+  const BUILD = '27.31.2';
   const state = {
     startedAt: Date.now(),
     errors: [],
