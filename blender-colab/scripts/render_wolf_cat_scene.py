@@ -74,7 +74,7 @@ def linearize(obj):
     except Exception:
         curves=[]
     for fc in curves:
-        for k in fc.keyframe_points: k.interpolation="BEZIER"
+        for k in fc.keyframe_points: k.interpolation="LINEAR"
 
 def look_at(o, target):
     d=Vector(target)-o.matrix_world.translation
@@ -96,15 +96,15 @@ def build_ground():
     area("Soft_Fill",(0,-5,3),400,4.0,(1.0,.82,.65),(0,0,1.0))
 
 def build_wolf():
-    rig=empty("WOLF_MASTER",(4.9,0,0))
+    rig=empty("WOLF_MASTER",(6.0,0,0))
     dark=mat("WolfDark",(.035,.045,.055),.9)
     grey=mat("WolfGrey",(.23,.27,.31),.88)
     light=mat("WolfLight",(.53,.57,.60),.9)
     black=mat("WolfBlack",(.008,.008,.01),.5)
     eye=mat("WolfEye",(.82,.62,.18),.32, emission=(.34,.17,.02), strength=.6)
 
-    uv("Wolf_Body",(0,0,1.35),(1.25,.52,.60),grey,rig)
-    uv("Wolf_Chest",(-.78,0,1.45),(.63,.56,.72),light,rig)
+    body=uv("Wolf_Body",(0,0,1.35),(1.25,.52,.60),grey,rig)
+    chest=uv("Wolf_Chest",(-.78,0,1.45),(.63,.56,.72),light,rig)
     uv("Wolf_Neck",(-1.18,0,1.82),(.46,.46,.66),dark,rig)
     head=uv("Wolf_Head",(-1.58,0,2.20),(.55,.45,.50),grey,rig)
     uv("Wolf_Muzzle",(-1.96,-.02,2.18),(.50,.31,.27),light,rig)
@@ -112,30 +112,56 @@ def build_wolf():
     for s,y in (("L",-.25),("R",.25)):
         cone("Wolf_Ear_"+s,(-1.48,y,2.68),.22,.72,dark,rig,rot=(0,0,0))
         uv("Wolf_Eye_"+s,(-1.86,y*.9,2.32),(.06,.045,.06),eye,rig,20,12)
-    legs=[]
-    for i,(x,y) in enumerate(((-.78,-.28),(-.78,.28),(.78,-.28),(.78,.28))):
+
+    leg_defs=((-0.82,-.30),(-0.82,.30),(.78,-.30),(.78,.30))
+    legs=[]; paws=[]
+    for i,(x,y) in enumerate(leg_defs):
         leg=cyl("Wolf_Leg_"+str(i),(x,y,.72),.13,1.05,grey,rig); legs.append(leg)
-        uv("Wolf_Paw_"+str(i),(x-.08,y,.20),(.30,.22,.13),dark,rig,22,14)
+        paw=uv("Wolf_Paw_"+str(i),(x-.05,y,.16),(.31,.23,.14),dark,rig,22,14); paws.append(paw)
     tail=uv("Wolf_Tail",(1.30,.02,1.45),(.82,.28,.25),dark,rig); tail.rotation_euler[1]=math.radians(-28)
 
-    # Approach: right -> center, with gentle body bob.
-    for f,x,z in ((1,5.2,0),(48,3.7,.04),(96,2.25,0),(132,1.65,.02),(168,1.45,0)):
+    # TRUE ROOT MOTION: wolf visibly travels across the scene while the walk cycle plays.
+    root_keys=((1,6.0,0.00),(25,5.25,.07),(49,4.45,0.00),(73,3.65,.07),
+               (97,2.85,0.00),(121,2.05,.07),(145,1.35,0.00),(168,.85,0.00))
+    for f,x,z in root_keys:
         rig.location=(x,0,z); kf(rig,"location",f)
-    # Four-step leg swing.
-    for leg_i,leg in enumerate(legs):
-        base=leg.rotation_euler.copy()
-        phase=0 if leg_i in (0,3) else 12
-        for f,ang in ((1+phase,-12),(13+phase,12),(25+phase,-12),(37+phase,12),(49+phase,-12),(73+phase,12),(97+phase,-10),(121+phase,7),(145+phase,0)):
-            if f<=168:
-                leg.rotation_euler=base; leg.rotation_euler[1]=math.radians(ang); kf(leg,"rotation_euler",f)
-        linearize(leg)
-    # Tail and head attention near the cat.
+    linearize(rig)
+
+    # Four-beat quadruped walk. Paws remain low during stance and lift during swing.
+    # Diagonal pairs are offset by half a cycle, matching the tutorial principle.
+    cycle=24
+    for i,(leg,paw) in enumerate(zip(legs,paws)):
+        phase=0 if i in (0,3) else 12
+        base_x=leg_defs[i][0]-0.05
+        base_z=.16
+        for start in range(1-phase,145,cycle):
+            keys=((0,.34,base_z,-24),(6,.08,base_z,-7),(12,-.34,base_z,22),
+                  (18,-.05,.42,5),(24,.34,base_z,-24))
+            for off,dx,z,ang in keys:
+                fr=start+off
+                if 1 <= fr <= 145:
+                    paw.location.x=base_x+dx
+                    paw.location.z=z
+                    kf(paw,"location",fr)
+                    leg.rotation_euler[1]=math.radians(ang)
+                    kf(leg,"rotation_euler",fr)
+        # settle when the wolf reaches the cat
+        paw.location.x=base_x; paw.location.z=base_z; kf(paw,"location",168)
+        leg.rotation_euler[1]=0; kf(leg,"rotation_euler",168)
+        linearize(paw); linearize(leg)
+
+    # Body/shoulder bob and attention.
+    for f,zang in ((1,-2),(13,2),(25,-2),(37,2),(49,-2),(61,2),(73,-2),
+                   (85,2),(97,-2),(109,2),(121,-2),(133,2),(145,0),(168,0)):
+        body.rotation_euler[1]=math.radians(zang); kf(body,"rotation_euler",f)
+        chest.rotation_euler[1]=math.radians(-zang*.6); kf(chest,"rotation_euler",f)
+    head.rotation_euler[1]=0; kf(head,"rotation_euler",1)
+    head.rotation_euler[1]=math.radians(-10); kf(head,"rotation_euler",128)
+    head.rotation_euler[1]=math.radians(-5); kf(head,"rotation_euler",168)
     tail.rotation_euler[1]=math.radians(-28); kf(tail,"rotation_euler",1)
-    tail.rotation_euler[1]=math.radians(-15); kf(tail,"rotation_euler",84)
-    tail.rotation_euler[1]=math.radians(-22); kf(tail,"rotation_euler",168)
-    head.rotation_euler[1]=math.radians(0); kf(head,"rotation_euler",1)
-    head.rotation_euler[1]=math.radians(-7); kf(head,"rotation_euler",138)
-    head.rotation_euler[1]=math.radians(-3); kf(head,"rotation_euler",168)
+    tail.rotation_euler[1]=math.radians(-10); kf(tail,"rotation_euler",90)
+    tail.rotation_euler[1]=math.radians(-24); kf(tail,"rotation_euler",168)
+    linearize(body); linearize(chest); linearize(head); linearize(tail)
     return rig
 
 def build_cat():
@@ -171,22 +197,27 @@ def build_cat():
         s=uv("Cat_Stripe_"+str(i),(x,-.39,1.33+(.04 if i==2 else 0)),(.08,.035,.28),stripe,rig,18,10)
         s.rotation_euler[1]=math.radians(18 if i<2 else -10)
 
-    # Cat holds, notices wolf, then turns LEFT (counter-clockwise viewed from above).
+    # Cat notices the approaching wolf, turns its head first, then pivots LEFT clearly.
     rig.rotation_mode="XYZ"
     rig.rotation_euler=(0,0,0); kf(rig,"rotation_euler",1)
-    rig.rotation_euler=(0,0,0); kf(rig,"rotation_euler",88)
-    rig.rotation_euler=(0,0,math.radians(24)); kf(rig,"rotation_euler",118)
-    rig.rotation_euler=(0,0,math.radians(58)); kf(rig,"rotation_euler",150)
-    rig.rotation_euler=(0,0,math.radians(64)); kf(rig,"rotation_euler",168)
-    # Head turns first.
+    rig.rotation_euler=(0,0,0); kf(rig,"rotation_euler",92)
+    rig.rotation_euler=(0,0,math.radians(28)); kf(rig,"rotation_euler",112)
+    rig.rotation_euler=(0,0,math.radians(62)); kf(rig,"rotation_euler",132)
+    rig.rotation_euler=(0,0,math.radians(92)); kf(rig,"rotation_euler",150)
+    rig.rotation_euler=(0,0,math.radians(96)); kf(rig,"rotation_euler",168)
+
+    # Head reacts before the body.
     head.rotation_euler[2]=0; kf(head,"rotation_euler",72)
-    head.rotation_euler[2]=math.radians(18); kf(head,"rotation_euler",105)
-    head.rotation_euler[2]=math.radians(30); kf(head,"rotation_euler",132)
-    # Tail flick.
-    tail2.rotation_euler[2]=math.radians(-8); kf(tail2,"rotation_euler",70)
-    tail2.rotation_euler[2]=math.radians(18); kf(tail2,"rotation_euler",102)
-    tail2.rotation_euler[2]=math.radians(-16); kf(tail2,"rotation_euler",132)
-    tail2.rotation_euler[2]=math.radians(5); kf(tail2,"rotation_euler",168)
+    head.rotation_euler[2]=math.radians(20); kf(head,"rotation_euler",92)
+    head.rotation_euler[2]=math.radians(42); kf(head,"rotation_euler",112)
+    head.rotation_euler[2]=math.radians(20); kf(head,"rotation_euler",150)
+
+    # Tail flicks while the cat turns.
+    tail2.rotation_euler[2]=math.radians(-18); kf(tail2,"rotation_euler",82)
+    tail2.rotation_euler[2]=math.radians(24); kf(tail2,"rotation_euler",104)
+    tail2.rotation_euler[2]=math.radians(-22); kf(tail2,"rotation_euler",128)
+    tail2.rotation_euler[2]=math.radians(12); kf(tail2,"rotation_euler",150)
+    tail2.rotation_euler[2]=math.radians(0); kf(tail2,"rotation_euler",168)
     linearize(rig); linearize(head); linearize(tail2)
 
     # Mirrored collection-style demonstration object: hidden from render, kept in .blend.
