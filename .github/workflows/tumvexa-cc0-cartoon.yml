@@ -1,0 +1,74 @@
+name: TUMVEXA CC0 Cat Wolf 60s Cartoon
+
+on:
+  push:
+    paths:
+      - '.github/workflows/tumvexa-cc0-cartoon.yml'
+      - 'blender-colab/scripts/render_cc0_story.py'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  BLENDER_DIR: '/tmp/blender-5.2.1-linux-x64'
+
+jobs:
+  render:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Install free tools
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends ffmpeg curl unzip xz-utils libegl1
+          curl -L --retry 3 -A "Mozilla/5.0"             https://download.blender.org/release/Blender5.2/blender-5.2.1-linux-x64.tar.xz             -o /tmp/blender.tar.xz
+          tar -xf /tmp/blender.tar.xz -C /tmp
+          "$BLENDER_DIR/blender" --version | head -n 3
+
+      - name: Download CC0 characters
+        run: |
+          set -euo pipefail
+          mkdir -p assets/cc0/wolf assets/cc0/cat artifacts
+          curl -L --fail --retry 3 -A "Mozilla/5.0"             "https://opengameart.org/sites/default/files/3dwolf_blend.zip"             -o assets/cc0/wolf/wolf.zip
+          unzip -q assets/cc0/wolf/wolf.zip -d assets/cc0/wolf/unpacked
+          WOLF_BLEND="$(find assets/cc0/wolf/unpacked -type f -iname '*.blend' | head -n 1)"
+          test -n "$WOLF_BLEND"
+          cp "$WOLF_BLEND" assets/cc0/wolf/wolf.blend
+          curl -L --fail --retry 3 -A "Mozilla/5.0"             "https://opengameart.org/sites/default/files/CatPilot.blend"             -o assets/cc0/cat/cat.blend
+          ls -lh assets/cc0/wolf/wolf.blend assets/cc0/cat/cat.blend
+
+      - name: Render 60 second Blender story
+        env:
+          LIBGL_ALWAYS_SOFTWARE: '1'
+        run: |
+          set -euo pipefail
+          "$BLENDER_DIR/blender" -b             --python blender-colab/scripts/render_cc0_story.py             --             --cat "$GITHUB_WORKSPACE/assets/cc0/cat/cat.blend"             --wolf "$GITHUB_WORKSPACE/assets/cc0/wolf/wolf.blend"             --output "$GITHUB_WORKSPACE/artifacts/TUMVEXA_WOLF_AND_GINGER_CAT_60S.mp4"             --duration 60             --fps 6
+          test -s artifacts/TUMVEXA_WOLF_AND_GINGER_CAT_60S.mp4
+          test -s artifacts/TUMVEXA_WOLF_AND_GINGER_CAT_60S.blend
+          test -s artifacts/TUMVEXA_WOLF_AND_GINGER_CAT_60S.srt
+
+      - name: Smooth to 24 fps and burn Russian subtitles
+        run: |
+          set -euo pipefail
+          ffmpeg -y -hide_banner -loglevel error             -i artifacts/TUMVEXA_WOLF_AND_GINGER_CAT_60S.mp4             -vf "minterpolate=fps=24:mi_mode=mci:mc_mode=aobmc:me_mode=bidir:vsbmc=1"             -c:v libx264 -pix_fmt yuv420p -crf 21 -movflags +faststart             artifacts/smooth.mp4
+          ffmpeg -y -hide_banner -loglevel error             -i artifacts/smooth.mp4             -vf "subtitles=artifacts/TUMVEXA_WOLF_AND_GINGER_CAT_60S.srt:force_style='FontName=DejaVu Sans,FontSize=20,PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,BorderStyle=1,Outline=2,Shadow=0,Alignment=2,MarginV=20'"             -c:v libx264 -pix_fmt yuv420p -crf 20 -movflags +faststart             artifacts/final.mp4
+          mv artifacts/final.mp4 artifacts/TUMVEXA_WOLF_AND_GINGER_CAT_60S.mp4
+          rm -f artifacts/smooth.mp4
+          ffprobe -v error -show_entries stream=width,height,r_frame_rate -show_entries format=duration -of json             artifacts/TUMVEXA_WOLF_AND_GINGER_CAT_60S.mp4
+
+      - name: Upload cartoon
+        uses: actions/upload-artifact@v4
+        with:
+          name: TUMVEXA-CC0-CARTOON-60S
+          path: |
+            artifacts/TUMVEXA_WOLF_AND_GINGER_CAT_60S.mp4
+            artifacts/TUMVEXA_WOLF_AND_GINGER_CAT_60S.blend
+            artifacts/TUMVEXA_WOLF_AND_GINGER_CAT_60S.srt
+            artifacts/TUMVEXA_WOLF_AND_GINGER_CAT_60S.json
+          if-no-files-found: error
+          retention-days: 7
