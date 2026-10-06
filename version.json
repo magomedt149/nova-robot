@@ -1,7 +1,7 @@
 {
-  "name": "NOVA",
-  "version": "27.31.1",
-  "pwa": "27.31.1",
+  "name": "Nova Super App",
+  "version": "27.31.2",
+  "pwa": "27.31.2",
   "mode": "free-only",
   "paidApis": false,
   "externalComputeRequiresConfirmation": true,
@@ -20,7 +20,7 @@
   "trueBlenderOrbit": true,
   "mediaTruthfulnessGuard": true,
   "blenderCameraBridge": true,
-  "blenderCameraBridgeVersion": "1.0.0",
+  "blenderCameraBridgeVersion": "1.2.0",
   "videoProVersion": "31.2.0",
   "hybridAnimate": true,
   "hybridAnimateVersion": "1.0.0",
@@ -155,7 +155,7 @@
     "Нова, смешай музыку с видео, fade in 2 seconds, fade out 3 seconds"
   ],
   "healthRuntime": true,
-  "healthRuntimeVersion": "27.31.1",
+  "healthRuntimeVersion": "27.31.2",
   "autoMontage": true,
   "autoMontageVersion": "1.0.0",
   "autoMontageMode": "local-first 5-second preview; remote compute only after approval",
@@ -609,5 +609,9 @@
     "get_file_contents"
   ],
   "githubPublicFreeBridgeIphone": true,
-  "githubPublicFreeBridgeGatewayRequired": false
+  "githubPublicFreeBridgeGatewayRequired": false,
+  "blenderLocalAgent": true,
+  "blenderLocalAgentVersion": "1.1.0",
+  "threeDDiagnostics": true,
+  "threeDDiagnosticsMode": "health + scene scan + preview sequence + flow + loop"
 }
