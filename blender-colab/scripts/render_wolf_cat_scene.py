@@ -256,7 +256,7 @@ def setup_render(a, out):
     except Exception as exc:
         raise RuntimeError(f"Eevee unavailable in this Blender build: {exc}")
     if a.preview:
-        w,h=384,216
+        w,h=320,180
     else:
         w,h=1280,720
     scene.render.resolution_x=w; scene.render.resolution_y=h; scene.render.resolution_percentage=100

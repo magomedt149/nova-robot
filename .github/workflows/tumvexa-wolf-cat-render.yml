@@ -37,7 +37,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p artifacts
-          "$BLENDER_DIR/blender" -b             --python blender-colab/scripts/render_wolf_cat_scene.py             --             --output "$GITHUB_WORKSPACE/artifacts/NOVA_SUPER_APP_WOLF_GINGER_CAT.mp4"             --duration 5             --fps 4             --preview
+          "$BLENDER_DIR/blender" -b             --python blender-colab/scripts/render_wolf_cat_scene.py             --             --output "$GITHUB_WORKSPACE/artifacts/NOVA_SUPER_APP_WOLF_GINGER_CAT.mp4"             --duration 5             --fps 1             --preview
           test -s artifacts/NOVA_SUPER_APP_WOLF_GINGER_CAT.mp4
           test -s artifacts/NOVA_SUPER_APP_WOLF_GINGER_CAT.blend
 
