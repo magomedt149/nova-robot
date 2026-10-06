@@ -1,0 +1,59 @@
+name: TUMVEXA Wolf + Ginger Cat FREE Blender Render
+
+on:
+  push:
+    paths:
+      - '.github/workflows/tumvexa-wolf-cat-render.yml'
+      - 'blender-colab/scripts/render_wolf_cat_scene.py'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  BLENDER_VERSION: '5.2.1'
+  BLENDER_DIR: '/tmp/blender-5.2.1-linux-x64'
+
+jobs:
+  render:
+    name: Render wolf approaches ginger cat
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Install ffmpeg and Blender dependencies
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends ffmpeg wget xz-utils libegl1
+
+      - name: Install Blender 5.2.1 LTS
+        run: |
+          set -euo pipefail
+          wget -q https://download.blender.org/release/Blender5.2/blender-5.2.1-linux-x64.tar.xz -O /tmp/blender.tar.xz
+          tar -xf /tmp/blender.tar.xz -C /tmp
+          "$BLENDER_DIR/blender" --version | head -n 3
+
+      - name: Render scene
+        env:
+          LIBGL_ALWAYS_SOFTWARE: '1'
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts
+          "$BLENDER_DIR/blender" -b             --python blender-colab/scripts/render_wolf_cat_scene.py             --             --output "$GITHUB_WORKSPACE/artifacts/TUMVEXA_WOLF_GINGER_CAT.mp4"             --duration 7             --fps 12             --preview
+          test -s artifacts/TUMVEXA_WOLF_GINGER_CAT.mp4
+          test -s artifacts/TUMVEXA_WOLF_GINGER_CAT.blend
+          ffprobe -v error -show_entries stream=width,height,r_frame_rate -show_entries format=duration -of json artifacts/TUMVEXA_WOLF_GINGER_CAT.mp4
+
+      - name: Upload video and Blender scene
+        uses: actions/upload-artifact@v4
+        with:
+          name: TUMVEXA-WOLF-GINGER-CAT
+          path: |
+            artifacts/TUMVEXA_WOLF_GINGER_CAT.mp4
+            artifacts/TUMVEXA_WOLF_GINGER_CAT.blend
+            artifacts/TUMVEXA_WOLF_GINGER_CAT.json
+          if-no-files-found: error
+          retention-days: 7
