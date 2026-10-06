@@ -48,7 +48,7 @@ jobs:
           mv artifacts/NOVA_SUPER_APP_WOLF_GINGER_CAT_24.mp4 artifacts/NOVA_SUPER_APP_WOLF_GINGER_CAT.mp4
           ffprobe -v error -show_entries stream=width,height,r_frame_rate -show_entries format=duration -of json artifacts/NOVA_SUPER_APP_WOLF_GINGER_CAT.mp4
           DURATION="$(ffprobe -v error -show_entries format=duration -of default=nw=1:nk=1 artifacts/NOVA_SUPER_APP_WOLF_GINGER_CAT.mp4)"
-          python3 - "$DURATION" <<\'PY\'
+          python3 - "$DURATION" <<'PY'
           import sys
           duration=float(sys.argv[1])
           assert 4.8 <= duration <= 5.2, f"diagnostic duration must be 5s, got {duration:.3f}s"
