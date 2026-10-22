@@ -1,10 +1,10 @@
-const APP_VERSION = '27.31.2';
+const APP_VERSION = '27.31.3';
 const CACHE = `nova-v${APP_VERSION}-github-mcp`;
 const API_CACHE = 'nova-api-economy-v2';
 const METERED_NETLIFY_HOST = /(^|\.)netlify\.app$/i.test(self.location.hostname);
 const YOUTUBE_TTL_MS = 24 * 60 * 60 * 1000;
 const TRANSLATE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
-const ALWAYS_FRESH_STATIC = /\/(?:nova-free-calls|nova-call-diagnostics)\.js$|\/nova-call-check\.html$/i;
+const ALWAYS_FRESH_STATIC = /\/(?:nova-free-calls|nova-call-diagnostics|nova-model-viewer|nova-3d-director|nova-blender-camera)\.js$|\/nova-call-check\.html$/i;
 
 const CORE = [
   './',
@@ -39,6 +39,8 @@ const CORE = [
   './nova-ios-output-actions.js',
   './nova-video-pro.js',
   './nova-3d-director.js',
+  './nova-model-viewer.js',
+  './vendor/model-viewer-4.1.0.min.js',
   './nova-blender-camera.js',
   './nova-unified-video-studio.js',
   './nova-generation-ux.js',
@@ -478,9 +480,9 @@ self.addEventListener('fetch', (event) => {
       });
     event.waitUntil(network.then(() => undefined, () => undefined));
     event.respondWith(
-      caches.match(event.request, { ignoreSearch: true })
-        .then((cached) => cached || network)
-        .catch(() => network)
+      (/\/(?:nova-model-viewer|nova-3d-director|nova-blender-camera)\.js$/i.test(url.pathname)
+        ? network.catch(() => caches.match(event.request, { ignoreSearch: true }))
+        : caches.match(event.request, { ignoreSearch: true }).then((cached) => cached || network).catch(() => network))
     );
     return;
   }
