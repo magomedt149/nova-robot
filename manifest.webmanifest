@@ -2,7 +2,7 @@
   "name": "Nova Super App — FREE LOCK AI Agent",
   "short_name": "Nova Super App",
   "description": "Nova Super App — локальный AI-агент с Video Studio, True Blender Camera, Motion + VFX, голосами, памятью и диагностикой.",
-  "start_url": "./?pwa=27.31.2",
+  "start_url": "./?pwa=27.31.3",
   "display": "standalone",
   "background_color": "#02030a",
   "theme_color": "#07132f",

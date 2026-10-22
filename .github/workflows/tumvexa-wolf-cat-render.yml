@@ -1,11 +1,13 @@
 name: Nova Super App · 3D Wolf + Ginger Cat · 5s Diagnostic
 
 on:
-  push:
-    paths:
-      - '.github/workflows/tumvexa-wolf-cat-render.yml'
-      - 'blender-colab/scripts/render_wolf_cat_scene.py'
   workflow_dispatch:
+    inputs:
+      preview_fps:
+        description: "1 = five still diagnostic frames; 12 = motion preview (slower)"
+        type: choice
+        options: ["1", "12"]
+        default: "1"
 
 permissions:
   contents: read
@@ -34,14 +36,15 @@ jobs:
       - name: Render Blender preview
         env:
           LIBGL_ALWAYS_SOFTWARE: '1'
+          PREVIEW_FPS: ${{ inputs.preview_fps || '1' }}
         run: |
           set -euo pipefail
           mkdir -p artifacts
-          "$BLENDER_DIR/blender" -b             --python blender-colab/scripts/render_wolf_cat_scene.py             --             --output "$GITHUB_WORKSPACE/artifacts/NOVA_SUPER_APP_WOLF_GINGER_CAT.mp4"             --duration 5             --fps 1             --preview
+          "$BLENDER_DIR/blender" -b             --python blender-colab/scripts/render_wolf_cat_scene.py             --             --output "$GITHUB_WORKSPACE/artifacts/NOVA_SUPER_APP_WOLF_GINGER_CAT.mp4"             --duration 5             --fps "$PREVIEW_FPS"             --preview
           test -s artifacts/NOVA_SUPER_APP_WOLF_GINGER_CAT.mp4
           test -s artifacts/NOVA_SUPER_APP_WOLF_GINGER_CAT.blend
 
-      - name: Smooth preview to 24 fps
+      - name: Package preview at 24 fps (frame repetition, no interpolation)
         run: |
           set -euo pipefail
           ffmpeg -y -hide_banner -loglevel error             -i artifacts/NOVA_SUPER_APP_WOLF_GINGER_CAT.mp4             -vf "fps=24"             -c:v libx264 -pix_fmt yuv420p -crf 20 -movflags +faststart             artifacts/NOVA_SUPER_APP_WOLF_GINGER_CAT_24.mp4

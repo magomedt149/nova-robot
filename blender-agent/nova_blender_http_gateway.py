@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """NOVA Blender Agent HTTP gateway v1.0.0 — FREE local bridge adapter."""
 from __future__ import annotations
-import argparse, base64, json, socket
+import argparse, base64, json, socket, ssl
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
@@ -91,9 +91,18 @@ class Handler(BaseHTTPRequestHandler):
         except Exception as exc:self._json({'ok':False,'error':str(exc)},502)
 
 def main()->int:
-    parser=argparse.ArgumentParser(description='NOVA browser gateway for the local FREE Blender Agent');parser.add_argument('--host',default=DEFAULT_HTTP_HOST);parser.add_argument('--port',type=int,default=DEFAULT_HTTP_PORT);parser.add_argument('--bridge-host',default=DEFAULT_BRIDGE_HOST);parser.add_argument('--bridge-port',type=int,default=DEFAULT_BRIDGE_PORT);parser.add_argument('--token',default='');parser.add_argument('--allow-lan',action='store_true');args=parser.parse_args();loopback=args.host in {'127.0.0.1','localhost','::1'}
+    parser=argparse.ArgumentParser(description='NOVA browser gateway for the local FREE Blender Agent');parser.add_argument('--host',default=DEFAULT_HTTP_HOST);parser.add_argument('--port',type=int,default=DEFAULT_HTTP_PORT);parser.add_argument('--bridge-host',default=DEFAULT_BRIDGE_HOST);parser.add_argument('--bridge-port',type=int,default=DEFAULT_BRIDGE_PORT);parser.add_argument('--token',default='');parser.add_argument('--allow-lan',action='store_true');parser.add_argument('--tls-cert',help='PEM certificate trusted by the iPhone');parser.add_argument('--tls-key',help='PEM private key');args=parser.parse_args();loopback=args.host in {'127.0.0.1','localhost','::1'}
     if not loopback and (not args.allow_lan or not args.token):raise SystemExit('Non-local bind requires --allow-lan and --token.')
-    Handler.config=Config(args.bridge_host,args.bridge_port,args.token);server=ThreadingHTTPServer((args.host,args.port),Handler);print(f'[NOVA Blender Gateway v{VERSION}] http://{args.host}:{args.port} -> {args.bridge_host}:{args.bridge_port}');print('[NOVA Blender Gateway] FREE local mode; paid/cloud tools are not exposed.')
+    if bool(args.tls_cert) != bool(args.tls_key):parser.error('--tls-cert and --tls-key must be supplied together')
+    context=None
+    if args.tls_cert:
+        context=ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+        context.minimum_version=ssl.TLSVersion.TLSv1_2
+        context.load_cert_chain(args.tls_cert,args.tls_key)
+    Handler.config=Config(args.bridge_host,args.bridge_port,args.token);server=ThreadingHTTPServer((args.host,args.port),Handler)
+    if context:server.socket=context.wrap_socket(server.socket,server_side=True)
+    scheme='https' if context else 'http'
+    print(f'[NOVA Blender Gateway v{VERSION}] {scheme}://{args.host}:{args.port} -> {args.bridge_host}:{args.bridge_port}');print('[NOVA Blender Gateway] FREE local mode; paid/cloud tools are not exposed.')
     try:server.serve_forever(poll_interval=.25)
     except KeyboardInterrupt:pass
     finally:server.server_close()

@@ -22,3 +22,14 @@ Gateway по умолчанию слушает только `127.0.0.1:9877`, н
 `python blender-agent/nova_blender_http_gateway.py --host 0.0.0.0 --allow-lan --token "СИЛЬНЫЙ_СЕКРЕТ"`
 
 В NOVA укажи `http://IP_КОМПЬЮТЕРА:9877` и тот же token. HTTPS-браузер может блокировать обычный HTTP LAN endpoint; тогда нужен локальный HTTPS/reverse proxy. Не выставляй gateway напрямую в Интернет.
+
+### HTTPS без внешнего proxy
+
+Gateway принимает `--tls-cert cert.pem --tls-key key.pem` вместе. Сертификат
+должен соответствовать имени/IP компьютера и быть доверенным на iPhone.
+Пример: `python blender-agent/nova_blender_http_gateway.py --host 0.0.0.0 --allow-lan --token YOUR_LAN_TOKEN --tls-cert cert.pem --tls-key key.pem`.
+На iPhone укажи HTTPS-адрес компьютера. Не используй localhost и не отключай
+проверку сертификатов. Настройка сертификата не выполняется автоматически.
+
+Новый локальный GLB/USDZ просмотрщик работает без Blender Agent. Подробности:
+[NOVA_IPHONE_UPDATE_METHOD.md](../NOVA_IPHONE_UPDATE_METHOD.md).
